@@ -1,0 +1,33 @@
+# Build outputs
+bin/
+obj/
+TestResults/
+publish/
+
+# IDE and user-local files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Local SDK/tool/package caches
+.dotnet/
+.dotnet-home/
+.tools/
+.nuget/
+.superpowers/
+*.nupkg
+
+# Runtime logs and local data
+logs/
+*.log
+data/*
+!data/README.md
+recordings/*.jsonl
+!recordings/README.md
+
+# Generated future memory exports stay out until their schema is approved.
+docs/memory/generated/
+*.gbrain
+*.graphify.json

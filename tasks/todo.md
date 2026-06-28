@@ -1,0 +1,538 @@
+# Windows Binance Indicator App - Planning Todo
+
+## Status
+
+- [x] Inspect project files and documentation.
+- [x] Identify current source material for the indicator formula.
+- [x] Check git context.
+- [x] Clarify MVP scope and runtime stack.
+- [x] Propose 2-3 architecture options with tradeoffs.
+- [x] Get user approval for the selected design.
+- [x] Write implementation plan after design approval.
+- [x] Implement only after the plan is approved.
+- [x] Verify with tests/live-data dry run.
+
+## Git Repository And Memory Structure Todo
+
+- [x] Review the proposed Git/repository structure against the current WPF/.NET solution.
+- [x] Confirm the safer strategy: keep current project layout instead of moving everything into `src/` and `tests/`.
+- [x] Check local Git and GitHub tooling availability.
+- [x] Update `.gitignore` so build outputs, local tool caches, published binaries, logs, data files, and JSONL recordings are not committed.
+- [x] Add durable docs for architecture, formula source, data sources, configuration, repository decisions, and future memory.
+- [x] Add `config/appsettings.example.json`, `data/README.md`, `recordings/README.md`, and `scripts/README.md`.
+- [x] Verify ignore rules before any first commit.
+- [x] Initialize local Git repository on `main` if Git becomes available.
+- [x] Create the first commit: `chore: initialize repository structure`.
+- [x] Create/connect private GitHub repository `tc-dn-hofi3-dashboard` if GitHub tooling and authentication are available.
+- [x] Run solution tests/build after repository hygiene changes.
+- [x] Record results and blockers.
+
+## Git Repository And Memory Structure Results
+
+- Installed Git for Windows `2.54.0.windows.1` through `winget` because Git was not available in PATH.
+- Initialized a local Git repository on branch `main`.
+- Added repository docs: `README.md`, `docs/architecture.md`, `docs/formulas.md`, `docs/data-sources.md`, `docs/configuration.md`, `docs/decisions/0001-repository-and-memory-structure.md`, and `docs/memory/*`.
+- Added `config/appsettings.example.json`, `data/README.md`, `recordings/README.md`, and `scripts/README.md`.
+- Updated `.gitignore` to exclude build outputs, local SDK/tool caches, `.superpowers/`, `publish/`, logs, `data/*`, JSONL recordings, and future generated memory exports.
+- Added `.gitattributes` to keep text files normalized with LF and mark common binary outputs as binary.
+- Verified `git add -n .` does not include `bin/`, `obj/`, `publish/`, `recordings/*.jsonl`, or `.superpowers/` files.
+- Verified ignore rules with `git check-ignore -v` for `publish/`, `recordings/*.jsonl`, `obj/`, and `bin/` paths.
+- Verification used the project-local SDK: `.dotnet/dotnet.exe`.
+- `dotnet test CryptoIndicatorApp.sln --no-restore` via local SDK passed `71/71`.
+- `dotnet build CryptoIndicatorApp.sln --no-restore` via local SDK passed with `0` warnings and `0` errors.
+- Global Git author identity was not configured; the first commit uses local repository identity `MECHREVO <mechrevo@users.noreply.github.com>`.
+- GitHub CLI `2.95.0` is installed and authenticated for `striges88-bit`.
+- Created private GitHub repository `striges88-bit/tc-dn-hofi3-dashboard`.
+- Connected `origin` to `https://github.com/striges88-bit/tc-dn-hofi3-dashboard.git`; `main` is ready to push.
+
+## Project Setup Todo
+
+- [x] Confirm whether `AGENTS.md` exists in the workspace.
+- [x] Create project-specific `AGENTS.md` rules for TC-DN-HOFI3 development.
+- [x] Create `binance-indicator-dev` skill for recurring project workflow.
+- [x] Validate skill frontmatter and basic structure.
+- [x] Record setup results and any limitations.
+
+## Current Findings
+
+- Workspace currently contains `TC-DN-HOFI3.md` and no application code.
+- The folder is not a git repository, so commits/history are unavailable unless git is initialized later.
+- The source document defines TC-DN-HOFI3: top-3 rolling HOFI, depth normalization, robust z-score, TFI gate, and risk filters.
+- The document explicitly warns that the indicator is a research/analytics hypothesis, not a proven trading signal.
+
+## Key Risks
+
+- A desktop UI is easy to build; correct Binance order book sequencing is the harder part.
+- REST must not be in the hot calculation path if subsecond indicators matter.
+- Formula configurability can become a source of accidental overfitting if every threshold is editable without guardrails.
+- Live-only display is insufficient for confidence; we need replay/logging early, even in an analytics-only MVP.
+- If this becomes Windows-only too early, testing and data-pipeline work may become harder than necessary.
+
+## Open Decisions
+
+- Runtime stack: C# + WPF + .NET 8 LTS (`net8.0-windows`).
+- Market scope: USDS-M Futures only, one configured symbol per app run for MVP.
+- MVP data mode: live streams plus raw event recording/replay from the first step.
+- Formula configuration: config file only for MVP; broad UI parameter editing is deferred.
+- UI scope: current values/status plus a simple 60-second chart.
+
+## Stack Direction
+
+- Candidate stack: C# + WPF + .NET.
+- Configuration: `Microsoft.Extensions.Configuration` with JSON files is acceptable.
+- Binance access: `Binance.Net` is a practical C# client, but treat it as a third-party dependency, not an official Binance SDK.
+- Official Binance `binance-connector-dotnet` appears focused on Spot public API/Spot streams, so it does not cover the USDS-M Futures hot path we need for TC-DN-HOFI3.
+- Architecture implication: isolate Binance client calls behind our own market-data interfaces so the indicator engine and replay logic do not depend directly on `Binance.Net` models.
+- Data pipeline implication: live and replay modes must feed the same internal event types into the indicator engine.
+- Recording format: JSONL for the first version, optimized for debuggability and deterministic replay over storage efficiency.
+- JSONL implication: define versioned event envelopes early so future schema changes do not break old recordings.
+- Market scope: USDS-M Futures only, one configured symbol per app run for MVP.
+- Multi-symbol support is intentionally deferred until single-symbol sequencing, replay, and indicator correctness are verified.
+- Binance stream baseline: diff depth from `/public` using `<symbol>@depth@100ms`; aggregate trades from `/market` using `<symbol>@aggTrade`.
+- UI MVP: show current `Z_OFI`, `TFI`, signal state, book health, latency, recording status, and a simple 60-second chart for `Z_OFI` and `TFI`.
+- Selected architecture: layered single-process WPF MVP.
+
+## Review / Results
+
+- Created project `AGENTS.md` with TC-DN-HOFI3 scope, pipeline, indicator, and verification rules.
+- Created Codex skill `binance-indicator-dev` in `C:\Users\Steven Owl\.codex\skills\binance-indicator-dev`.
+- Created `tasks/lessons.md` as the feedback/fix learning log.
+- Official `quick_validate.py` could not run because the active Python lacks `yaml`; manual frontmatter/default-prompt/template scan passed.
+- Design sections approved by user.
+- Design spec written to `docs/superpowers/specs/2026-05-18-windows-binance-indicator-design.md`.
+- Spec self-review fixed vague runtime and stream-speed wording.
+- No application implementation started.
+- Next required step: user review of updated spec before implementation plan.
+
+## Structure Review Todo
+
+- [x] Read proposed project tree from `C:\Users\Steven Owl\Downloads\file.txt`.
+- [x] Compare proposed tree with approved design spec.
+- [x] Identify structural risks before scaffolding.
+- [x] Recommend a revised MVP project structure.
+
+## Structure Review Results
+
+- The proposed `Desktop` / `Core` / `Infrastructure` / `Tests` split is directionally correct.
+- `Core/Interfaces/IBinanceApiClient.cs` is the wrong boundary for the domain; Binance-specific clients should stay in Infrastructure.
+- Generic `Services` and `Models` folders are likely to become dumping grounds unless split by domain concepts.
+- MVP needs explicit folders for market events, order book sequencing, JSONL recording/replay, indicator engine, and health/latency state.
+- Broad runtime-loaded `Formulas` are too flexible for MVP; use a concrete TC-DN-HOFI3 implementation behind a small domain interface.
+- User approved replacing broad `Core` with explicit `Domain` + `Application`.
+- Updated the design spec with the accepted solution structure and project responsibilities.
+
+## MVP Implementation Todo
+
+- [x] Install or locate a usable .NET 8 SDK for scaffold/build/test.
+- [x] Scaffold `CryptoIndicatorApp` solution with `Desktop`, `Application`, `Domain`, `Infrastructure`, and test projects.
+- [x] Implement domain market events, health/sample models, trade classification, order book sequencing, and TC-DN-HOFI3 primitives.
+- [x] Implement JSONL reader/writer and Binance adapter boundaries without leaking Binance DTOs into Domain.
+- [x] Implement live/replay application sessions and a 60-second chart buffer.
+  - [x] Keep `Application` dependent on `Domain` interfaces/models only; compose `Infrastructure` in Desktop or outer layer.
+  - [x] Add Application tests for shared pipeline, deterministic replay, recording-before-calculation, and chart retention.
+  - [x] Remove direct `Application -> Infrastructure` project reference.
+- [x] Implement minimal WPF dashboard with config-only parameters.
+  - [x] Add Desktop composition tests for JSONL source/recorder adapters and dashboard state updates.
+  - [x] Add Desktop -> Infrastructure reference and compose JSONL replay/recording at the Desktop boundary.
+  - [x] Add config-only app settings for one symbol, mode, replay path, and recording path.
+  - [x] Build WPF dashboard for symbol/mode/status/path/book health/latency/Z_OFI/TFI/signal and native 60-second chart.
+- [x] Run deterministic tests and build verification.
+
+## Live Binance Source Todo
+
+- [x] Verify Binance.Net 12.12.0 public REST/socket API surface against local package docs and official Binance stream/snapshot docs.
+- [x] Add red Infrastructure tests for live source snapshot-first buffering, initial depth overlap, and resync on `pu` gap.
+- [x] Implement Infrastructure live source boundaries without adding an `Infrastructure -> Application` reference.
+- [x] Add Desktop composition adapter for live source and wire Live mode to `LiveIndicatorSession` with JSONL recording.
+- [x] Verify narrow tests, full solution tests, and build.
+- [x] Record whether a live-data dry run was performed or deferred.
+
+## Post-Live MVP Enhancements Todo
+
+- [ ] Add manual symbol/ticker refresh from Binance USDS-M exchange information, with delisted/inactive symbol handling.
+- [x] Add optional proxy configuration for public REST snapshot and WebSocket market streams.
+- [x] Verify proxy support against Binance.Net/CryptoExchange.Net APIs before implementation; ShadowSocks should be treated as an external local proxy endpoint, not as app-managed networking.
+
+## Proxy And Live Dry Run Todo
+
+- [x] Verify Binance.Net/CryptoExchange.Net proxy support from the installed package documentation.
+- [x] Add red tests for config-only proxy binding and Binance client option propagation.
+- [x] Implement minimal proxy options: enabled/type/host/port.
+- [x] Wire proxy options into `BinanceNetUsdFuturesMarketDataClient` through Desktop composition.
+- [x] Run narrow tests, full tests, and build.
+- [x] Perform live dry run: record short JSONL and replay it through the existing pipeline.
+  - [x] Add a small non-GUI dry-run harness using existing Application/Infrastructure pipeline.
+  - [x] Record a short public USDS-M Futures JSONL session.
+  - [x] Replay the recorded JSONL through `ReplayIndicatorSession`.
+  - [x] Run solution tests/build after the dry run.
+
+## Active Symbol Dry Run And Formula Review Todo
+
+- [x] Verify requested symbols are active Binance USDS-M perpetual contracts.
+- [x] Run live JSONL recording plus replay for `ESPORTSUSDT`, `XANUSDT`, and `PLAYUSDT`.
+- [x] Extract replay-level sample statistics from the recorded JSONL files.
+- [x] Review current formula implementation against `TC-DN-HOFI3.md`.
+- [x] Run deterministic tests/build after analysis.
+- [x] Record dry-run and formula review results.
+
+## Active Symbol Dry Run And Formula Review Results
+
+- Binance REST check on 2026-05-25 confirmed all requested symbols exist as `TRADING` `PERPETUAL` USDS-M contracts:
+  `ESPORTSUSDT`, `XANUSDT`, `PLAYUSDT`.
+- 24h REST snapshot at check time:
+  `ESPORTSUSDT` last `0.0601000`, 24h change `-91.553%`, quote volume `228323482.1636300`;
+  `XANUSDT` last `0.0124990`, 24h change `38.126%`, quote volume `215983845.7516040`;
+  `PLAYUSDT` last `0.1041200`, 24h change `48.235%`, quote volume `240164431.8149900`.
+- Added `tools/LiveDryRun.Tests` and `IndicatorSampleSummaryCollector` so the CLI reports replay-wide `Z_OFI`, TFI, signal, resync, and latency stats instead of only the last replay sample.
+- Extended dry-run recordings:
+  `recordings/live-dry-run-esportsusdt-summary-20260525-173847.jsonl`,
+  `recordings/live-dry-run-xanusdt-summary-20260525-173907.jsonl`,
+  `recordings/live-dry-run-playusdt-summary-20260525-173928.jsonl`.
+- ESPORTSUSDT 20s dry run: `390` events, `125` live samples, `125` replay samples, count match `true`, resync max `0`, `Z_OFI` min/max `-8.94286167` / `19.38043897`, TFI min/max `-1` / `1`, candidates long/short/neutral `12/15/98`, latency p50/p95/p99 `211.364/244.245/288.603 ms`.
+- XANUSDT 20s dry run: `236` events, `108` live samples, `108` replay samples, count match `true`, resync max `0`, `Z_OFI` min/max `-5233262585.5446074` / `66728151910.78520356`, TFI min/max `-1` / `1`, candidates long/short/neutral `10/9/89`, latency p50/p95/p99 `212.05/266.508/301.942 ms`.
+- PLAYUSDT 20s dry run: `660` events, `133` live samples, `133` replay samples, count match `true`, resync max `0`, `Z_OFI` min/max `-4.56441306` / `3.67812624`, TFI min/max `-1` / `1`, candidates long/short/neutral `2/5/126`, latency p50/p95/p99 `208.127/222.117/239.359 ms`.
+- Formula implementation review:
+  HOFI uses CKS level OFI over top 3 book levels with exponential weights and `lambda=0.8`; depth normalization divides rolling 250 ms HOFI by median weighted top-3 USD depth over `DepthReferenceSeconds=60`.
+- Robust z-score is applied to `NOFI`, not raw HOFI, using median/MAD over `ZScoreWindowSeconds=180`; current implementation has no warm-up/min sample requirement and no MAD floor beyond epsilon.
+- XANUSDT produced enormous `Z_OFI` values because early/flat NOFI history made MAD effectively zero; this makes current candidate counts unsafe as signal evidence.
+- Current TFI sums base asset quantities over the same rolling `OfiWindowMilliseconds=250`; the source formula/pseudocode expects aggressive notional (`price * qty`), so this is a formula mismatch for symbols with different price scales.
+- Current final signal is a simple logical gate: long if `Z_OFI >= ThetaZ` and `TFI >= ThetaTfi`, short if symmetric; it does not yet implement the 1s stability window, volume floor, spread/depth/vol/cancel filters, or funding/liquidation/OI risk overlays from `TC-DN-HOFI3.md`.
+- Verification after the dry-run analysis: full solution tests passed `35/35`; build passed with 0 errors and 5 existing `NU1900` warnings for NuGet vulnerability metadata.
+
+## Formula Validity Fix Todo
+
+- [x] Add red Domain tests for TFI notional flow, robust z warm-up/MAD floor, and 1s stability gating.
+- [x] Switch rolling TFI from base quantity to aggressive notional (`price * quantity`) over the existing 250 ms window.
+- [x] Add config-only warm-up/min-history and MAD denominator floor so early/flat `NOFI` history cannot emit actionable z-score spikes.
+- [x] Implement the existing 1s stability gate using `StabilityWindowMilliseconds` / `ThetaStable` without adding wider filters yet.
+- [x] Run full tests/build.
+- [x] Replay the latest `ESPORTSUSDT`, `XANUSDT`, and `PLAYUSDT` JSONL files through the updated formula and record before/after impact.
+
+## Formula Validity Fix Results
+
+- Added red/green Domain tests for notional TFI, robust z denominator floor, warm-up/min-history, and stability-gated candidate emission.
+- Added config parameters `MinimumZScoreSamples=30` and `NofiMadFloor=0.000001`; Desktop config now exposes both under `Dashboard.Indicator`.
+- `RollingTradeFlow` now uses aggressive notional (`Price * Quantity`) instead of base quantity over the same rolling 250 ms window.
+- Signal candidate logic now requires 250 ms `Z_OFI`, same-direction TFI, and either same-direction 1s stable `Z_OFI` or same-direction fast `Z_OFI` in 2 of the last 3 evaluations. Wider filters from `TC-DN-HOFI3.md` remain deferred.
+- Added `tools/LiveDryRun` replay-only mode using `--input ... --replay-only` so existing JSONL recordings can be recalculated without a new live run.
+- Full verification after implementation: `dotnet test CryptoIndicatorApp.sln --no-restore` passed `40/40`; `dotnet build CryptoIndicatorApp.sln --no-restore` passed with 0 errors and 5 existing `NU1900` warnings.
+- Replay recalculation on the same files:
+  `ESPORTSUSDT` stayed at `125` samples, `Z_OFI` min/max `-8.94286167` / `4.62699879`, candidates long/short/neutral `6/14/105`.
+  `XANUSDT` stayed at `108` samples, `Z_OFI` min/max `-4.89913568` / `4.0521794`, candidates long/short/neutral `7/7/94`.
+  `PLAYUSDT` stayed at `133` samples, `Z_OFI` min/max `-4.56441306` / `3.67812624`, candidates long/short/neutral `2/4/127`.
+- Main impact: the XANUSDT near-zero-MAD explosion was removed; candidate counts dropped because 1s stability now filters isolated 250 ms spikes.
+
+## User-Ready MVP UI Slice Todo
+
+- [x] Add Binance USDS-M exchange-info symbol metadata boundary and tests for active perpetual filtering.
+- [x] Add Desktop symbol refresh composition without moving Infrastructure into Application.
+- [x] Convert WPF startup from auto-run to controlled `Symbol`, `Mode`, `Start`, `Stop`, `Restart` UI.
+- [x] Keep one selected symbol active at a time; cancel/dispose the previous session on stop/restart.
+- [x] Change default mode to `Live` so the app opens in a usable state.
+- [x] Run narrow tests, full solution tests, and publish.
+- [x] Run live smoke recordings/replays for `ESPORTSUSDT`, `XANUSDT`, and `PLAYUSDT`.
+
+## User-Ready MVP UI Slice Results
+
+- Added `BinanceUsdFuturesSymbolMetadata`, `BinanceUsdFuturesSymbolFilter`, and `IBinanceUsdFuturesSymbolProvider`.
+- `BinanceNetUsdFuturesMarketDataClient` now loads USDS-M exchange info and returns sorted active `TRADING` + `PERPETUAL` symbols for UI refresh.
+- WPF dashboard no longer auto-runs on launch; it exposes `Symbol`, `Mode`, `Refresh symbols`, `Start`, `Stop`, and `Restart`.
+- UI state remains single-symbol: changing symbol only changes the next session; running sessions are stopped before restart.
+- Default Desktop config is now `Live` with recording path template `recordings/{symbol}.jsonl`.
+- Published Desktop app to `publish\desktop`.
+- Full solution verification after implementation: `dotnet test CryptoIndicatorApp.sln --no-restore` passed `45/45`; publish passed with the existing `NU1900` warning.
+- Sandbox live WebSocket failed with `CantConnectError.UnableToConnect`; the same dry-run command succeeded outside the sandbox.
+- Live smoke `ESPORTSUSDT`: `106` events, `44` live samples, `44` replay samples, count match `true`, synced `true`, max resync `0`, candidates long/short/neutral `0/0/44`, latency p50/p95/p99 `219.295/271.553/315.523 ms`.
+- Live smoke `XANUSDT`: `501` events, `60` live samples, `60` replay samples, count match `true`, synced `true`, max resync `0`, candidates long/short/neutral `3/1/56`, latency p50/p95/p99 `215.658/221.257/276.902 ms`.
+- Live smoke `PLAYUSDT`: `131` events, `34` live samples, `34` replay samples, count match `true`, synced `true`, max resync `0`, candidates long/short/neutral `0/0/34`, latency p50/p95/p99 `211.383/254.19/260.146 ms`.
+
+## Next UX And Context Modules Plan
+
+- [x] Fix the non-rendering 60-second chart first; likely cause is WPF layout sizing where the metrics row owns the remaining `*` height and the chart `Canvas` sits in an `Auto` row without a stable height.
+- [x] Add a focused Desktop test or renderable chart-point test for non-empty `ChartSamples` producing non-empty `Polyline` points when the chart has dimensions.
+- [x] Add ticker search/type-ahead behavior to the symbol selector so pasted or typed symbols can be selected without scrolling through 500+ contracts.
+- [x] Compact the top command/status area by merging title, symbol/mode controls, refresh, start/stop/restart, connection status, and symbol refresh status into one dense header band.
+- [x] Replace oversized metric tiles with compact value-fit columns for `Z_OFI`, TFI, signal, book health, latency, and last update.
+- [x] Add visual color state for signal candidates, with green/red intensity based on signal strength, but keep text labels so color is not the only signal.
+- [x] Make Replay path behavior explicit: in Live mode hide or de-emphasize it; in Replay mode require/select a file instead of showing ambiguous `n/a`.
+- [x] Add a window pin / always-on-top toggle in the compact header so the dashboard can stay visible while switching to other windows.
+- [ ] Design liquidation context as a separate slow-risk module using Binance USDS-M `<symbol>@forceOrder`; aggregate by 15-minute buckets and display signed notional intensity over roughly 2.5 hours.
+- [ ] Design open-interest context as a separate low-frequency module from Binance REST open interest endpoints; do not treat it as a WebSocket stream or hot-path input.
+- [ ] Run full tests, publish, and manual WPF smoke after each UI slice before adding the next data module.
+
+## Next UX And Context Modules Notes
+
+- Binance liquidation stream is available for a specific symbol as `<symbol>@forceOrder`, update speed 1000 ms, and only pushes the largest liquidation snapshot in each interval. It is useful as context/risk overlay, not as a subsecond trigger.
+- Binance open interest for USDS-M is documented through REST endpoints: current `/fapi/v1/openInterest` and historical/statistical `/futures/data/openInterestHist` with periods such as `5m` and `15m`. Treat it as slow context.
+- The first implementation should not mix liquidation/OI into TC-DN-HOFI3 signal logic. Show them as separate visual modules until there is replay data and a tested rule.
+
+## MVP UX Hardening Slice Todo
+
+- [x] Add red Desktop tests for chart geometry, symbol search/filtering, mode-aware replay path text, and signal visual intensity.
+- [x] Fix the 60-second chart so live samples render into non-empty polyline points and the chart owns stable vertical space.
+- [x] Add ticker type-ahead/search after symbol refresh with paste-to-select exact symbol behavior.
+- [x] Merge title, symbol/mode controls, refresh/start/stop/restart, connection status, and symbol refresh status into one compact header band.
+- [x] Replace tall metric tiles with a compact value-fit metric strip so the chart gets more space.
+- [x] Add signal color state with long/short intensity from existing `Z_OFI` plus TFI confirmation, keeping the text label.
+- [x] Make Replay path UX mode-aware: de-emphasized live text, explicit missing-file/configured-file state in Replay.
+- [x] Run narrow Desktop tests, full solution tests, publish, and record results.
+
+## MVP UX Hardening Slice Review
+
+- Added `ChartGeometryBuilder` and Desktop tests for non-empty chart points with stable dimensions.
+- Moved the chart into the main `*` row, made metrics `Auto`, and gave the chart/canvas stable minimum height.
+- Switched symbol selector to editable type-ahead over `FilteredSymbols`; exact paste and unique prefix search select the symbol without scrolling.
+- Invalid search text now disables `Start` so a stale previous symbol is not launched accidentally.
+- Merged title, controls, refresh status, and connection status into one compact header band.
+- Replaced tall metric tiles with a compact horizontal metric strip; signal tile uses a visual intensity brush while keeping `LongCandidate` / `ShortCandidate` / `Neutral` text.
+- Replay path now shows `Live mode` with reduced opacity in Live and explicit missing/configured state in Replay.
+- Verification: Desktop tests passed `14/14`; full solution tests passed `51/51`; publish to `publish\desktop` succeeded.
+- Existing warning remains: `NU1900` because NuGet vulnerability metadata could not be loaded from `https://api.nuget.org/v3/index.json`.
+- Published app was launched for smoke check as process `CryptoIndicatorApp.Desktop` PID `33292`; visual inspection remains user-side.
+
+## Upcoming MVP Polish Todo
+
+- [x] User visual smoke: confirm the published app renders the live 60-second chart after the latest layout fix.
+- [x] Add a header-level pin toggle that maps to WPF `Window.Topmost`, with clear on/off visual state.
+- [x] Keep the pin state local to the running window first; persist it to config only if repeated manual use shows it is worth remembering between launches.
+- [x] Run Desktop/full solution tests before publish.
+- [x] User visual smoke: confirm the Pin toggle keeps the app above other windows during normal window switching.
+
+## Upcoming MVP Polish Priority
+
+- The pin / always-on-top toggle should be the next small UI polish after confirming the chart fix, and before liquidation/open-interest modules.
+- It is useful for the actual workflow, but it is not data-pipeline work; it should not delay fixing a still-broken chart if visual smoke finds one.
+- Implementation should stay in Desktop only: no Domain/Application/Infrastructure changes and no indicator behavior changes.
+
+## Upcoming MVP Polish Results
+
+- User confirmed the live 60-second chart renders after the previous layout fix.
+- Added `DashboardViewModel.IsAlwaysOnTop` with a Desktop test for default-off state and `PropertyChanged` notification.
+- Bound WPF `Window.Topmost` to `IsAlwaysOnTop` and added a compact `Pin` toggle in the header with a visible checked state.
+- Kept pin state runtime-local only; no config persistence was added.
+- Verification: Desktop tests passed `15/15`; full solution tests passed `52/52`; publish to `publish\desktop` succeeded.
+- User confirmed the Pin toggle keeps the window above other windows during normal window switching.
+- Existing warning remains: `NU1900` because NuGet vulnerability metadata could not be loaded from `https://api.nuget.org/v3/index.json`.
+
+## Liquidation And Open Interest Formula Design Todo
+
+- [x] Confirm the pin / always-on-top UX with user-side smoke.
+- [x] Verify current Binance USDS-M liquidation and open-interest data sources from official docs.
+- [x] Analyze bucket delta formulas and normalization choices before implementation.
+- [x] Get user approval for the recommended liquidation/OI context formula.
+- [x] Write the implementation plan for separate context modules after formula approval.
+
+## Liquidation And Open Interest Formula Design Notes
+
+- Liquidations should be treated as an observed forced-order context stream, not total market liquidations, because Binance pushes only the largest liquidation order per symbol within each 1000 ms interval.
+- Recommended liquidation bucket value: signed observed notional delta, where `BUY` force-order side is interpreted as short-liquidation buy pressure and `SELL` side as long-liquidation sell pressure.
+- Recommended liquidation normalization: divide signed liquidation notional by current/open-interest notional when available, use the signed value only for direction, and use robust-normalized absolute magnitude for color intensity. This keeps strength comparable across symbols and avoids color inversion when a positive delta is merely smaller than usual.
+- Open interest should be treated as low-frequency REST/statistics context, not a WebSocket stream or hot-path input.
+- Recommended OI bucket value: `sumOpenInterestValue[t] - sumOpenInterestValue[t-1]`, with relative delta `delta / previousOpenInterestValue`; green/red direction comes from the delta sign, while brightness comes from robust-normalized absolute magnitude.
+- Default frame should be 15 minutes with a 5-minute option; display duration should stay around 150 minutes, so tile count becomes 10 at 15m and 30 at 5m.
+- Normalization history should be longer than the visible 150 minutes, preferably about 24 hours per timeframe, bootstrapped from Binance open-interest history. Liquidation normalization needs warm-up or persisted local history because Binance does not provide equivalent historical liquidation buckets through this stream.
+- These context modules must remain separate visual modules first and must not change TC-DN-HOFI3 signal logic without a separate tested rule.
+- Implementation plan written to `docs/superpowers/plans/2026-05-26-liquidation-open-interest-context-modules.md`.
+
+## Liquidation And Open Interest Context Modules Implementation Todo
+
+- [x] Add Domain context models, frame helpers, and robust magnitude normalizer.
+- [x] Add Domain bucket calculators.
+- [x] Add Application context source/session boundary without referencing Infrastructure.
+- [x] Add Infrastructure Binance mapping for liquidation stream and open-interest history.
+- [x] Add Desktop config, ViewModel projection, and WPF liquidation/OI strips.
+- [x] Run full tests, publish, and live smoke on active symbols.
+
+## Liquidation And Open Interest Context Modules Results
+
+- HOFI/TFI formula unchanged; no changes were made to `TcDnHofi3Engine`, `IndicatorParameters`, `IndicatorSample`, or `SignalState`.
+- Added separate Domain context models, robust magnitude normalization, liquidation bucket calculation, and OI delta bucket calculation.
+- Added Application `IContextDataSource`, `ContextModuleSession`, and `ContextModuleSample`; `CryptoIndicatorApp.Application` still references only `CryptoIndicatorApp.Domain`.
+- Added Infrastructure Binance context mapping, USDS-M OI history REST loading, and `<symbol>@forceOrder` liquidation stream subscription.
+- Added Desktop context config defaults, 15m/5m frame selection, ViewModel tile projection, and compact WPF strips for liquidations and open interest.
+- Added `tools/LiveDryRun --context-only` smoke mode for non-GUI verification of OI history and liquidation subscription.
+- Verification: `dotnet test CryptoIndicatorApp.sln --no-restore` passed `64/64`; existing `NU1900` warning remains because NuGet vulnerability metadata could not be loaded.
+- Publish: `dotnet publish CryptoIndicatorApp.Desktop\CryptoIndicatorApp.Desktop.csproj -c Release -o publish\desktop --no-restore` completed with 0 errors and existing `NU1900` warning.
+- Sandbox context smoke failed on Binance SSL/network, then succeeded outside sandbox.
+- Live context smoke at 15m:
+  `ESPORTSUSDT`, `XANUSDT`, and `PLAYUSDT` each loaded 10 OI tiles, had 10 non-zero OI tiles, opened liquidation subscription successfully, and had 0 liquidation tiles because no force-order events arrived during the 4-second windows.
+- Additional 5m smoke on `XANUSDT` loaded 30 OI tiles, had 30 non-zero OI tiles, opened liquidation subscription successfully, and had 0 liquidation events during the 4-second window.
+- Known limitation: Binance liquidation stream reports only the largest liquidation snapshot per 1000 ms interval, not complete market liquidation history.
+
+## Context Refresh And TFI Chart Visibility Todo
+
+- [x] Record user-side WPF smoke: published app starts, symbol selection works, Start Live works, context strips render, and 15m/5m switching works.
+- [x] Add config-only periodic OI refresh for the context module, defaulting to a conservative one-symbol interval rather than any hot-path REST dependency.
+- [x] Keep OI refresh de-duplicated by Binance OI timestamp so repeated REST polls do not create fake delta tiles.
+- [x] Add Application tests proving OI refresh can emit updated context samples even when no liquidation events arrive.
+- [x] Add clearer Desktop label/tooltip for liquidations: the stream is observed liquidation snapshots, not complete liquidation volume.
+- [x] Add tooltip/source wording that Binance sends only the largest liquidation order per symbol within a 1000 ms interval and sends no event when none occurs.
+- [x] Improve TFI chart visibility as a Desktop-only rendering change; do not change `RollingTradeFlow`, `TcDnHofi3Engine`, thresholds, or signal logic.
+- [x] Prefer threshold-normalized visual scaling for TFI: plot/display a chart value derived from `TFI / ThetaTfi`, clipped for readability, while keeping the raw TFI metric text unchanged.
+- [x] Add chart rendering tests so a threshold-level TFI move produces a visible vertical deviation and does not flatten against the center line when `Z_OFI` has larger magnitude.
+- [x] Run Desktop tests, Application tests, full solution tests, and publish.
+- [x] User-side manual WPF smoke: verify OI refresh status over time, liquidation tooltip wording, and `TFI/Theta` chart visibility.
+
+## Context Refresh And TFI Chart Visibility Notes
+
+- Binance OI statistics are REST data with period choices including `5m` and `15m`, most-recent-data behavior when no time range is sent, and an IP limit documented by Binance. Polling belongs only in the slow context module, not in the HOFI/TFI hot path.
+- For one selected symbol, a simple configurable OI refresh interval is enough for MVP. Polling faster than the selected OI frame is mostly redundant, so refresh should be conservative and timestamp-deduplicated.
+- The liquidation strip should be named/tooled as observed forced-order snapshots. It must not imply full liquidation history or total liquidation volume.
+- Current chart geometry scales `Z_OFI` and raw `TFI` against a shared max absolute value. Since TFI is bounded near `[-1, 1]` and the useful confirmation threshold is around `0.15`, it becomes visually flat when `Z_OFI` spikes to several z-score units.
+- Do not "sharpen" TFI by changing the formula or lowering `ThetaTfi`. The lowest-risk visual fix is to plot TFI in threshold units, e.g. `TFI / ThetaTfi`, optionally clipped around `[-3, 3]`. Then `+1` means long-side TFI confirmation threshold and `-1` means short-side confirmation threshold.
+- If the combined chart still feels visually crowded after threshold-normalized TFI, the next UI option is a split two-lane chart with shared time axis: top `Z_OFI`, bottom `TFI confirmation strength`.
+
+## Context Refresh And TFI Chart Visibility Results
+
+- Added Application `IContextRefreshClock` and periodic OI refresh support in `ContextModuleSession`.
+- Desktop config now has `Dashboard.Context.OpenInterestRefreshSeconds`, default `60`; values below zero normalize to disabled `0`.
+- OI refresh is timestamp-deduplicated: repeated Binance OI snapshots with the same latest timestamp do not emit fake context samples.
+- Added Application tests for OI refresh without liquidation events and for same-timestamp deduplication.
+- Added Desktop labels/tooltips describing liquidation data as observed force-order snapshots, not total liquidation volume.
+- Changed chart rendering only: TFI line is plotted as `TFI / ThetaTfi`, clipped to `+/-3`; raw TFI metric text and signal logic are unchanged.
+- Added chart geometry tests proving a threshold-level TFI move is visibly displaced even next to larger `Z_OFI`.
+- Verification: Application tests passed `10/10`; Desktop tests passed `19/19`; full solution tests passed `68/68`.
+- Publish: `dotnet publish CryptoIndicatorApp.Desktop\CryptoIndicatorApp.Desktop.csproj -c Release -o publish\desktop --no-restore` succeeded; published config contains `OpenInterestRefreshSeconds: 60`.
+- Existing warning remains: `NU1900` because NuGet vulnerability metadata could not be loaded from `https://api.nuget.org/v3/index.json`.
+- Codex-side WPF launch for manual smoke was attempted after publish, but the launched process did not expose a top-level WPF window to UI Automation / `MainWindowHandle`; no crash event was recorded. Treat the visual WPF smoke as still user-side.
+- Re-verified after the launch attempt: `dotnet test CryptoIndicatorApp.sln --no-restore` passed `68/68`; published config still contains `OpenInterestRefreshSeconds: 60` and `ThetaTfi: 0.15`.
+
+## Raw TFI Chart Rollback Todo
+
+- [x] Record user-side smoke: OI strip stays healthy after refresh, and observed liquidations update/work.
+- [x] Add a Desktop regression test proving the chart uses raw TFI scaling rather than threshold-normalized `TFI/Theta`.
+- [x] Roll back the Desktop chart legend and rendering to raw `TFI` without changing `RollingTradeFlow`, thresholds, or signal logic.
+- [x] Run Desktop tests, full solution tests, and publish.
+
+## Raw TFI Chart Rollback Notes
+
+- User-side smoke found `TFI/Theta` more visible but too chaotic: it obscures `Z_OFI` and hurts chart readability.
+- The correct MVP rollback is Desktop-only raw TFI rendering. A future alternative, if TFI context is still needed, is a split two-lane chart instead of overlaying threshold-normalized TFI on the same axis.
+
+## Raw TFI Chart Rollback Results
+
+- Reverted the 60-second chart legend from `TFI/Theta` to raw `TFI`.
+- Reverted `MainWindow.RenderChart()` to plot raw `sample.Tfi` on the same shared scale as `Z_OFI`.
+- Removed the unused `ToTfiConfirmationStrength` chart helper.
+- Added a Desktop regression test that rejects `TFI/Theta` in the chart contract and verifies raw TFI stays visually subtle next to larger `Z_OFI`.
+- HOFI/TFI calculation, thresholds, signal logic, and metric-strip raw TFI values were not changed.
+- Verification: Desktop tests passed `20/20`; full solution tests passed `69/69`.
+- Publish: `dotnet publish CryptoIndicatorApp.Desktop\CryptoIndicatorApp.Desktop.csproj -c Release -o publish\desktop --no-restore` succeeded.
+- Existing warning remains: `NU1900` because NuGet vulnerability metadata could not be loaded from `https://api.nuget.org/v3/index.json`.
+
+## Chart Zero Line And Visual Color Tests Todo
+
+- [x] Record design requirement: red/green should not be used as static OFI/TFI identity colors because both series can support long and short context.
+- [x] Record design requirement: add a neutral gray zero line for orientation on the 60-second chart.
+- [x] Add a red Desktop test for zero-line geometry/contract.
+- [x] Implement the neutral zero line as Desktop-only chart rendering.
+- [x] Run Desktop tests, full solution tests, and publish.
+- [ ] Future visual-test slice: compare 4-color signed line variants where positive and negative OFI/TFI segments use distinct colors, with OFI opaque/dominant and TFI lower-opacity/secondary.
+
+## Chart Zero Line And Visual Color Tests Notes
+
+- Four-color signed rendering should not be added by just recoloring the two existing polylines. WPF `Polyline` has one stroke, so signed coloring needs segmented geometry or multiple per-sign polylines.
+- The visual design test should evaluate contrast on a white chart background, zero-line visibility, OFI dominance, TFI transparency, and color semantics that do not imply static long/short identity for the whole series.
+- Candidate palette families to test later: OFI positive in blue/cyan or emerald, OFI negative in ruby/rose; TFI positive in mint/teal with opacity, TFI negative in amber/orange/rose with opacity. Static red/green line identity should remain avoided.
+
+## Chart Zero Line And Visual Color Tests Results
+
+- Added a neutral gray dashed zero line to the 60-second chart as a Desktop-only orientation aid.
+- The zero line is rendered as a separate WPF `Line` behind the OFI/TFI polylines, not as market data and not as an indicator formula change.
+- Added Desktop tests for zero-line geometry and XAML/code-behind chart contract.
+- Recorded future visual-test requirements for signed 4-color rendering: separate positive/negative colors per series, OFI opaque/dominant, TFI lower-opacity/secondary, and no static red/green identity colors for whole OFI/TFI lines.
+- Verification: Desktop tests passed `22/22`; full solution tests passed `71/71`.
+- Publish: `dotnet publish CryptoIndicatorApp.Desktop\CryptoIndicatorApp.Desktop.csproj -c Release -o publish\desktop --no-restore` succeeded.
+- Existing warning remains: `NU1900` because NuGet vulnerability metadata could not be loaded from `https://api.nuget.org/v3/index.json`.
+
+## MVP Implementation Results
+
+- Implementation started after user approved the plan.
+- Current folder is not a git repository, so git worktree isolation and commits are unavailable unless git is initialized later.
+- Infrastructure red/green completed for JSONL event store and minimal Binance adapter boundaries.
+- JSONL replay fails fast on malformed rows and unsupported schema versions.
+- Minimal Binance boundary currently covers USDS-M stream names and raw field mapping into Domain events; full live socket source remains pending.
+- `dotnet test CryptoIndicatorApp.sln --no-restore` passed: Domain.Tests 9, Infrastructure.Tests 8.
+- `dotnet build CryptoIndicatorApp.sln --no-restore` passed after fixing the Desktop `Application` namespace collision.
+- Application boundary decision updated: `Application` must not reference `Infrastructure` or concrete `JsonlMarketEventStore`; JSONL/Binance composition belongs in Desktop or another outer composition layer.
+- Application slice implemented with `IMarketEventSource`, `IMarketEventRecorder`, shared `IndicatorPipeline`, `LiveIndicatorSession`, `ReplayIndicatorSession`, and `ChartSampleBuffer`.
+- Added `CryptoIndicatorApp.Application.Tests`: 6 tests cover no Infrastructure reference, shared live/replay output, deterministic replay sequence, live raw-event recording, record-before-process order, and 60-second chart retention.
+- `dotnet test CryptoIndicatorApp.sln --no-restore` passed: Domain.Tests 9, Application.Tests 6, Infrastructure.Tests 8.
+- `dotnet build CryptoIndicatorApp.sln --no-restore` passed with 1 warning: `NU1900` because NuGet vulnerability data could not be loaded from `https://api.nuget.org/v3/index.json`; escalated restore did not clear it.
+- Next WPF/composition slice intentionally excludes the full Binance live WebSocket source; that remains a separate infrastructure slice because it needs current Binance.Net API verification and live-data dry run.
+- WPF/composition slice added `CryptoIndicatorApp.Desktop.Tests` and registered it in the solution.
+- Desktop now composes Infrastructure at the outer boundary via JSONL source/recorder adapters; Application still references only Domain.
+- Added config-only `appsettings.json` for symbol, mode, replay path, recording path, chart window, and indicator parameters.
+- Added a minimal WPF dashboard with symbol/mode/status, recording/replay paths, book health, latency, `Z_OFI`, TFI, signal, last update ID, and native Polyline chart for the last 60 seconds.
+- Red/green verification: Desktop tests first failed on missing `Composition`, `Configuration`, and `ViewModels`, then passed after implementation.
+- `dotnet test CryptoIndicatorApp.sln --no-restore` passed: Domain.Tests 9, Application.Tests 6, Infrastructure.Tests 8, Desktop.Tests 3.
+- `dotnet build CryptoIndicatorApp.sln --no-restore` passed with 0 errors and 3 `NU1900` warnings from unavailable NuGet vulnerability data.
+- Verified `CryptoIndicatorApp.Application` project references only `CryptoIndicatorApp.Domain`; the only source-text hit for `CryptoIndicatorApp.Infrastructure` under Application is the existing boundary test assertion.
+- Confirmed `appsettings.json` is copied to `CryptoIndicatorApp.Desktop\bin\Debug\net8.0-windows`.
+- Live Binance source slice added `IBinanceUsdFuturesMarketDataClient`, `BinanceUsdFuturesLiveMarketEventSource`, and `BinanceNetUsdFuturesMarketDataClient`.
+- Live source subscribes to public depth and aggTrade streams first, loads the REST depth snapshot only for initial sync/resync, emits the snapshot before buffered depth updates, drops stale buffered updates, and emits a new snapshot after a detected `pu` gap.
+- Desktop now adapts the Infrastructure live source through `BinanceLiveMarketEventSource` and uses `LiveIndicatorSession` with JSONL recording in `Live` mode.
+- Application still references only Domain; `dotnet list CryptoIndicatorApp.Application/CryptoIndicatorApp.Application.csproj reference` shows only `CryptoIndicatorApp.Domain`.
+- Full solution verification passed after the live-source slice: Domain.Tests 9, Application.Tests 6, Infrastructure.Tests 11, Desktop.Tests 4.
+- `dotnet build CryptoIndicatorApp.sln --no-restore` passed with 0 errors and the existing 3 `NU1900` warnings about unavailable NuGet vulnerability data.
+- Live GUI/network dry run was deferred; no Binance API keys are needed for the current public market-data slice.
+- User-requested manual ticker refresh and optional ShadowSocks/local-proxy support were recorded as post-live MVP enhancements instead of being mixed into the sequence/snapshot slice.
+- Proxy support source-check found `CryptoExchange.Net` `ApiProxy`, `ExchangeOptions.Proxy`, and WebSocket proxy hooks in the installed 11.1.0 XML docs; GitHub source shows REST handler builds a `WebProxy` from `proxy.Host` and `proxy.Port`.
+- Added config-only proxy options under `Dashboard.Proxy`: `Enabled`, `Type`, `Host`, `Port`.
+- Implemented `BinanceConnectionOptions` / `BinanceProxyOptions` in Infrastructure and wired them through Desktop live composition into `BinanceNetUsdFuturesMarketDataClient`.
+- Supported proxy type is currently `Http`; unsupported values such as `Socks5` fail fast with a clear error instead of pretending SOCKS is supported by the current library surface.
+- For HTTP proxy safety, Infrastructure normalizes a bare host such as `127.0.0.1` to `http://127.0.0.1` before creating the `ApiProxy`, matching the library's URI construction path.
+- Proxy slice verification passed: `dotnet test CryptoIndicatorApp.sln --no-restore` passed 34 tests; `dotnet build CryptoIndicatorApp.sln --no-restore` passed with 0 errors and the existing 3 `NU1900` warnings.
+- Added `tools/LiveDryRun`, a non-GUI CLI harness that records public Binance USDS-M market events to JSONL and immediately replays them through `ReplayIndicatorSession`.
+- Sandbox live run failed at WebSocket subscription with `CantConnectError.UnableToConnect`; the same command succeeded outside the sandbox.
+- Live dry run command recorded `C:\Users\Steven Owl\Desktop\PRJCT-INDIC\recordings\live-dry-run-20260525-141619.jsonl`: 92 JSONL events, 69 live samples, 69 replay samples, sample counts matched, final book synced, resync count 0.
+- Full post-dry-run verification passed: `dotnet test CryptoIndicatorApp.sln --no-restore` passed 34 tests; `dotnet build CryptoIndicatorApp.sln --no-restore` passed with 0 errors and 4 existing `NU1900` warnings.
+
+## Skill Import Todo
+
+- [x] Inspect downloaded `agent-skills-main` folder.
+- [x] Identify candidate Codex skills under `skills/*/SKILL.md`.
+- [x] Check for install-name conflicts and obvious trigger risks.
+- [x] Copy approved skill folders into `C:\Users\Steven Owl\.codex\skills`.
+- [x] Verify installed skill folders and record restart requirement.
+
+## Skill Import Results
+
+- Source validator passed: 23 skills checked, 0 errors, 0 warnings.
+- Installed 23 imported skills into `C:\Users\Steven Owl\.codex\skills`.
+- Verified each non-system installed skill folder has `SKILL.md`.
+- Codex restart is required before the newly installed skills appear in future sessions.
+- Caution: several imported skills overlap with existing Superpowers workflows, so future sessions may trigger more process-heavy behavior.
+
+## Skill Dedup Audit Todo
+
+- [x] Define audit scope: imported global skills, existing Superpowers skills, and project `AGENTS.md`.
+- [x] Inventory imported skill triggers and likely overlap.
+- [x] Rank skills by usefulness for the TC-DN-HOFI3 Windows app.
+- [x] Identify keep / optional / remove candidates.
+- [x] Update `AGENTS.md` only with durable project guidance, not generic skill noise.
+- [x] Verify resulting files and summarize deletion recommendation separately.
+
+## Skill Dedup Audit Results
+
+- Added `tasks/skill-audit.md` with keep / later / remove-or-avoid recommendations for all 23 imported skills.
+- Updated `AGENTS.md` with a project-specific skill selection policy.
+- Did not delete global skill folders; pruning should be confirmed separately because it changes Codex behavior outside this project.
+
+## AGENTS Merge Todo
+
+- [x] Read current project `AGENTS.md`.
+- [x] Read downloaded `C:\Users\MECHREVO\Downloads\Telegram Desktop\agents.md`.
+- [x] Separate useful project rules from web/WSL/Docker-specific rules.
+- [x] Update project `AGENTS.md` with adapted combined guidance.
+- [x] Verify the resulting `AGENTS.md` for conflicts and obsolete paths.
+
+## AGENTS Merge Review
+
+- The downloaded file is useful as a strict engineering-policy source, but it is web-project biased.
+- Do not import Ubuntu WSL, Docker-only, CodeRabbit, JavaScript/JSDoc, frontend routing, database, or "no MVPs" rules into this WPF/.NET Binance analytics project.
+- Adapt useful ideas instead: Russian responses, explicit dependencies, source-file size guardrails, fail-fast required config/data, human-readable errors, bounded retries, risk-based tests, external API mocks, and clean handling of legacy compatibility.
+- Updated `AGENTS.md` with project-specific versions of those rules.
+- Replaced the stale `C:\Users\Steven Owl\.codex\skills\binance-indicator-dev\SKILL.md` fallback with `%USERPROFILE%\.codex\skills\binance-indicator-dev\SKILL.md`.
+- Verified the resulting `AGENTS.md` is 134 lines and does not contain imported Ubuntu WSL, CodeRabbit, JSDoc, Prisma, React, npm migration, or production-branch Docker deployment rules.
+- `$binance-indicator-dev` is still missing from `C:\Users\MECHREVO\.codex\skills\binance-indicator-dev\SKILL.md`; future sessions should state that and continue from project docs if the skill is unavailable.

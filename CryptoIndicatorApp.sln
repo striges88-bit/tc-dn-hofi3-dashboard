@@ -1,0 +1,82 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CryptoIndicatorApp.Domain", "CryptoIndicatorApp.Domain\CryptoIndicatorApp.Domain.csproj", "{F0403E7C-A4A8-41BE-81C0-EE1878DB85B0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CryptoIndicatorApp.Application", "CryptoIndicatorApp.Application\CryptoIndicatorApp.Application.csproj", "{C23CB1F0-A1D7-4150-B470-7E32DDA94F19}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CryptoIndicatorApp.Infrastructure", "CryptoIndicatorApp.Infrastructure\CryptoIndicatorApp.Infrastructure.csproj", "{39D391A8-3DA8-4E23-9536-6770AADC6707}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CryptoIndicatorApp.Desktop", "CryptoIndicatorApp.Desktop\CryptoIndicatorApp.Desktop.csproj", "{98A973DE-C02F-42D3-ABA9-6C68C70DD979}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CryptoIndicatorApp.Domain.Tests", "CryptoIndicatorApp.Domain.Tests\CryptoIndicatorApp.Domain.Tests.csproj", "{356298AC-DF21-460F-B7B6-3AE87AB11B33}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CryptoIndicatorApp.Infrastructure.Tests", "CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj", "{CCC81B84-C6BC-4A20-8924-3F8C4EB6C633}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CryptoIndicatorApp.Application.Tests", "CryptoIndicatorApp.Application.Tests\CryptoIndicatorApp.Application.Tests.csproj", "{9F61A16E-D99C-41BA-ABF9-17565CD254AB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CryptoIndicatorApp.Desktop.Tests", "CryptoIndicatorApp.Desktop.Tests\CryptoIndicatorApp.Desktop.Tests.csproj", "{E4EA5CE5-827A-40BC-9C3F-42E2DD1B942B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{D6066293-DF88-46DD-B305-CD0614B38B8D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CryptoIndicatorApp.LiveDryRun", "tools\LiveDryRun\CryptoIndicatorApp.LiveDryRun.csproj", "{6154AE89-13A6-42A5-9B37-9AA78F2E0393}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CryptoIndicatorApp.LiveDryRun.Tests", "tools\LiveDryRun.Tests\CryptoIndicatorApp.LiveDryRun.Tests.csproj", "{D78BBB63-EF54-4B5E-A4DA-9A294D7CFF72}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F0403E7C-A4A8-41BE-81C0-EE1878DB85B0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F0403E7C-A4A8-41BE-81C0-EE1878DB85B0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F0403E7C-A4A8-41BE-81C0-EE1878DB85B0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F0403E7C-A4A8-41BE-81C0-EE1878DB85B0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C23CB1F0-A1D7-4150-B470-7E32DDA94F19}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C23CB1F0-A1D7-4150-B470-7E32DDA94F19}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C23CB1F0-A1D7-4150-B470-7E32DDA94F19}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C23CB1F0-A1D7-4150-B470-7E32DDA94F19}.Release|Any CPU.Build.0 = Release|Any CPU
+		{39D391A8-3DA8-4E23-9536-6770AADC6707}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{39D391A8-3DA8-4E23-9536-6770AADC6707}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{39D391A8-3DA8-4E23-9536-6770AADC6707}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{39D391A8-3DA8-4E23-9536-6770AADC6707}.Release|Any CPU.Build.0 = Release|Any CPU
+		{98A973DE-C02F-42D3-ABA9-6C68C70DD979}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{98A973DE-C02F-42D3-ABA9-6C68C70DD979}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{98A973DE-C02F-42D3-ABA9-6C68C70DD979}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{98A973DE-C02F-42D3-ABA9-6C68C70DD979}.Release|Any CPU.Build.0 = Release|Any CPU
+		{356298AC-DF21-460F-B7B6-3AE87AB11B33}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{356298AC-DF21-460F-B7B6-3AE87AB11B33}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{356298AC-DF21-460F-B7B6-3AE87AB11B33}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{356298AC-DF21-460F-B7B6-3AE87AB11B33}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CCC81B84-C6BC-4A20-8924-3F8C4EB6C633}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CCC81B84-C6BC-4A20-8924-3F8C4EB6C633}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CCC81B84-C6BC-4A20-8924-3F8C4EB6C633}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CCC81B84-C6BC-4A20-8924-3F8C4EB6C633}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9F61A16E-D99C-41BA-ABF9-17565CD254AB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9F61A16E-D99C-41BA-ABF9-17565CD254AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9F61A16E-D99C-41BA-ABF9-17565CD254AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9F61A16E-D99C-41BA-ABF9-17565CD254AB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E4EA5CE5-827A-40BC-9C3F-42E2DD1B942B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E4EA5CE5-827A-40BC-9C3F-42E2DD1B942B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E4EA5CE5-827A-40BC-9C3F-42E2DD1B942B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E4EA5CE5-827A-40BC-9C3F-42E2DD1B942B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6154AE89-13A6-42A5-9B37-9AA78F2E0393}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6154AE89-13A6-42A5-9B37-9AA78F2E0393}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6154AE89-13A6-42A5-9B37-9AA78F2E0393}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6154AE89-13A6-42A5-9B37-9AA78F2E0393}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D78BBB63-EF54-4B5E-A4DA-9A294D7CFF72}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D78BBB63-EF54-4B5E-A4DA-9A294D7CFF72}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D78BBB63-EF54-4B5E-A4DA-9A294D7CFF72}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D78BBB63-EF54-4B5E-A4DA-9A294D7CFF72}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{6154AE89-13A6-42A5-9B37-9AA78F2E0393} = {D6066293-DF88-46DD-B305-CD0614B38B8D}
+		{D78BBB63-EF54-4B5E-A4DA-9A294D7CFF72} = {D6066293-DF88-46DD-B305-CD0614B38B8D}
+	EndGlobalSection
+EndGlobal

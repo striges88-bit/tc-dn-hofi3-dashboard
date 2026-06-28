@@ -1,0 +1,27 @@
+# Lessons
+
+Record feedback-driven mistake patterns here after reviews, corrections, or fixes.
+
+## Active Rules
+
+- Warn the user when the session context appears to be more than 50% full, and suggest compacting or summarizing before continuing substantial work.
+- When a WPF project references a layer named `Application`, fully qualify `System.Windows.Application` in `App.xaml.cs` because the project namespace can shadow the WPF type.
+- Keep the `Application` layer independent from concrete Infrastructure services such as `JsonlMarketEventStore`; expose source/recorder interfaces in Application and compose JSONL/Binance adapters only in Desktop or another outer layer.
+- After adding package references, run restore before `--no-restore` verification; otherwise compile errors can be caused by stale assets rather than source code.
+- Do not request or store Binance API keys for public market-data features; USDS-M depth snapshots, diff depth streams, and aggTrade streams are public.
+- Treat manual ticker refresh and proxy settings as outer infrastructure/config features, not as part of indicator formula or Application pipeline logic.
+- For CryptoExchange.Net `ApiProxy`, normalize HTTP proxy hosts with an explicit `http://` scheme before passing them to the library; its handler builds a URI from `proxy.Host` plus `proxy.Port`, so a bare host can fail at runtime.
+- For C# top-level program files, helper types declared after top-level statements are namespace-level types; do not mark them `private`.
+- Live Binance WebSocket dry runs may fail inside the sandbox even when normal network is enabled; rerun the exact command with user-approved escalation before diagnosing Binance or proxy code.
+- `IndicatorSample.ExchangeToReceiveLatency` is nullable; summary and latency tooling must handle missing latency values explicitly.
+- Robust z-score needs warm-up and a denominator floor before its output is treated as signal evidence; early flat `NOFI` history can make MAD effectively zero and produce enormous `Z_OFI`.
+- Keep CLI option parsing for tools in a public, testable class instead of burying it inside a top-level `Program.cs`; replay/reporting modes then get deterministic tests without invoking live network paths.
+- When implementing TC-DN-HOFI3 stability, include both parts of the documented gate (`1s stable z` and `2 of last 3` fast-z persistence) unless explicitly deferring one; otherwise the implementation silently becomes more conservative than the spec.
+- For WPF chart/UI work, a passing ViewModel test is not enough; verify container sizing and non-empty rendered geometry/points because an `Auto` row plus unconstrained `Canvas` can make live data invisible.
+- For editable ticker ComboBox UX, never leave `Start` enabled when the typed search text does not resolve to the selected symbol; otherwise the app can launch a stale previous symbol while the input displays an invalid ticker.
+- After refreshing a large symbol list, reset the filtered view to the full active list instead of applying stale search text from the previous selection.
+- When plotting heterogeneous indicator series together, avoid raw shared scaling if one series is bounded and another is a z-score; use semantic visual normalization, label the transformed line clearly, and keep raw metric values unchanged.
+- Do not count a WPF visual smoke as complete from Codex if the launched process has no `MainWindowHandle` or UI Automation top-level window; record automated checks separately and leave visual verification user-side.
+- If threshold-normalized TFI makes the combined chart unreadable, do not keep tuning the overlay; revert to raw TFI or move the transformed series into a separate lane.
+- For signed indicator chart colors, avoid assigning green/red as static series identities when both series can be positive or negative; encode series identity and sign separately, and keep secondary context lines lower-opacity than dominant signals.
+- Do not put another user's absolute profile path into durable project instructions; prefer `%USERPROFILE%` or a project-relative path, and state the fallback if an optional local skill is missing.
