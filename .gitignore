@@ -31,3 +31,7 @@ recordings/*.jsonl
 docs/memory/generated/
 *.gbrain
 *.graphify.json
+.gbrain/
+.graphify/
+.mem0/
+.graphiti/

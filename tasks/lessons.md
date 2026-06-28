@@ -4,7 +4,7 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 
 ## Active Rules
 
-- Warn the user when the session context appears to be more than 50% full, and suggest compacting or summarizing before continuing substantial work.
+- When the session context approaches 50% full, stop at a clean handoff point for `/compact`; record completed verification, remaining work, and the next pending command before continuing substantial work.
 - When a WPF project references a layer named `Application`, fully qualify `System.Windows.Application` in `App.xaml.cs` because the project namespace can shadow the WPF type.
 - Keep the `Application` layer independent from concrete Infrastructure services such as `JsonlMarketEventStore`; expose source/recorder interfaces in Application and compose JSONL/Binance adapters only in Desktop or another outer layer.
 - After adding package references, run restore before `--no-restore` verification; otherwise compile errors can be caused by stale assets rather than source code.
@@ -25,3 +25,5 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - If threshold-normalized TFI makes the combined chart unreadable, do not keep tuning the overlay; revert to raw TFI or move the transformed series into a separate lane.
 - For signed indicator chart colors, avoid assigning green/red as static series identities when both series can be positive or negative; encode series identity and sign separately, and keep secondary context lines lower-opacity than dominant signals.
 - Do not put another user's absolute profile path into durable project instructions; prefer `%USERPROFILE%` or a project-relative path, and state the fallback if an optional local skill is missing.
+- In PowerShell scripts, do not compute default parameter values from `$PSScriptRoot`; under some launch forms it can be empty during parameter binding. Accept an empty parameter and resolve `$PSScriptRoot` or `$PSCommandPath` inside the script body.
+- Codex may inherit a stale PATH after Git/GitHub CLI installation; verify common install paths and use absolute executables for the current session, then restart Codex/terminal for refreshed Machine PATH.

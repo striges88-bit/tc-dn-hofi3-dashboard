@@ -537,3 +537,66 @@
 - Replaced the stale `C:\Users\Steven Owl\.codex\skills\binance-indicator-dev\SKILL.md` fallback with `%USERPROFILE%\.codex\skills\binance-indicator-dev\SKILL.md`.
 - Verified the resulting `AGENTS.md` is 134 lines and does not contain imported Ubuntu WSL, CodeRabbit, JSDoc, Prisma, React, npm migration, or production-branch Docker deployment rules.
 - `$binance-indicator-dev` is still missing from `C:\Users\MECHREVO\.codex\skills\binance-indicator-dev\SKILL.md`; future sessions should state that and continue from project docs if the skill is unavailable.
+
+## Agent Memory Architecture Todo
+
+- [x] Record implementation scope: memory is project tooling only, not application runtime.
+- [x] Add red tests for memory contract files, retrieval facts, staleness rules, and refresh script behavior.
+- [x] Add a human-authored memory contract under `docs/memory/`.
+- [x] Add a generated-memory schema under `docs/memory/`.
+- [x] Add a manual memory refresh script that writes only ignored generated output.
+- [x] Add retrieval/staleness test commands for known project facts.
+- [x] Run narrow memory tests, full solution tests, and build.
+- [x] Record implementation results and limitations.
+
+## Agent Memory Architecture Results
+
+- Implemented memory as project tooling only; no WPF, Binance pipeline, formula, threshold, filter, cadence, or runtime config behavior was changed.
+- Added `docs/memory/contract.md` with source priority, human/generated boundaries, node/edge schema, staged retrieval protocol, staleness rules, and tool strategy.
+- Added `docs/memory/generated-memory.schema.json` for generated memory indexes.
+- Added ADR `docs/decisions/0002-agent-memory-contract.md`.
+- Added manual refresh script `scripts/memory-refresh.ps1`; it writes `docs/memory/generated/project-memory-index.json`, which remains ignored by Git.
+- Refresh output currently records 6 curated nodes, 5 edges, a source-file hash index, and tool availability for `gbrain`, `graphify`, `mem0`, and `graphiti`.
+- Added `MemoryContractTests` under Infrastructure tests for retrieval facts, schema enums/required metadata, staleness rules, ignored generated output, and build-artifact exclusion from the generated index.
+- TDD red/green was used: initial tests failed on missing contract/schema/script; later regression failed on invalid `valid_until` and noisy `bin/obj` source indexing before the script fix.
+- Verification passed: `dotnet test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter MemoryContractTests` passed `5/5`.
+- Verification passed: `dotnet test CryptoIndicatorApp.sln --no-restore` passed `76/76`.
+- Build verification passed: `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` completed with 0 warnings and 0 errors.
+- `$binance-indicator-dev` is still unavailable at `%USERPROFILE%\.codex\skills\binance-indicator-dev\SKILL.md`; this work continued from `AGENTS.md` and project docs.
+
+## Laptop Continuity And Skill Recovery Todo
+
+- [x] Confirm current skill status: `%USERPROFILE%\.codex\skills\binance-indicator-dev\SKILL.md` is missing on this laptop.
+- [x] Confirm current repo/tooling status: `.git` exists in the project folder, but `git` is not available in PATH on this laptop.
+- [x] Identify existing durable context sources: `AGENTS.md`, `TC-DN-HOFI3.md`, `docs/*`, `docs/memory/*`, `tasks/todo.md`, `tasks/lessons.md`, current code/tests/config.
+- [x] Install or locate Git for Windows and GitHub tooling on the laptop; verify `git status`, `git log`, `git remote -v`, and remote push health before relying on repository history.
+- [x] Reconstruct `binance-indicator-dev` as a versioned project artifact, not as local-only state. Preferred source path: `skills/binance-indicator-dev/SKILL.md`; installed copy path: `%USERPROFILE%\.codex\skills\binance-indicator-dev\SKILL.md`.
+- [x] Build the reconstructed skill from repo facts only: project scope/rules from `AGENTS.md`, formula and filters from `TC-DN-HOFI3.md` and `docs/formulas.md`, architecture from `docs/architecture.md` and ADRs, memory/retrieval rules from `docs/memory/contract.md`, and implementation boundaries from current code/tests.
+- [x] Keep `SKILL.md` concise and procedural; move longer reference material into `skills/binance-indicator-dev/references/` only if it prevents re-reading large docs every session.
+- [x] Add a small install script such as `scripts/install-project-skills.ps1` that copies the versioned skill into `%USERPROFILE%\.codex\skills` and fails fast if the source skill is missing.
+- [x] Add a lightweight repository test or script check that verifies the project skill source exists, has valid frontmatter, and includes the critical guardrails: no REST hot path, live/replay shared event types, no formula/threshold/cadence change without approval, Application must not reference Infrastructure, JSONL schema/versioning discipline.
+- [x] Validate the installed skill after copy and record that Codex restart may be required before the skill appears in the active skills list.
+- [x] Create a durable session-handoff habit: after meaningful work, update `tasks/todo.md` results, `tasks/lessons.md` after feedback/fixes, and `docs/memory/*` or a dated handoff note only for decisions/facts that should survive chat loss.
+- [x] Run `scripts/memory-refresh.ps1` after durable docs/code changes and verify generated memory remains under ignored `docs/memory/generated/`.
+- [ ] Push the repository after each meaningful work session; if remote push is unavailable, create an encrypted/off-machine backup or `git bundle` until GitHub access is restored.
+- [x] Do not treat ChatGPT/Codex chat history as canonical project storage. If an old thread contains important context, summarize the decision/evidence into repo docs instead of depending on account sync.
+- [x] Keep secrets, local proxy settings, raw JSONL recordings, and generated memory caches out of Git; commit reviewed summaries and reproducible scripts instead.
+
+## Laptop Continuity And Skill Recovery Review
+
+- Current plan deliberately avoids recreating the lost desktop state as another laptop-local-only dependency.
+- The source of truth should become the project repository; `%USERPROFILE%\.codex\skills` is only an installation target.
+- Old chat history and the original desktop skill remain unavailable for roughly 3 months, so reconstruction must be treated as best-effort from committed/project files, not as exact recovery.
+
+## Laptop Continuity And Skill Recovery Results
+
+- Git for Windows and GitHub CLI were already installed at `C:\Program Files\Git\cmd\git.exe` and `C:\Program Files\GitHub CLI\gh.exe`; the current Codex process PATH is stale, but Machine PATH already contains both tools. Use absolute paths in this session or restart Codex/terminal to refresh PATH.
+- Verified repository state with Git: branch `main` tracks `origin/main`; recent commits include `807d057 docs: record repository publication`; remote is `https://github.com/striges88-bit/tc-dn-hofi3-dashboard.git`.
+- Verified GitHub CLI auth for `striges88-bit` and remote `origin/main` via `git ls-remote --heads origin main`.
+- Created versioned project skill at `skills/binance-indicator-dev/SKILL.md` with UI metadata at `skills/binance-indicator-dev/agents/openai.yaml`.
+- Added `scripts/install-project-skills.ps1`; it installs the versioned skill to `%USERPROFILE%\.codex\skills\binance-indicator-dev` and refuses unsafe destination paths.
+- Installed the skill to `C:\Users\MECHREVO\.codex\skills\binance-indicator-dev`; Codex restart may be required before it appears in the active skill list.
+- Added `scripts/verify-project-skills.ps1`; it checks frontmatter, default prompt metadata, installed-copy equality, and critical project guardrails.
+- Official skill validator initially failed because bundled Python lacked `PyYAML`; installed `PyYAML` into ignored `.tools\python-packages` and reran `quick_validate.py`, which passed.
+- Fixed `scripts/memory-refresh.ps1` root detection because default parameter evaluation could see an empty `$PSScriptRoot` under `powershell.exe -File`; applied the same safer pattern to the new skill scripts.
+- Verification passed: `scripts/verify-project-skills.ps1 -CheckInstalled`, `quick_validate.py`, `scripts/memory-refresh.ps1`, `MemoryContractTests` `5/5`, full solution tests `76/76`, and solution build with `0` warnings and `0` errors.

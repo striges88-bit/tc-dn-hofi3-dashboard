@@ -1,0 +1,4 @@
+interface:
+  display_name: "Binance Indicator Dev"
+  short_description: "TC-DN-HOFI3 project workflow"
+  default_prompt: "Use $binance-indicator-dev before changing Binance streams, replay, indicators, or WPF live display."
