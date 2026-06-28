@@ -101,9 +101,9 @@ The manual refresh script may write ignored files under `docs/memory/generated/`
 
 ## Tool Strategy
 
-- Hindsight is the preferred external semantic memory candidate. Its upstream Codex, CLI, MCP, and embedded-daemon surfaces are confirmed in `docs/memory/hindsight-spike.md`, but local install mode, Windows behavior, import script, retention policy, auth, and export/backup behavior remain spike work.
+- Hindsight is the preferred external semantic memory candidate. Its upstream Codex, CLI, MCP, and embedded-daemon surfaces are confirmed in `docs/memory/hindsight-spike.md`, but local install mode, Windows behavior, retention policy, auth, and export/backup behavior remain spike work.
 - Hindsight must stay below generated indexes in source priority and must not become a WPF/.NET runtime dependency.
-- Codex auto-retain must stay disabled during MVP. Use curated import first: `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`.
+- Codex auto-retain must stay disabled during MVP. Use `scripts/hindsight-curated-import.ps1` to generate a pre-install manifest for curated import sources: `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`.
 - Do not import raw JSONL recordings, generated memory exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps into Hindsight.
 - GBrain upstream CLI and Codex MCP documentation are confirmed in `docs/memory/gbrain-spike.md`, but GBrain is now a historical/secondary candidate rather than the roadmap-preferred external memory tool.
 - Graphify is still a spike target. Confirm its real CLI/API and export format before making it required.

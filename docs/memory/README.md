@@ -25,6 +25,12 @@ Refresh the local generated index:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh.ps1
 ```
 
+Generate the pre-install Hindsight curated import manifest without calling Hindsight:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\hindsight-curated-import.ps1
+```
+
 Run the retrieval/staleness contract tests:
 
 ```powershell

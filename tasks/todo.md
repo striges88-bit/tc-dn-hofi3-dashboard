@@ -609,14 +609,29 @@
 
 ## Hindsight Curated Import Todo
 
-- [ ] Commit the current Hindsight/GBrain memory-roadmap layer before adding import tooling.
-- [ ] Add a failing memory contract test for a curated Hindsight import manifest/script allowlist.
-- [ ] Verify the failing test rejects missing curated import tooling for the expected reason.
-- [ ] Add minimal curated import tooling that lists only approved source files.
-- [ ] Ensure denylisted sources stay excluded: `recordings/*.jsonl`, `docs/memory/generated/`, secrets, build artifacts, and local proxy details.
-- [ ] Update memory docs/open questions with the pre-install import rule and keep Codex auto-retain disabled.
-- [ ] Run `scripts/memory-refresh.ps1`, narrow memory tests, and review uncommitted changes.
-- [ ] Record results and remaining install-spike decision.
+- [x] Commit the current Hindsight/GBrain memory-roadmap layer before adding import tooling.
+- [x] Add a failing memory contract test for a curated Hindsight import manifest/script allowlist.
+- [x] Verify the failing test rejects missing curated import tooling for the expected reason.
+- [x] Add minimal curated import tooling that lists only approved source files.
+- [x] Ensure denylisted sources stay excluded: `recordings/*.jsonl`, `docs/memory/generated/`, secrets, build artifacts, and local proxy details.
+- [x] Update memory docs/open questions with the pre-install import rule and keep Codex auto-retain disabled.
+- [x] Run `scripts/memory-refresh.ps1`, narrow memory tests, and review uncommitted changes.
+- [x] Record results and remaining install-spike decision.
+
+## Hindsight Curated Import Results
+
+- Committed the prior Hindsight/GBrain roadmap layer as `3b30b2a docs: prefer hindsight memory candidate`.
+- Added `CryptoIndicatorApp.Infrastructure.Tests/HindsightCuratedImportTests.cs` with a red/green test for the curated import manifest script.
+- Red verification failed for the expected reason: missing `scripts/hindsight-curated-import.ps1`.
+- Added `scripts/hindsight-curated-import.ps1`; it writes only `docs/memory/generated/hindsight-curated-import-manifest.json` and does not install Hindsight, call Hindsight APIs, start daemons, or enable Codex hooks.
+- The import allowlist is `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`.
+- The denylist excludes raw JSONL recordings, generated memory exports, secrets, local proxy details, build artifacts, and unreviewed experiment dumps.
+- Updated `docs/memory/contract.md`, `docs/memory/README.md`, `docs/memory/hindsight-spike.md`, and `docs/memory/open-questions.md` so the current status is manifest-only pre-install tooling.
+- `scripts/hindsight-curated-import.ps1` generated `13` curated file entries with Codex auto-retain disabled.
+- `scripts/memory-refresh.ps1` generated the ignored index with `6` nodes, `5` edges, and `144` indexed files.
+- Verification passed: `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore` passed `26/26`.
+- Full solution build/test was not rerun for this docs/script/test-only memory slice.
+- Remaining install-spike decision: use Python/uvx embedded daemon first unless a later constraint requires Cloud, Docker, or external PostgreSQL.
 
 ## Laptop Continuity And Skill Recovery Todo
 

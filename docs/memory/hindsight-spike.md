@@ -53,11 +53,19 @@ This means Hindsight is confirmed upstream, but it is not currently usable as a 
 - Do not store Hindsight API tokens, local databases, or daemon state in Git.
 - Treat Cloud, Docker, Python/uvx, and external PostgreSQL modes as separate install-spike options.
 
+## Curated Import Manifest
+
+- `scripts/hindsight-curated-import.ps1` generates `docs/memory/generated/hindsight-curated-import-manifest.json`.
+- The script only lists approved project files; it does not install Hindsight, call a Hindsight API, start a daemon, or enable Codex hooks.
+- Approved sources are `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`.
+- Denied sources include raw JSONL recordings, generated memory exports, secrets, local proxy details, build artifacts, and unreviewed experiment dumps.
+- This manifest is a pre-install safety gate. The actual Hindsight `retain-files` command, bank ID, auth, and retention behavior still require the install spike.
+
 ## Remaining Gaps
 
 - Local install mode is not selected: Cloud, Docker, Python/uvx embedded daemon, or external PostgreSQL.
 - Local Windows install has not been executed.
 - The Codex hook behavior has not been tested in this desktop environment.
-- The exact curated import command/script is not implemented yet.
+- The exact Hindsight retain/import command using the curated manifest has not been tested yet.
 - Export/backup format and deletion/retention policy are not confirmed.
 - Authentication and bank naming policy are not defined.
