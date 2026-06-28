@@ -14,6 +14,13 @@
 
 Project-specific rules in this file override generic imported or global instructions when they conflict.
 
+## Git Commit Cadence
+
+- After a coherent, verified work slice is complete, commit it proactively instead of letting reviewed changes accumulate.
+- Commit only changes that are in scope for the current task and have passed the narrowest meaningful verification.
+- Do not auto-commit secrets, raw recordings, generated memory exports, local machine state, or unrelated user changes.
+- If the worktree is mixed, verification failed, or the commit boundary is unclear, stop at a clean point, record status in `tasks/todo.md`, and ask before committing.
+
 ## Project Scope
 
 This project is a Windows analytics application for the TC-DN-HOFI3 Binance USDS-M Futures indicator.

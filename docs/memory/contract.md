@@ -101,10 +101,13 @@ The manual refresh script may write ignored files under `docs/memory/generated/`
 
 ## Tool Strategy
 
-- Hindsight is the preferred external semantic memory candidate. Its upstream Codex, CLI, MCP, and embedded-daemon surfaces are confirmed in `docs/memory/hindsight-spike.md`, but local install mode, Windows behavior, retention policy, auth, and export/backup behavior remain spike work.
+- Hindsight is the preferred external semantic memory candidate. Its upstream Codex, CLI, MCP, and embedded-daemon surfaces are confirmed in `docs/memory/hindsight-spike.md`; Python/uvx embedded package probing is complete, and the local `tc-dn-hofi3` daemon endpoint is confirmed at `http://127.0.0.1:9077`. Retain/import behavior, Rust CLI availability, billing/auth usability, retention policy, and export/backup behavior remain spike work.
 - Hindsight must stay below generated indexes in source priority and must not become a WPF/.NET runtime dependency.
 - Codex auto-retain must stay disabled during MVP. Use `scripts/hindsight-curated-import.ps1` to generate a pre-install manifest for curated import sources: `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`.
 - Do not import raw JSONL recordings, generated memory exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps into Hindsight.
+- Python/uvx embedded daemon is the selected first Hindsight install-spike path. Track it through `docs/memory/hindsight-install-spike.md` and `scripts/hindsight-install-spike.ps1`; the install-spike report is generated under ignored `docs/memory/generated/`.
+- Store Hindsight LLM secrets only in ignored `.hindsight/` env files and load them into process environment. Do not pass secret values through Hindsight profile `--env`, `profile set-env`, shell history, or committed config.
+- Do not run Hindsight `retain`, `retain-files`, curated import, or Codex hook configuration until LLM billing/auth, Rust CLI versus embedded import surface, retention, export, and delete policy are confirmed.
 - GBrain upstream CLI and Codex MCP documentation are confirmed in `docs/memory/gbrain-spike.md`, but GBrain is now a historical/secondary candidate rather than the roadmap-preferred external memory tool.
 - Graphify is still a spike target. Confirm its real CLI/API and export format before making it required.
 - Mem0 may be used as a semantic cache with metadata filters, not as a source of truth.

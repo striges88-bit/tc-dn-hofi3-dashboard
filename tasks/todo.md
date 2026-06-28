@@ -670,3 +670,79 @@
 - Fixed `scripts/memory-refresh.ps1` root detection because default parameter evaluation could see an empty `$PSScriptRoot` under `powershell.exe -File`; applied the same safer pattern to the new skill scripts.
 - Verification passed: `scripts/verify-project-skills.ps1 -CheckInstalled`, `quick_validate.py`, `scripts/memory-refresh.ps1`, `MemoryContractTests` `5/5`, full solution tests `76/76`, and solution build with `0` warnings and `0` errors.
 - Committed and pushed continuity tooling to `origin/main` in commit `111760d chore: add project continuity tooling`.
+
+## Hindsight Python/Uvx Install Spike Todo
+
+- [x] Confirm current upstream Python/uvx embedded daemon commands and note any doc inconsistencies before installing or retaining memory.
+- [x] Add a failing test for a safe install-spike report/script contract.
+- [x] Add a minimal install-spike script that probes prerequisites and writes only ignored generated output.
+- [x] Keep Codex auto-retain disabled and do not import curated files during the install spike.
+- [x] Run local prerequisite checks; only run network/install commands as an explicit spike step.
+- [x] Update memory docs/open questions with actual install status, blocked items, and next command.
+- [x] Run narrow memory/tooling tests and `scripts/memory-refresh.ps1`.
+- [x] Record install-spike results and remaining risk.
+
+## Hindsight Python/Uvx Install Spike Results
+
+- Added `CryptoIndicatorApp.Infrastructure.Tests/HindsightInstallSpikeTests.cs` with a red/green guard for a safe install-spike script and docs.
+- Red verification failed for the expected reason: missing `scripts/hindsight-install-spike.ps1` and `docs/memory/hindsight-install-spike.md`.
+- Added `scripts/hindsight-install-spike.ps1`; default mode only probes local tools and writes ignored `docs/memory/generated/hindsight-install-spike-report.json`.
+- Added `docs/memory/hindsight-install-spike.md` and updated `docs/memory/hindsight-spike.md`, `docs/memory/contract.md`, `docs/memory/open-questions.md`, and `docs/memory/README.md`.
+- Installed `uv` user-scoped through WinGet package `astral-sh.uv`; installed version is `uv 0.11.25`.
+- Current Codex PATH stayed stale after WinGet install, so the spike script now discovers `uv.exe` and `uvx.exe` under `%LOCALAPPDATA%\Microsoft\WinGet\Packages\astral-sh.uv_*`.
+- `uvx hindsight-embed --help` succeeded and downloaded managed `cpython-3.14.6-windows-x86_64-none` plus package dependencies.
+- Embedded CLI help confirms profile, daemon, UI/control, `memory retain`, `memory recall`, `memory reflect`, and `bank list` surfaces.
+- `hindsight-embed profile show -o json` reports default config under `%USERPROFILE%\.hindsight\embed` and port `8888`.
+- `hindsight-embed daemon status` reports daemon not running and exits with code `1`.
+- `hindsight-embed memory retain --help` and `hindsight-embed bank list --help` fail before help output with `LLM API key is required`; no `OPENAI_API_KEY`, `HINDSIGHT_API_TOKEN`, or `HINDSIGHT_API_LLM_API_KEY` was present in this Codex process.
+- Codex auto-retain remains disabled; curated import was not executed; daemon was not started; no `retain` or `retain-files` command was run.
+- Verification passed: `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore` passed `28/28`.
+- `scripts/memory-refresh.ps1` generated the ignored index with `6` nodes, `5` edges, and `147` indexed files.
+- `scripts/hindsight-install-spike.ps1 -ProbeUvxHelp` regenerated the ignored install-spike report after tests.
+- Remaining next step: approve secret-backed Hindsight env handling, then create an explicit project profile and test daemon/MCP endpoint behavior before any curated import.
+
+## Hindsight Profile And Daemon Smoke Todo
+
+- [x] Create a new OpenAI project API key through the secure encrypted flow without printing the plaintext key.
+- [x] Store the key only in ignored repo-local env storage under `.hindsight/`.
+- [x] Decide the project secret-backed env policy and document it without recording secret values.
+- [x] Create an explicit Hindsight project profile for `tc-dn-hofi3` using the ignored env file.
+- [x] Start/check the embedded daemon and confirm the actual local endpoint before any import.
+- [x] Probe the MCP endpoint/bank surface without retaining or importing project files.
+- [x] Update Hindsight docs/open questions with real profile, daemon, and MCP results.
+- [x] Run narrow memory tooling tests and refresh generated memory.
+- [x] Record results, blockers, and the next safe command.
+
+## Hindsight Profile And Daemon Smoke Results
+
+- Created OpenAI project API key `TC-DN-HOFI3 Hindsight` through encrypted setup and wrote it only to ignored `.hindsight/tc-dn-hofi3.env`; plaintext was not printed.
+- Secret policy: keep Hindsight/OpenAI secrets in ignored `.hindsight/` env files, load them only into process environment, and do not pass them through Hindsight `--env`, `profile set-env`, shell history, or committed config.
+- Created explicit Hindsight profile `tc-dn-hofi3` on port `9077`; Hindsight stores profile config at `%USERPROFILE%\.hindsight\profiles\tc-dn-hofi3.env`.
+- First daemon start opened a visible/hanging launcher and then hit Hindsight's 180s timeout while downloading/initializing heavy Python dependencies, local embeddings/reranker, embedded PostgreSQL, and migrations.
+- Stopped the visible launcher process tree; later hidden startup completed enough for the API process to become healthy.
+- Confirmed daemon status: `hindsight-embed -p tc-dn-hofi3 daemon status` reports `Daemon Running`.
+- Confirmed endpoints: `http://127.0.0.1:9077/health`, `/mcp/`, and `/metrics` return HTTP `200`; `/` returns HTTP `404`.
+- Hindsight log shows OpenAI verification fails with `billing_not_active`, so LLM-dependent retain/recall/reflect behavior is blocked until OpenAI account billing is active.
+- `hindsight-embed -p tc-dn-hofi3 bank list` with process env attempts to use/install the separate Rust `hindsight` CLI and failed locally with `[WinError 2]`; bank/import behavior remains unverified.
+- Curated import, `retain`, `retain-files`, and Codex auto-retain were not executed.
+- Updated `docs/memory/hindsight-install-spike.md`, `docs/memory/hindsight-spike.md`, `docs/memory/contract.md`, `docs/memory/open-questions.md`, and `MemoryContractTests` so old "daemon not running" facts are no longer current.
+- Verification passed: `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter "MemoryContractTests|HindsightInstallSpikeTests"` passed `9/9`.
+- `scripts/memory-refresh.ps1` regenerated the ignored memory index with `6` nodes, `5` edges, and `147` indexed files.
+- `git diff --check` passed.
+- Intended Hindsight daemon processes remain running for the approved project profile on port `9077`; no extra visible launcher process remained after cleanup.
+- Next safe command after fixing OpenAI billing is a non-import smoke such as `hindsight-embed -p tc-dn-hofi3 bank list` with process env loaded. Do not run curated import or retain until Rust CLI/import behavior and retention/export/delete policy are confirmed.
+
+## Git Commit Cadence Todo
+
+- [x] Record a durable rule that Codex should commit coherent verified work slices proactively.
+- [x] Prefer a project instruction over an automatic Git hook because hooks cannot safely decide semantic commit boundaries or exclude unrelated user changes.
+- [x] Keep the guardrail explicit: no auto-commit for secrets, raw recordings, generated memory exports, local machine state, unrelated user changes, unclear scope, or failed/incomplete verification.
+- [x] Re-run the narrow memory/Hindsight tests before committing the current slice.
+- [x] Review Git status/diff hygiene before staging.
+- [x] Commit the verified memory/Hindsight profile smoke and commit-cadence rule.
+
+## Git Commit Cadence Results
+
+- Added `AGENTS.md` Git commit cadence rules for proactive commits after coherent verified slices.
+- Added the same feedback-driven rule to `tasks/lessons.md`.
+- Did not add a Git auto-commit hook: that would be unsafe for secrets, generated outputs, and mixed worktrees.

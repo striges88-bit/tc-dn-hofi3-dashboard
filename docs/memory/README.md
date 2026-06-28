@@ -12,6 +12,7 @@ For now, it is documentation only. The application runtime must not depend on th
 - `entities.md`: domain and architecture entities that graph tools may later ingest.
 - `project-map.md`: high-level module map.
 - `hindsight-spike.md`: confirmed upstream Hindsight surface, local availability, curated import policy, and MVP restrictions.
+- `hindsight-install-spike.md`: selected Python/uvx embedded daemon install-spike path and safety gates.
 - `gbrain-spike.md`: confirmed upstream GBrain CLI/API surface and current local availability.
 - `open-questions.md`: unresolved questions that should not be silently encoded as facts.
 
@@ -29,6 +30,12 @@ Generate the pre-install Hindsight curated import manifest without calling Hinds
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\hindsight-curated-import.ps1
+```
+
+Generate the safe Hindsight install-spike report without installing packages or starting daemons:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\hindsight-install-spike.ps1
 ```
 
 Run the retrieval/staleness contract tests:

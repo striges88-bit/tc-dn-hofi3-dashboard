@@ -158,7 +158,15 @@ public sealed class MemoryContractTests
         Assert.Contains("Stop", spike, StringComparison.Ordinal);
         Assert.Contains("where.exe hindsight", spike, StringComparison.Ordinal);
         Assert.Contains("python --version", spike, StringComparison.Ordinal);
-        Assert.Contains("not currently usable as a local project tool", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("uvx hindsight-embed --help", spike, StringComparison.Ordinal);
+        Assert.Contains("port `8888`", spike, StringComparison.Ordinal);
+        Assert.Contains("profile named `tc-dn-hofi3`", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("port `9077`", spike, StringComparison.Ordinal);
+        Assert.Contains("/mcp/", spike, StringComparison.Ordinal);
+        Assert.Contains("billing_not_active", spike, StringComparison.Ordinal);
+        Assert.Contains("separate Rust `hindsight` CLI", spike, StringComparison.Ordinal);
+        Assert.Contains("not installed locally", spike, StringComparison.Ordinal);
+        Assert.Contains("auto-installer failed", spike, StringComparison.Ordinal);
         Assert.Contains("Do not enable Codex auto-retain during MVP", spike, StringComparison.Ordinal);
         Assert.Contains("docs/memory/*.md", spike, StringComparison.Ordinal);
         Assert.Contains("docs/decisions/*.md", spike, StringComparison.Ordinal);
@@ -173,7 +181,10 @@ public sealed class MemoryContractTests
         Assert.Contains("docs/memory/*.md", contract, StringComparison.Ordinal);
         Assert.Contains("Hindsight", readme, StringComparison.Ordinal);
         Assert.Contains("historical/secondary candidate", readme, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("local install mode is still undecided", openQuestions, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("uvx hindsight-embed --help", openQuestions, StringComparison.Ordinal);
+        Assert.Contains("tc-dn-hofi3", openQuestions, StringComparison.Ordinal);
+        Assert.Contains("http://127.0.0.1:9077", openQuestions, StringComparison.Ordinal);
+        Assert.Contains("billing_not_active", openQuestions, StringComparison.Ordinal);
         Assert.Contains("auto-retain must remain disabled during MVP", openQuestions, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(".hindsight/", gitignore, StringComparison.Ordinal);
         Assert.Contains("*.hindsight", gitignore, StringComparison.Ordinal);
