@@ -578,7 +578,7 @@
 - [x] Validate the installed skill after copy and record that Codex restart may be required before the skill appears in the active skills list.
 - [x] Create a durable session-handoff habit: after meaningful work, update `tasks/todo.md` results, `tasks/lessons.md` after feedback/fixes, and `docs/memory/*` or a dated handoff note only for decisions/facts that should survive chat loss.
 - [x] Run `scripts/memory-refresh.ps1` after durable docs/code changes and verify generated memory remains under ignored `docs/memory/generated/`.
-- [ ] Push the repository after each meaningful work session; if remote push is unavailable, create an encrypted/off-machine backup or `git bundle` until GitHub access is restored.
+- [x] Push the repository after each meaningful work session; if remote push is unavailable, create an encrypted/off-machine backup or `git bundle` until GitHub access is restored.
 - [x] Do not treat ChatGPT/Codex chat history as canonical project storage. If an old thread contains important context, summarize the decision/evidence into repo docs instead of depending on account sync.
 - [x] Keep secrets, local proxy settings, raw JSONL recordings, and generated memory caches out of Git; commit reviewed summaries and reproducible scripts instead.
 
@@ -600,3 +600,4 @@
 - Official skill validator initially failed because bundled Python lacked `PyYAML`; installed `PyYAML` into ignored `.tools\python-packages` and reran `quick_validate.py`, which passed.
 - Fixed `scripts/memory-refresh.ps1` root detection because default parameter evaluation could see an empty `$PSScriptRoot` under `powershell.exe -File`; applied the same safer pattern to the new skill scripts.
 - Verification passed: `scripts/verify-project-skills.ps1 -CheckInstalled`, `quick_validate.py`, `scripts/memory-refresh.ps1`, `MemoryContractTests` `5/5`, full solution tests `76/76`, and solution build with `0` warnings and `0` errors.
+- Committed and pushed continuity tooling to `origin/main` in commit `111760d chore: add project continuity tooling`.
