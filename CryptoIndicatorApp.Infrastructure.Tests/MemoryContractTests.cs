@@ -119,6 +119,67 @@ public sealed class MemoryContractTests
     }
 
     [Fact]
+    public void GBrainSpikeRecordsUpstreamCliAndLocalAvailability()
+    {
+        var spike = ReadText("docs/memory/gbrain-spike.md");
+        var contract = ReadText("docs/memory/contract.md");
+        var openQuestions = ReadText("docs/memory/open-questions.md");
+
+        Assert.Contains("historical/secondary candidate", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Hindsight replaced GBrain", spike, StringComparison.Ordinal);
+        Assert.Contains("garrytan/gbrain", spike, StringComparison.Ordinal);
+        Assert.Contains("gbrain init --pglite", spike, StringComparison.Ordinal);
+        Assert.Contains("codex mcp add gbrain -- gbrain serve", spike, StringComparison.Ordinal);
+        Assert.Contains("Bun `>=1.3.10`", spike, StringComparison.Ordinal);
+        Assert.Contains("where.exe gbrain", spike, StringComparison.Ordinal);
+        Assert.Contains("not found", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not currently usable as a local project tool", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("docs/memory/gbrain-spike.md", contract, StringComparison.Ordinal);
+        Assert.Contains("historical/secondary candidate", contract, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("local Windows install", openQuestions, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void HindsightSpikeSetsPreferredExternalMemoryWithoutAutoRetain()
+    {
+        var spike = ReadText("docs/memory/hindsight-spike.md");
+        var contract = ReadText("docs/memory/contract.md");
+        var readme = ReadText("docs/memory/README.md");
+        var openQuestions = ReadText("docs/memory/open-questions.md");
+        var gitignore = ReadText(".gitignore");
+
+        Assert.Contains("vectorize-io/hindsight", spike, StringComparison.Ordinal);
+        Assert.Contains("preferred external memory candidate", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Python `>=3.11`", spike, StringComparison.Ordinal);
+        Assert.Contains("hindsight memory retain-files", spike, StringComparison.Ordinal);
+        Assert.Contains("/mcp/{bank_id}/", spike, StringComparison.Ordinal);
+        Assert.Contains("SessionStart", spike, StringComparison.Ordinal);
+        Assert.Contains("UserPromptSubmit", spike, StringComparison.Ordinal);
+        Assert.Contains("Stop", spike, StringComparison.Ordinal);
+        Assert.Contains("where.exe hindsight", spike, StringComparison.Ordinal);
+        Assert.Contains("python --version", spike, StringComparison.Ordinal);
+        Assert.Contains("not currently usable as a local project tool", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Do not enable Codex auto-retain during MVP", spike, StringComparison.Ordinal);
+        Assert.Contains("docs/memory/*.md", spike, StringComparison.Ordinal);
+        Assert.Contains("docs/decisions/*.md", spike, StringComparison.Ordinal);
+        Assert.Contains("docs/formulas.md", spike, StringComparison.Ordinal);
+        Assert.Contains("AGENTS.md", spike, StringComparison.Ordinal);
+        Assert.Contains("tasks/lessons.md", spike, StringComparison.Ordinal);
+        Assert.Contains("Do not import raw JSONL recordings", spike, StringComparison.Ordinal);
+
+        Assert.Contains("Hindsight is the preferred external semantic memory candidate", contract, StringComparison.Ordinal);
+        Assert.Contains("docs/memory/hindsight-spike.md", contract, StringComparison.Ordinal);
+        Assert.Contains("Codex auto-retain must stay disabled during MVP", contract, StringComparison.Ordinal);
+        Assert.Contains("docs/memory/*.md", contract, StringComparison.Ordinal);
+        Assert.Contains("Hindsight", readme, StringComparison.Ordinal);
+        Assert.Contains("historical/secondary candidate", readme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("local install mode is still undecided", openQuestions, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("auto-retain must remain disabled during MVP", openQuestions, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(".hindsight/", gitignore, StringComparison.Ordinal);
+        Assert.Contains("*.hindsight", gitignore, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RefreshScriptBuildsIgnoredGeneratedIndexWithRequiredMetadata()
     {
         var scriptPath = Path.Combine(Root, "scripts", "memory-refresh.ps1");

@@ -536,7 +536,7 @@
 - Updated `AGENTS.md` with project-specific versions of those rules.
 - Replaced the stale `C:\Users\Steven Owl\.codex\skills\binance-indicator-dev\SKILL.md` fallback with `%USERPROFILE%\.codex\skills\binance-indicator-dev\SKILL.md`.
 - Verified the resulting `AGENTS.md` is 134 lines and does not contain imported Ubuntu WSL, CodeRabbit, JSDoc, Prisma, React, npm migration, or production-branch Docker deployment rules.
-- `$binance-indicator-dev` is still missing from `C:\Users\MECHREVO\.codex\skills\binance-indicator-dev\SKILL.md`; future sessions should state that and continue from project docs if the skill is unavailable.
+- Historical note, superseded by "Laptop Continuity And Skill Recovery Results": at this point `$binance-indicator-dev` was missing from `C:\Users\MECHREVO\.codex\skills\binance-indicator-dev\SKILL.md`; do not treat this as current skill status.
 
 ## Agent Memory Architecture Todo
 
@@ -562,7 +562,61 @@
 - Verification passed: `dotnet test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter MemoryContractTests` passed `5/5`.
 - Verification passed: `dotnet test CryptoIndicatorApp.sln --no-restore` passed `76/76`.
 - Build verification passed: `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` completed with 0 warnings and 0 errors.
-- `$binance-indicator-dev` is still unavailable at `%USERPROFILE%\.codex\skills\binance-indicator-dev\SKILL.md`; this work continued from `AGENTS.md` and project docs.
+- Historical note, superseded by "Laptop Continuity And Skill Recovery Results": at this point `$binance-indicator-dev` was unavailable at `%USERPROFILE%\.codex\skills\binance-indicator-dev\SKILL.md`; this is not the current skill status.
+
+## GBrain CLI/API Spike Todo
+
+- [x] Confirm upstream GBrain repository, install/runtime requirements, CLI entrypoint, and documented local setup command from current source.
+- [x] Check whether `gbrain` and its required runtime are available in the current Windows environment.
+- [x] Record the confirmed command/API surface and local availability in `docs/memory/`.
+- [x] Update memory open questions so GBrain is not mixed with still-unverified Graphify details.
+- [x] Run the narrow memory contract tests after documentation changes.
+- [x] Record spike results and remaining risks.
+
+## GBrain CLI/API Spike Results
+
+- Confirmed upstream `garrytan/gbrain` exists and documents `gbrain init --pglite` for local PGlite setup.
+- Confirmed package metadata: CLI entrypoint is `gbrain`, runtime requires Bun, and upstream documents standalone install via `bun install -g github:garrytan/gbrain`.
+- Confirmed upstream Codex MCP path: `codex mcp add gbrain -- gbrain serve`.
+- Local environment check found neither `gbrain` nor `bun` in PATH, so GBrain is verified upstream but not currently usable locally.
+- Added `docs/memory/gbrain-spike.md` and updated `docs/memory/contract.md`, `docs/memory/README.md`, and `docs/memory/open-questions.md`.
+- Added a MemoryContractTests guard so retrieval does not collapse "confirmed upstream" into "installed/current local tool".
+- Ran `scripts/memory-refresh.ps1`: generated ignored index with 6 nodes, 5 edges, and 141 indexed files.
+- Verification passed: `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter MemoryContractTests` passed `6/6`.
+- Remaining risks: local Windows install, `gbrain doctor`, runtime MCP tool inspection, import policy, and export/backup format are still unverified.
+
+## Hindsight Memory Candidate Todo
+
+- [x] Confirm upstream Hindsight repository and documented Codex/CLI/MCP surfaces from current sources.
+- [x] Add `docs/memory/hindsight-spike.md` with local availability, curated import policy, and auto-retain restriction.
+- [x] Mark GBrain as historical/secondary instead of the preferred external memory candidate.
+- [x] Update `docs/memory/contract.md`, `docs/memory/README.md`, and `docs/memory/open-questions.md`.
+- [x] Add/adjust `MemoryContractTests` so retrieval preserves Hindsight preferred status and GBrain historical status.
+- [x] Run `scripts/memory-refresh.ps1` and the narrow memory contract tests.
+- [x] Record spike results and remaining install-mode decision.
+
+## Hindsight Memory Candidate Results
+
+- Confirmed upstream `vectorize-io/hindsight` exists and is a Python project with `hindsight-api`, `hindsight-embed`, `hindsight-cli`, Codex integration, and MCP docs.
+- Confirmed package metadata: `hindsight-api` and `hindsight-embed` require Python `>=3.11`; `hindsight-cli` builds a Rust binary named `hindsight`.
+- Added `docs/memory/hindsight-spike.md` with upstream sources, local availability, MVP decision, curated import allowlist, auto-retain restriction, and remaining gaps.
+- Updated `docs/memory/gbrain-spike.md` so GBrain is historical/secondary, not the roadmap-preferred external memory candidate.
+- Updated `docs/memory/contract.md`, `docs/memory/README.md`, `docs/memory/open-questions.md`, `.gitignore`, and `tasks/lessons.md`.
+- Local environment check found no `hindsight`, `hindsight-api`, `uvx`, or Docker; `python --version` resolves only to the Windows Store alias, so local Hindsight installation remains a separate install spike.
+- Ran `scripts/memory-refresh.ps1`: generated ignored index with 6 nodes, 5 edges, and 142 indexed files.
+- Verification passed: `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter MemoryContractTests` passed `7/7`.
+- Remaining decision: choose Hindsight install mode first: Cloud, Docker, Python/uvx embedded daemon, or external PostgreSQL.
+
+## Hindsight Curated Import Todo
+
+- [ ] Commit the current Hindsight/GBrain memory-roadmap layer before adding import tooling.
+- [ ] Add a failing memory contract test for a curated Hindsight import manifest/script allowlist.
+- [ ] Verify the failing test rejects missing curated import tooling for the expected reason.
+- [ ] Add minimal curated import tooling that lists only approved source files.
+- [ ] Ensure denylisted sources stay excluded: `recordings/*.jsonl`, `docs/memory/generated/`, secrets, build artifacts, and local proxy details.
+- [ ] Update memory docs/open questions with the pre-install import rule and keep Codex auto-retain disabled.
+- [ ] Run `scripts/memory-refresh.ps1`, narrow memory tests, and review uncommitted changes.
+- [ ] Record results and remaining install-spike decision.
 
 ## Laptop Continuity And Skill Recovery Todo
 

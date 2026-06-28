@@ -30,8 +30,10 @@ recordings/*.jsonl
 # Generated future memory exports stay out until their schema is approved.
 docs/memory/generated/
 *.gbrain
+*.hindsight
 *.graphify.json
 .gbrain/
+.hindsight/
 .graphify/
 .mem0/
 .graphiti/

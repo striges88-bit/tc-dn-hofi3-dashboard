@@ -10,7 +10,7 @@ Use this order when project memory conflicts:
 2. `AGENTS.md`, ADRs, `docs/formulas.md`, and `TC-DN-HOFI3.md`: durable project rules, decisions, and canonical formula material.
 3. `docs/memory/*.md`: human-authored memory map, glossary, entities, open questions, and this contract.
 4. `docs/memory/generated/`: generated indexes and tool exports. These are cache artifacts and must be refreshed from sources.
-5. External semantic/vector memory such as Mem0, Graphiti, GBrain, or another agent store.
+5. External semantic/vector memory such as Hindsight, Mem0, Graphiti, GBrain, or another agent store.
 
 Generated memory must never override current code, tests, ADRs, formula docs, or project instructions.
 
@@ -19,7 +19,7 @@ Generated memory must never override current code, tests, ADRs, formula docs, or
 - Human-authored source: `docs/memory/*.md`, `docs/decisions/*.md`, `tasks/lessons.md`, and approved design/spec docs.
 - Generated source: only files under `docs/memory/generated/`; this directory stays ignored until a committed schema/export policy is approved.
 - Experiments: live/replay/JSONL observations stay as separate experiment summaries with links to recordings or reports. Raw JSONL and bulk runtime observations do not belong in the project memory graph.
-- Local stores: GBrain, Graphify, Mem0, Graphiti, embeddings, and local databases are optional caches until their schema and refresh behavior are approved.
+- Local stores: Hindsight, GBrain, Graphify, Mem0, Graphiti, embeddings, and local databases are optional caches until their schema and refresh behavior are approved.
 
 ## Node Schema
 
@@ -101,7 +101,12 @@ The manual refresh script may write ignored files under `docs/memory/generated/`
 
 ## Tool Strategy
 
-- GBrain and Graphify are spike targets. Confirm their real CLI/API and export format before making them required.
+- Hindsight is the preferred external semantic memory candidate. Its upstream Codex, CLI, MCP, and embedded-daemon surfaces are confirmed in `docs/memory/hindsight-spike.md`, but local install mode, Windows behavior, import script, retention policy, auth, and export/backup behavior remain spike work.
+- Hindsight must stay below generated indexes in source priority and must not become a WPF/.NET runtime dependency.
+- Codex auto-retain must stay disabled during MVP. Use curated import first: `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`.
+- Do not import raw JSONL recordings, generated memory exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps into Hindsight.
+- GBrain upstream CLI and Codex MCP documentation are confirmed in `docs/memory/gbrain-spike.md`, but GBrain is now a historical/secondary candidate rather than the roadmap-preferred external memory tool.
+- Graphify is still a spike target. Confirm its real CLI/API and export format before making it required.
 - Mem0 may be used as a semantic cache with metadata filters, not as a source of truth.
 - Graphiti is deferred until temporal contradictions justify graph database/LLM/embedding operations.
 - LangGraph short-term state is only needed if this project later owns a custom agent runtime.
