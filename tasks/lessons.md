@@ -35,3 +35,5 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - When evaluating optional memory tools, distinguish upstream existence/API confirmation from local installation status; "not found in PATH" is only a local availability result, not evidence that the project or CLI does not exist.
 - When replacing a preferred external memory tool, keep the old spike as historical/secondary unless there is a concrete reason to delete it; update retrieval priority and tests so stale candidate docs do not rank as current.
 - For SQLite memory tooling, use `EXPLAIN QUERY PLAN` plus a local `query_log`; do not design around PostgreSQL-only diagnostics.
+- For LanceDB sidecar work, read only canonical SQLite `search_documents` with valid source metadata; do not crawl the project directly, and do not enable hooks until cleanup/rebuild/search/explain are repeatable.
+- Do not trust raw vector distance as current-fact ranking. Sidecar retrieval needs metadata filters, freshness checks, and a typed/exact-token reranker so generic chunks do not outrank current ADR/formula records.

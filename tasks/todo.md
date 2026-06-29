@@ -753,7 +753,7 @@
 - [x] Add red tests for the SQLite canonical memory contract, schema, retrieval, explain logging, stale checks, and safety exclusions.
 - [x] Add a tooling-only memory CLI under `tools/` with `refresh`, `search`, `explain`, and `stale-check` commands.
 - [x] Build the SQLite schema with FTS5 tables and a local `query_log`; do not use PostgreSQL-only diagnostics.
-- [x] Update memory docs and ADRs so Hindsight is historical/failed, SQLite is canonical local memory, and LanceDB is a deferred semantic sidecar.
+- [x] Update memory docs and ADRs so Hindsight is historical/failed, SQLite is canonical local memory, and LanceDB was deferred for that SQLite MVP slice.
 - [x] Ensure raw JSONL, generated exports, secrets, local proxy details, and build artifacts are not indexed.
 - [x] Run memory refresh, narrow memory/tooling tests, solution build, and stale-check verification.
 - [x] Run diff hygiene checks.
@@ -775,3 +775,29 @@
 - Verification passed: `MemoryContractTests` `8/8`, `MemoryCliTests` `4/4`, full `.\.dotnet\dotnet.exe test CryptoIndicatorApp.sln --no-restore`, and `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` with 0 warnings and 0 errors.
 - Memory verification passed: `scripts/memory-refresh.ps1` indexed 159 files, SQLite `refresh`, `search`, `explain`, and `stale-check`; real `actual OFI formula` search now returns current `formula_version.tc-dn-hofi3.current` first.
 - Diff hygiene passed: `git diff --check` returned exit code 0; generated memory, `.hindsight/`, and raw recordings remained ignored.
+
+## LanceDB Semantic Sidecar Spike Todo
+
+- [x] Create a separate branch for the LanceDB semantic sidecar spike.
+- [x] Add red tests for local-only LanceDB sidecar guardrails, SQLite-only ingestion, generated-path safety, and no commit-hook auto-refresh.
+- [x] Add tooling-only wrapper/script for `probe`, `rebuild`, `search`, `explain`, and `cleanup` against SQLite-exported current/proposed records.
+- [x] Keep LanceDB below SQLite: no canonical status ownership, no direct project crawl, no raw JSONL/generated/secrets/local proxy/build artifact import.
+- [x] Verify clean rebuild/delete/reindex behavior using local embedded LanceDB through `uv`, without Cloud and without auto-update after commit.
+- [x] Update memory docs and lessons with actual LanceDB API/smoke results and remaining semantic-quality limits.
+- [x] Run narrow tests, memory refresh/stale-check, real sidecar smoke, diff hygiene, and commit the verified slice.
+
+## LanceDB Semantic Sidecar Spike Results
+
+- Created branch `codex/lancedb-semantic-sidecar` from the clean SQLite memory branch.
+- Added `LanceDbSidecarSpikeTests`; RED verification failed for the expected reasons: missing `scripts/lancedb-sidecar.ps1` and deferred LanceDB docs.
+- Added `scripts/lancedb-sidecar.ps1` and `tools/MemorySemantic/lancedb_sidecar.py`; the sidecar reads only SQLite `search_documents` current/proposed records with valid `source_path/source_hash`.
+- Added local deterministic token-hash vectors plus a typed/exact-token reranker after the first smoke showed raw vector distance ranked generic chunks above the current formula record.
+- Real local LanceDB smoke through `uv` succeeded: `cleanup` removed generated store, `rebuild` recreated `docs/memory/generated/lancedb` with `271` records, and `search`/`explain` returned `formula_version.tc-dn-hofi3.current` first for `actual OFI formula`.
+- LanceDB `explain` returned `explain_plan`/`analyze_plan` with `KNNVectorDistance`, `LanceRead`, and `TopK`.
+- SQLite refresh now reports `semantic_sidecar: lancedb-active-local-spike`; `stale-check` reports no issues after final refresh.
+- Remaining limitation: current embeddings are a no-Cloud mechanics smoke, not final semantic recall quality.
+- Compact handoff: full `.\.dotnet\dotnet.exe test CryptoIndicatorApp.sln --no-restore` passed after the LanceDB changes (`90/90` across projects). A parallel `build` run failed from transient file locks in `obj/` while tests were still using outputs, so rerun build alone next.
+- Post-compact verification passed: `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` completed with `0` warnings and `0` errors.
+- Fresh narrow tests passed: Infrastructure memory/Hindsight/LanceDB filters `13/13`, Memory CLI tests `4/4`, and `tools/MemorySemantic/lancedb_sidecar_tests.py` returned `ok`.
+- Fresh memory refresh/stale-check passed: legacy generated index has `162` indexed files, SQLite refresh reports `semantic_sidecar: lancedb-active-local-spike`, and SQLite `stale-check` reports no issues.
+- Fresh LanceDB smoke passed after cleanup/rebuild: local generated table has `271` records, `search` returns current `formula_version.tc-dn-hofi3.current` first for `actual OFI formula`, and `explain` includes `KNNVectorDistance`, `LanceRead`, and `TopK`.

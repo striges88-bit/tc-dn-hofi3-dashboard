@@ -17,6 +17,8 @@ publish/
 .tools/
 .nuget/
 .superpowers/
+__pycache__/
+*.py[cod]
 *.nupkg
 
 # Runtime logs and local data

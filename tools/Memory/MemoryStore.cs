@@ -155,7 +155,7 @@ public sealed class MemoryStore : IDisposable
         return new RefreshResult(
             SchemaVersion,
             "sqlite-fts5",
-            "lancedb-deferred",
+            "lancedb-active-local-spike",
             "historical-failed",
             snapshot.Files.Count,
             GetTableNames(),
