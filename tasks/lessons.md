@@ -34,3 +34,4 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - Codex may also inherit a stale PATH after WinGet package installation; if a user-scoped tool was just installed, probe the WinGet package directory under `%LOCALAPPDATA%\Microsoft\WinGet\Packages` before declaring it unavailable.
 - When evaluating optional memory tools, distinguish upstream existence/API confirmation from local installation status; "not found in PATH" is only a local availability result, not evidence that the project or CLI does not exist.
 - When replacing a preferred external memory tool, keep the old spike as historical/secondary unless there is a concrete reason to delete it; update retrieval priority and tests so stale candidate docs do not rank as current.
+- For SQLite memory tooling, use `EXPLAIN QUERY PLAN` plus a local `query_log`; do not design around PostgreSQL-only diagnostics.

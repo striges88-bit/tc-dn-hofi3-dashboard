@@ -1,5 +1,7 @@
 # Formulas
 
+Owner: TC-DN-HOFI3 formula docs (`TC-DN-HOFI3.md` and this summary).
+
 The canonical source for the TC-DN-HOFI3 research formula is `TC-DN-HOFI3.md`.
 
 The current implementation is in `CryptoIndicatorApp.Domain/Indicators` and must not be changed without explicit approval because threshold or sampling changes can invalidate replay comparisons.

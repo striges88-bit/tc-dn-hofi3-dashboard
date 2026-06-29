@@ -1,6 +1,6 @@
 # Hindsight External Memory Spike
 
-Status: preferred external memory candidate; upstream surface confirmed; Python/uvx embedded daemon is locally running for the `tc-dn-hofi3` profile; retain/import, Codex hooks, and curated import remain disabled.
+Status: historical/failed spike. Upstream surface confirmed and Python/uvx embedded daemon was locally smoke-tested for the `tc-dn-hofi3` profile, but MVP use is blocked by billing/auth, Rust CLI forwarding, retain/import uncertainty, and operational complexity. SQLite FTS5 replaced Hindsight as the canonical local memory store.
 
 Verified at: 2026-06-28
 
@@ -55,9 +55,11 @@ Install-spike update:
 
 ## Project Decision
 
-- Make Hindsight the preferred future external memory candidate, replacing GBrain in the roadmap priority.
+- Keep Hindsight as a historical/failed spike, not the roadmap-preferred memory store.
+- SQLite FTS5 is the canonical local memory store for generated retrieval/status metadata.
+- LanceDB is the deferred semantic sidecar candidate.
 - Keep Hindsight outside the WPF/.NET application runtime, build, and test dependencies.
-- Keep source priority unchanged: `code/tests/config` -> `AGENTS.md`/ADRs/formula docs -> `docs/memory/*` -> generated indexes -> Hindsight.
+- Keep source priority unchanged: `code/tests/config` -> `AGENTS.md`/ADRs/formula docs -> `docs/memory/*` -> generated SQLite/FTS indexes -> LanceDB -> historical external spikes.
 - Do not use Hindsight as a source of truth. It is a retrieval/cache layer under current code, tests, ADRs, formula docs, and human-authored memory docs.
 - Do not enable Codex auto-retain during MVP. Auto-retain can store stale hypotheses, raw transcript noise, local paths, proxy details, or accidental secrets before review.
 - Use curated import first: `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`.

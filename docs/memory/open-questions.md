@@ -1,16 +1,18 @@
 # Open Questions
 
-- Hindsight is the preferred external semantic memory candidate in `docs/memory/hindsight-spike.md`; Python/uvx embedded daemon is selected for the first local install spike, tracked by `docs/memory/hindsight-install-spike.md`.
+- SQLite FTS5 is now the canonical local memory store. `tools/Memory` owns `refresh`, `search`, `explain`, and `stale-check` for the MVP memory layer.
+- LanceDB is deferred as the semantic sidecar. Its embedded OSS install, hybrid search, metadata filters, cleanup, versioning, and explain/analyze surface still need a separate spike.
+- Hindsight is historical/failed for MVP in `docs/memory/hindsight-spike.md`; Python/uvx embedded daemon status remains recorded for traceability only.
 - The Hindsight install-spike report exists as ignored generated output. `uv` and `uvx hindsight-embed --help` are verified locally. Project profile `tc-dn-hofi3` exists on port `9077`; daemon `/health`, `/mcp/`, and `/metrics` endpoints answer HTTP `200`.
 - Hindsight curated import has a pre-install manifest script, but the actual Hindsight retain/import command still needs install-mode verification. The allowlist is `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`; raw JSONL, generated memory exports, secrets, local proxy details, build artifacts, and unreviewed experiment dumps remain denied.
 - Hindsight Codex auto-retain must remain disabled during MVP. Decide later whether reviewed summaries can enable controlled retain.
 - Hindsight secret handling decision: store the OpenAI key only in ignored repo-local `.hindsight/tc-dn-hofi3.env` and load it into process environment. Do not pass secret values through `profile create --env KEY=VALUE`, `profile set-env`, or committed config.
-- Hindsight auth, bank naming, export/backup, deletion, and retention policies are still undefined.
+- Hindsight auth, bank naming, export/backup, deletion, and retention policies are still undefined and should not block the SQLite memory path.
 - Hindsight LLM verification currently fails with OpenAI `billing_not_active`; fix account/billing state before treating retain/recall/reflect results as usable.
 - Hindsight embedded `bank list` forwards to the separate Rust `hindsight` CLI; local auto-install failed with `[WinError 2]`, so MCP bank behavior and file import remain unverified.
 - Hindsight upstream docs mention both `9077` and `8888` for local daemon examples; runtime project endpoint is confirmed as `http://127.0.0.1:9077`.
 - GBrain upstream CLI and Codex MCP path are confirmed in `docs/memory/gbrain-spike.md`, but it is now a historical/secondary candidate; local Windows install, `gbrain init --pglite`, runtime MCP tools, and export/backup format remain unverified.
-- Which exact Graphify commands, MCP tools, and export formats are available in this Windows environment?
+- Should Graphify still be spiked, or should SQLite `symbols`/`relations` cover the MVP code graph need first?
 - Should any generated memory export ever be committed, or should all generated indexes remain local and reproducible?
 - What recall threshold is acceptable for retrieval tests once semantic search is added?
 - Which human review cadence is enough for experiment summaries so failed live/replay observations do not become formula decisions?

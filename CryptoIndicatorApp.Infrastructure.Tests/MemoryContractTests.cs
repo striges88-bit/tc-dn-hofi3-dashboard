@@ -126,7 +126,8 @@ public sealed class MemoryContractTests
         var openQuestions = ReadText("docs/memory/open-questions.md");
 
         Assert.Contains("historical/secondary candidate", spike, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Hindsight replaced GBrain", spike, StringComparison.Ordinal);
+        Assert.Contains("SQLite FTS5 is now the canonical local memory store", spike, StringComparison.Ordinal);
+        Assert.Contains("LanceDB is the deferred semantic sidecar", spike, StringComparison.Ordinal);
         Assert.Contains("garrytan/gbrain", spike, StringComparison.Ordinal);
         Assert.Contains("gbrain init --pglite", spike, StringComparison.Ordinal);
         Assert.Contains("codex mcp add gbrain -- gbrain serve", spike, StringComparison.Ordinal);
@@ -140,7 +141,7 @@ public sealed class MemoryContractTests
     }
 
     [Fact]
-    public void HindsightSpikeSetsPreferredExternalMemoryWithoutAutoRetain()
+    public void HindsightSpikeIsHistoricalFailedAndSQLiteIsCanonicalMemory()
     {
         var spike = ReadText("docs/memory/hindsight-spike.md");
         var contract = ReadText("docs/memory/contract.md");
@@ -149,7 +150,7 @@ public sealed class MemoryContractTests
         var gitignore = ReadText(".gitignore");
 
         Assert.Contains("vectorize-io/hindsight", spike, StringComparison.Ordinal);
-        Assert.Contains("preferred external memory candidate", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("historical/failed spike", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Python `>=3.11`", spike, StringComparison.Ordinal);
         Assert.Contains("hindsight memory retain-files", spike, StringComparison.Ordinal);
         Assert.Contains("/mcp/{bank_id}/", spike, StringComparison.Ordinal);
@@ -175,11 +176,17 @@ public sealed class MemoryContractTests
         Assert.Contains("tasks/lessons.md", spike, StringComparison.Ordinal);
         Assert.Contains("Do not import raw JSONL recordings", spike, StringComparison.Ordinal);
 
-        Assert.Contains("Hindsight is the preferred external semantic memory candidate", contract, StringComparison.Ordinal);
+        Assert.Contains("SQLite FTS5 is the canonical local memory store", contract, StringComparison.Ordinal);
+        Assert.Contains("LanceDB is a deferred semantic sidecar", contract, StringComparison.Ordinal);
+        Assert.Contains("EXPLAIN QUERY PLAN", contract, StringComparison.Ordinal);
+        Assert.Contains("query_log", contract, StringComparison.Ordinal);
+        Assert.DoesNotContain("pg_stat_statements", contract, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("docs/memory/hindsight-spike.md", contract, StringComparison.Ordinal);
         Assert.Contains("Codex auto-retain must stay disabled during MVP", contract, StringComparison.Ordinal);
         Assert.Contains("docs/memory/*.md", contract, StringComparison.Ordinal);
-        Assert.Contains("Hindsight", readme, StringComparison.Ordinal);
+        Assert.Contains("SQLite FTS5", readme, StringComparison.Ordinal);
+        Assert.Contains("LanceDB", readme, StringComparison.Ordinal);
+        Assert.Contains("historical/failed", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("historical/secondary candidate", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("uvx hindsight-embed --help", openQuestions, StringComparison.Ordinal);
         Assert.Contains("tc-dn-hofi3", openQuestions, StringComparison.Ordinal);
@@ -188,6 +195,17 @@ public sealed class MemoryContractTests
         Assert.Contains("auto-retain must remain disabled during MVP", openQuestions, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(".hindsight/", gitignore, StringComparison.Ordinal);
         Assert.Contains("*.hindsight", gitignore, StringComparison.Ordinal);
+        Assert.Contains("*.sqlite", gitignore, StringComparison.Ordinal);
+        Assert.Contains("project-memory.sqlite", gitignore, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MemoryToolingDoesNotBecomeWpfRuntimeDependency()
+    {
+        Assert.DoesNotContain("tools\\Memory", ReadText("CryptoIndicatorApp.Desktop/CryptoIndicatorApp.Desktop.csproj"), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CryptoIndicatorApp.Memory", ReadText("CryptoIndicatorApp.Desktop/CryptoIndicatorApp.Desktop.csproj"), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CryptoIndicatorApp.Memory", ReadText("CryptoIndicatorApp.Application/CryptoIndicatorApp.Application.csproj"), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CryptoIndicatorApp.Memory", ReadText("tools/Memory/CryptoIndicatorApp.Memory.csproj"), StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1,6 +1,6 @@
 # GBrain CLI/API Spike
 
-Status: historical/secondary candidate. Upstream CLI confirmed; local installation unavailable in the current Windows session. Hindsight replaced GBrain as the preferred external memory candidate on 2026-06-28.
+Status: historical/secondary candidate. Upstream CLI confirmed; local installation unavailable in the current Windows session. Hindsight temporarily replaced GBrain as preferred on 2026-06-28, but SQLite FTS5 is now the canonical local memory store and LanceDB is the deferred semantic sidecar.
 
 Verified at: 2026-06-28
 
@@ -44,8 +44,8 @@ This means GBrain is real upstream, but it is not currently usable as a local pr
 
 ## Project Decision
 
-- Keep GBrain as a secondary fallback reference, not the roadmap-preferred external memory tool.
-- Do not rank GBrain above `docs/memory/hindsight-spike.md` when selecting a future external memory candidate unless a later ADR explicitly supersedes that decision.
+- Keep GBrain as a secondary fallback reference, not the roadmap-preferred memory tool.
+- Do not rank GBrain above SQLite FTS5 canonical memory or the deferred LanceDB sidecar unless a later ADR explicitly supersedes that decision.
 - Keep GBrain optional until a separate install spike verifies Bun, Windows behavior, `gbrain init --pglite`, `gbrain doctor`, import scope, MCP wiring, and export/backup behavior locally.
 - Do not add GBrain as a required dependency for WPF/.NET runtime, tests, or build.
 - Do not make GBrain a source of truth. It can only be a retrieval/cache layer below code, tests, ADRs, formula docs, and human-authored memory docs.

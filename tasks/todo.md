@@ -746,3 +746,32 @@
 - Added `AGENTS.md` Git commit cadence rules for proactive commits after coherent verified slices.
 - Added the same feedback-driven rule to `tasks/lessons.md`.
 - Did not add a Git auto-commit hook: that would be unsafe for secrets, generated outputs, and mixed worktrees.
+
+## SQLite FTS5 Canonical Memory Todo
+
+- [x] Create an isolated implementation branch for the SQLite memory slice.
+- [x] Add red tests for the SQLite canonical memory contract, schema, retrieval, explain logging, stale checks, and safety exclusions.
+- [x] Add a tooling-only memory CLI under `tools/` with `refresh`, `search`, `explain`, and `stale-check` commands.
+- [x] Build the SQLite schema with FTS5 tables and a local `query_log`; do not use PostgreSQL-only diagnostics.
+- [x] Update memory docs and ADRs so Hindsight is historical/failed, SQLite is canonical local memory, and LanceDB is a deferred semantic sidecar.
+- [x] Ensure raw JSONL, generated exports, secrets, local proxy details, and build artifacts are not indexed.
+- [x] Run memory refresh, narrow memory/tooling tests, solution build, and stale-check verification.
+- [x] Run diff hygiene checks.
+- [x] Commit the verified slice.
+
+## SQLite FTS5 Canonical Memory Results
+
+- Started on branch `codex/sqlite-memory-store` from clean `main` with local commits ahead of `origin/main`.
+- Added red/green CLI tests in `tools/Memory.Tests/MemoryCliTests.cs`; the initial red run failed because `tools/Memory/CryptoIndicatorApp.Memory.csproj` did not exist.
+- Added `tools/Memory` console CLI with `refresh`, `search`, `explain`, and `stale-check`.
+- Added SQLite FTS5 schema with `files`, `symbols`, `chunks`, `rules`, `adr`, `formula_versions`, `metrics`, `experiments`, `events`, `relations`, `sources`, `todos`, `search_documents`, `search_documents_fts`, and `query_log`.
+- `tools/Memory.Tests` passed after implementation: `.\.dotnet\dotnet.exe test tools\Memory.Tests\CryptoIndicatorApp.Memory.Tests.csproj --no-restore --filter MemoryCliTests` passed `4/4`.
+- Updated docs: `docs/decisions/0003-sqlite-fts5-canonical-memory.md`, `docs/memory/lancedb-spike.md`, `contract.md`, `README.md`, `open-questions.md`, `hindsight-spike.md`, and `gbrain-spike.md`.
+- Added `Owner:` metadata to `docs/formulas.md` so the current `formula_version` is not stale.
+- Added `tasks/lessons.md` rule: SQLite memory diagnostics use `EXPLAIN QUERY PLAN` plus local `query_log`, not PostgreSQL-only diagnostics.
+- Added ranking coverage so typed records such as `formula_version` and ADRs rank above noisy generic chunks for current factual retrieval.
+- Split SQLite schema statements into `MemorySchema.cs`; `MemoryStore.cs` is back under the project source-file size guardrail.
+- Added `tools/Memory` and `tools/Memory.Tests` to `CryptoIndicatorApp.sln`; `.\.dotnet\dotnet.exe restore CryptoIndicatorApp.sln` passed.
+- Verification passed: `MemoryContractTests` `8/8`, `MemoryCliTests` `4/4`, full `.\.dotnet\dotnet.exe test CryptoIndicatorApp.sln --no-restore`, and `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` with 0 warnings and 0 errors.
+- Memory verification passed: `scripts/memory-refresh.ps1` indexed 159 files, SQLite `refresh`, `search`, `explain`, and `stale-check`; real `actual OFI formula` search now returns current `formula_version.tc-dn-hofi3.current` first.
+- Diff hygiene passed: `git diff --check` returned exit code 0; generated memory, `.hindsight/`, and raw recordings remained ignored.

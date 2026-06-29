@@ -29,6 +29,10 @@ recordings/*.jsonl
 
 # Generated future memory exports stay out until their schema is approved.
 docs/memory/generated/
+project-memory.sqlite
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 *.gbrain
 *.hindsight
 *.graphify.json
