@@ -6,7 +6,7 @@ Date: 2026-06-28
 
 Use SQLite FTS5 as the canonical local generated memory store for agent tooling. Keep LanceDB below SQLite as a semantic sidecar candidate. Move Hindsight to historical/failed spike status and keep GBrain as historical/secondary.
 
-Update 2026-06-29: LanceDB moved from deferred candidate to active local spike. This does not change the canonical source priority: SQLite owns generated status/source metadata, and LanceDB remains a sidecar cache.
+Update 2026-06-29: LanceDB moved from deferred candidate to active local spike, then to a production-candidate semantic quality layer using local FastEmbed/ONNX. This does not change the canonical source priority: SQLite owns generated status/source metadata, and LanceDB remains a sidecar cache.
 
 The WPF/.NET application runtime must not depend on the memory store or semantic sidecars.
 

@@ -801,3 +801,31 @@
 - Fresh narrow tests passed: Infrastructure memory/Hindsight/LanceDB filters `13/13`, Memory CLI tests `4/4`, and `tools/MemorySemantic/lancedb_sidecar_tests.py` returned `ok`.
 - Fresh memory refresh/stale-check passed: legacy generated index has `162` indexed files, SQLite refresh reports `semantic_sidecar: lancedb-active-local-spike`, and SQLite `stale-check` reports no issues.
 - Fresh LanceDB smoke passed after cleanup/rebuild: local generated table has `271` records, `search` returns current `formula_version.tc-dn-hofi3.current` first for `actual OFI formula`, and `explain` includes `KNNVectorDistance`, `LanceRead`, and `TopK`.
+
+## LanceDB Semantic Quality Candidate Todo
+
+- [x] Add RED tests for a local FastEmbed/ONNX provider contract, provider metadata, and deterministic fallback isolation.
+- [x] Add RED tests for a LanceDB `eval` command that gates the required retrieval questions.
+- [x] Replace production sidecar embeddings with local FastEmbed/ONNX while keeping token-hash only as an explicit test/fallback mode.
+- [x] Store embedding provider/model/dimensions metadata in generated reports and indexed rows.
+- [x] Add `eval` to `tools/MemorySemantic/lancedb_sidecar.py` and `scripts/lancedb-sidecar.ps1`.
+- [x] Keep LanceDB below SQLite: import only current/proposed SQLite `search_documents` with valid `source_path/source_hash`.
+- [x] Update `docs/memory/*`, ADR, and lessons so the sidecar is a production-candidate semantic quality layer, not a final source of truth.
+- [x] Verify clean cleanup/rebuild/search/explain/eval behavior with local Python embedded dependencies, no Cloud, and no hooks.
+- [x] Run narrow Python tests, Infrastructure memory tests, Memory CLI tests, memory refresh/stale-check, build, diff hygiene, and commit.
+
+## LanceDB Semantic Quality Candidate Results
+
+- Added `docs/decisions/0004-funding-source-context.md` so the funding-source eval case has a real ADR source instead of relying on noisy chunks.
+- `scripts/lancedb-sidecar.ps1` now supports `eval`, `-EmbeddingProvider`, and `-EmbeddingModel`; default provider is local FastEmbed/ONNX through pinned `fastembed==0.8.0`.
+- `tools/MemorySemantic/lancedb_sidecar.py` now stores provider/model/dimensions/package metadata in generated rows and reports.
+- Token-hash remains available only as explicit `--embedding-provider token-hash` fallback/test mode.
+- `tools/Memory/ProjectMemoryIndexer.cs` now emits relation records for real `CryptoIndicatorApp.Infrastructure/Binance/*` adapter files so exchange-adapter impact retrieval is source-backed.
+- Real FastEmbed rebuild indexed the current/proposed SQLite record set with `384`-dimensional vectors; exact per-run counts stay in ignored generated reports because docs/task edits can legitimately shift chunk counts.
+- Real LanceDB `eval` passed `4/4`: current OFI formula, funding-source ADR, exchange adapter impact, and superseded-rule exclusion.
+- Added a rerank regression test so a self-referential `docs/memory/lancedb-spike.md` quality-gate chunk cannot outrank the canonical `formula_version` for the OFI formula query.
+- FastEmbed `0.8.0` warns that `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` now uses mean pooling instead of older CLS behavior; the wrapper pins this behavior, and changing it later requires a fresh eval baseline.
+- Compact handoff: stop here before final verification/commit. Freshly verified after the latest rerank change: Python sidecar tests returned `ok`; LanceDB `search "actual OFI formula"` returned `formula_version.tc-dn-hofi3.current` first; LanceDB `eval` passed `4/4`; SQLite `stale-check` returned no issues before the final rerank-only change. Next commands: run `scripts/lancedb-sidecar.ps1 -Command explain -Query "actual OFI formula"`, rerun SQLite `stale-check`, run Infrastructure memory tests, Memory CLI tests, solution build, `git diff --check`, review `git status`, then commit if all pass.
+- Post-compact `stale-check` first failed only on `tasks/todo.md` `source_hash_mismatch`, because this handoff text changed after the previous memory refresh; refresh/rebuild must run after final plan edits.
+- Post-compact verification passed on the final slice: Python sidecar tests returned `ok`; Infrastructure memory/LanceDB tests passed `11/11`; Memory CLI tests passed `4/4`; solution build completed with `0` warnings and `0` errors; LanceDB `eval` passed `4/4`; SQLite `stale-check` returned no issues after the canonical CLI `refresh`.
+- The final `explain` run for `actual OFI formula` returned `formula_version.tc-dn-hofi3.current` first and included `KNNVectorDistance`, `LanceRead`, and `TopK` in the LanceDB plan.

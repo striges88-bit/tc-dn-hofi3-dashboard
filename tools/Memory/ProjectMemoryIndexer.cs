@@ -136,8 +136,7 @@ public sealed class ProjectMemoryIndexer
         }
 
         if (path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-            && (path.Contains("ExchangeAdapter", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("exchange adapter", StringComparison.OrdinalIgnoreCase)))
+            && IsExchangeAdapterImpactFile(path, text))
         {
             var relation = new RelationRecord(
                 $"relation.exchange-adapter.{Slug(path)}",
@@ -250,6 +249,13 @@ public sealed class ProjectMemoryIndexer
         return path.Equals("docs/memory/rules.md", StringComparison.OrdinalIgnoreCase)
             || path.Equals("docs/memory/symbols.md", StringComparison.OrdinalIgnoreCase)
             || path.Equals("docs/memory/tests.md", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsExchangeAdapterImpactFile(string path, string text)
+    {
+        return path.StartsWith("CryptoIndicatorApp.Infrastructure/Binance/", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("ExchangeAdapter", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("exchange adapter", StringComparison.OrdinalIgnoreCase);
     }
 
     private string GetRelativePath(string path)

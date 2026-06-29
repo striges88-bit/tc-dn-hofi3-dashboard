@@ -20,7 +20,7 @@ Generated memory must never override current code, tests, ADRs, formula docs, or
 - Human-authored source: `docs/memory/*.md`, `docs/decisions/*.md`, `tasks/lessons.md`, and approved design/spec docs.
 - Generated source: only files under `docs/memory/generated/`; this directory stays ignored until a committed schema/export policy is approved.
 - Experiments: live/replay/JSONL observations stay as separate experiment summaries with links to recordings or reports. Raw JSONL and bulk runtime observations do not belong in the project memory graph.
-- Local stores: SQLite FTS5 is the canonical local generated memory store. LanceDB is an active local semantic sidecar spike below SQLite. Hindsight and GBrain are historical/secondary spikes, not sources of truth.
+- Local stores: SQLite FTS5 is the canonical local generated memory store. LanceDB is an active local semantic sidecar and production-candidate semantic quality layer below SQLite. Hindsight and GBrain are historical/secondary spikes, not sources of truth.
 
 ## Node Schema
 
@@ -136,14 +136,15 @@ The MVP refresh mechanism is a manual refresh command. A git post-commit hook ma
 
 The manual refresh script and `tools/Memory` CLI may write ignored files under `docs/memory/generated/`, including `project-memory.sqlite`. They must not rewrite human-authored docs, app code, formulas, config, or tests.
 
-LanceDB sidecar refresh is manual during the spike. Do not install a git post-commit hook, after-save hook, or background updater until local clean rebuild/delete/reindex behavior is verified and documented.
+LanceDB sidecar refresh is manual during the spike. Do not install a git post-commit hook, after-save hook, or background updater until local clean rebuild/delete/reindex behavior and the semantic quality gate are verified and documented.
 
 ## Tool Strategy
 
 - SQLite FTS5 is the canonical local memory store for generated retrieval/status metadata. Use `tools/Memory` for `refresh`, `search`, `explain`, and `stale-check`.
-- LanceDB is an active local semantic sidecar spike. It may add embeddings, hybrid search, metadata filtering, cleanup, and reranking, but SQLite remains the canonical status store and LanceDB must not own canonical status.
-- Use `scripts/lancedb-sidecar.ps1` for local `probe`, `rebuild`, `search`, `explain`, and `cleanup`. It reads SQLite `search_documents` only and writes generated data under `docs/memory/generated/lancedb`.
-- The current LanceDB spike uses deterministic local token-hash vectors plus a small typed/exact-token reranker to prove mechanics without Cloud or external model downloads. Do not treat this as final semantic recall quality evidence.
+- LanceDB is an active local semantic sidecar spike and production-candidate semantic quality layer. It may add embeddings, hybrid search, metadata filtering, cleanup, and reranking, but SQLite remains the canonical status store and LanceDB must not own canonical status.
+- Use `scripts/lancedb-sidecar.ps1` for local `probe`, `rebuild`, `search`, `explain`, `eval`, and `cleanup`. It reads SQLite `search_documents` only and writes generated data under `docs/memory/generated/lancedb`.
+- The current LanceDB candidate uses local FastEmbed/ONNX by default with model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` and wrapper pin `fastembed==0.8.0`. The deterministic token-hash provider remains fallback/test-only.
+- The LanceDB semantic quality gate must cover current OFI formula retrieval, funding-source decision retrieval, exchange adapter impact retrieval, and exclusion of superseded rules before any automation is added.
 - Hindsight is a historical/failed spike. Its upstream Codex, CLI, MCP, and embedded-daemon surfaces are confirmed in `docs/memory/hindsight-spike.md`, but billing/auth, Rust CLI forwarding, retain/import, and operational complexity blocked MVP use.
 - Hindsight must stay below SQLite and generated indexes in source priority and must not become a WPF/.NET runtime dependency.
 - Codex auto-retain must stay disabled during MVP. Use `scripts/hindsight-curated-import.ps1` to generate a pre-install manifest for curated import sources: `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`.

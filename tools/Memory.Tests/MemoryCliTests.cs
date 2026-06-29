@@ -35,7 +35,7 @@ public sealed class MemoryCliTests
         var root = document.RootElement;
 
         Assert.Equal("sqlite-fts5", root.GetProperty("canonical_store").GetString());
-        Assert.Equal("lancedb-active-local-spike", root.GetProperty("semantic_sidecar").GetString());
+        Assert.Equal("lancedb-fastembed-local-candidate", root.GetProperty("semantic_sidecar").GetString());
         Assert.Equal("historical-failed", root.GetProperty("hindsight_status").GetString());
 
         AssertJsonArrayContainsAll(

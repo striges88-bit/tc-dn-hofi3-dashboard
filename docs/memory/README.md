@@ -1,6 +1,6 @@
 # Project Memory
 
-This folder prepares the project for a multi-layer memory workflow. SQLite FTS5 is the canonical local generated memory store. LanceDB is an active local semantic sidecar spike below SQLite. Hindsight is now a historical/failed spike, and GBrain is kept only as a historical/secondary candidate.
+This folder prepares the project for a multi-layer memory workflow. SQLite FTS5 is the canonical local generated memory store. LanceDB is an active local semantic sidecar and production-candidate semantic quality layer below SQLite. Hindsight is now a historical/failed spike, and GBrain is kept only as a historical/secondary candidate.
 
 The application runtime must not depend on these files or generated stores.
 
@@ -59,15 +59,16 @@ Script path: `scripts/lancedb-sidecar.ps1`.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command probe
 ```
 
-Rebuild and query the local LanceDB sidecar from SQLite `search_documents` only:
+Rebuild, query, and evaluate the local LanceDB sidecar from SQLite `search_documents` only:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command rebuild
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command search -Query "actual OFI formula"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command explain -Query "actual OFI formula"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command eval
 ```
 
-The LanceDB spike currently uses deterministic local token-hash vectors plus a small typed/exact-token reranker. Treat this as a mechanics smoke, not as final semantic-quality evidence.
+The LanceDB candidate uses local FastEmbed/ONNX embeddings by default with model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` through pinned `fastembed==0.8.0`, plus typed/exact-token reranking and an explicit `eval` gate. The old token-hash provider is fallback/test-only.
 
 Generate the pre-install Hindsight curated import manifest without calling Hindsight:
 

@@ -1,9 +1,9 @@
 # Open Questions
 
 - SQLite FTS5 is now the canonical local memory store. `tools/Memory` owns `refresh`, `search`, `explain`, and `stale-check` for the MVP memory layer.
-- LanceDB is an active local semantic sidecar spike below SQLite. Its wrapper is `scripts/lancedb-sidecar.ps1`, its generated store is `docs/memory/generated/lancedb`, and it imports only SQLite `search_documents` records with current/proposed status and valid source metadata.
+- LanceDB is an active local semantic sidecar and production-candidate semantic quality layer below SQLite. Its wrapper is `scripts/lancedb-sidecar.ps1`, its generated store is `docs/memory/generated/lancedb`, and it imports only SQLite `search_documents` records with current/proposed status and valid source metadata.
 - LanceDB automation remains disabled: no git post-commit hook, no after-save hook, and no background refresh until clean rebuild/delete/reindex behavior is repeatable.
-- LanceDB semantic quality remains open. The current spike uses deterministic local token-hash vectors to prove local storage/search/explain mechanics without Cloud; a later decision is needed for production embeddings, hybrid ranking, and recall thresholds.
+- LanceDB semantic quality gate is now explicit. The current candidate uses local FastEmbed/ONNX with model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`; remaining open work is tuning recall thresholds and deciding whether a heavier local model is justified.
 - Hindsight is historical/failed for MVP in `docs/memory/hindsight-spike.md`; Python/uvx embedded daemon status remains recorded for traceability only.
 - The Hindsight install-spike report exists as ignored generated output. `uv` and `uvx hindsight-embed --help` are verified locally. Project profile `tc-dn-hofi3` exists on port `9077`; daemon `/health`, `/mcp/`, and `/metrics` endpoints answer HTTP `200`.
 - Hindsight curated import has a pre-install manifest script, but the actual Hindsight retain/import command still needs install-mode verification. The allowlist is `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`; raw JSONL, generated memory exports, secrets, local proxy details, build artifacts, and unreviewed experiment dumps remain denied.
@@ -16,5 +16,5 @@
 - GBrain upstream CLI and Codex MCP path are confirmed in `docs/memory/gbrain-spike.md`, but it is now a historical/secondary candidate; local Windows install, `gbrain init --pglite`, runtime MCP tools, and export/backup format remain unverified.
 - Should Graphify still be spiked, or should SQLite `symbols`/`relations` cover the MVP code graph need first?
 - Should any generated memory export ever be committed, or should all generated indexes remain local and reproducible?
-- What recall threshold is acceptable for retrieval tests once semantic search is added?
+- What recall threshold is acceptable beyond the current four-case semantic quality gate?
 - Which human review cadence is enough for experiment summaries so failed live/replay observations do not become formula decisions?

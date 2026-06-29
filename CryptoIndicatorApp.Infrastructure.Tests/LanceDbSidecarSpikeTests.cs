@@ -55,6 +55,9 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("search", commands);
         Assert.Contains("explain", commands);
         Assert.Contains("cleanup", commands);
+        Assert.Contains("eval", commands);
+        Assert.Equal("fastembed", root.GetProperty("embedding_provider").GetString());
+        Assert.Equal("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", root.GetProperty("embedding_model").GetString());
     }
 
     [Fact]
@@ -65,7 +68,7 @@ public sealed class LanceDbSidecarSpikeTests
         var readme = ReadText("docs/memory/README.md");
         var openQuestions = ReadText("docs/memory/open-questions.md");
 
-        Assert.Contains("Status: active local spike", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Status: active production-candidate semantic quality layer", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("local Python embedded", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("SQLite `search_documents`", spike, StringComparison.Ordinal);
         Assert.Contains("docs/memory/generated/lancedb", spike, StringComparison.Ordinal);
@@ -73,11 +76,16 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("no Cloud", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("no commit hook", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("not a canonical store", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("production-candidate semantic quality layer", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("FastEmbed", spike, StringComparison.Ordinal);
+        Assert.Contains("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", spike, StringComparison.Ordinal);
+        Assert.Contains("eval", spike, StringComparison.Ordinal);
 
         Assert.Contains("LanceDB is an active local semantic sidecar spike", contract, StringComparison.Ordinal);
         Assert.Contains("SQLite remains the canonical status store", contract, StringComparison.Ordinal);
+        Assert.Contains("local FastEmbed/ONNX", contract, StringComparison.Ordinal);
         Assert.Contains("scripts/lancedb-sidecar.ps1", readme, StringComparison.Ordinal);
-        Assert.Contains("LanceDB automation remains disabled", openQuestions, StringComparison.Ordinal);
+        Assert.Contains("LanceDB semantic quality gate", openQuestions, StringComparison.Ordinal);
     }
 
     [Fact]

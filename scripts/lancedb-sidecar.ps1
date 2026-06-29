@@ -1,12 +1,15 @@
 param(
     [string]$ProjectRoot = '',
-    [ValidateSet('probe', 'rebuild', 'search', 'explain', 'cleanup')]
+    [ValidateSet('probe', 'rebuild', 'search', 'explain', 'eval', 'cleanup')]
     [string]$Command = 'probe',
     [string]$DatabasePath = '',
     [string]$StorePath = '',
     [string]$OutputPath = '',
     [string]$Query = '',
-    [int]$Limit = 10
+    [int]$Limit = 10,
+    [ValidateSet('fastembed', 'token-hash')]
+    [string]$EmbeddingProvider = 'fastembed',
+    [string]$EmbeddingModel = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
 )
 
 Set-StrictMode -Version Latest
@@ -111,7 +114,7 @@ $output = Resolve-RootedOrRelativePath -Root $root -Path $OutputPath -DefaultPat
 
 $scriptPath = Join-Path $root 'tools\MemorySemantic\lancedb_sidecar.py'
 $uvPath = Find-Executable -Name 'uv.exe'
-$supportedCommands = @('probe', 'rebuild', 'search', 'explain', 'cleanup')
+$supportedCommands = @('probe', 'rebuild', 'search', 'explain', 'eval', 'cleanup')
 
 if ($Command -eq 'probe') {
     Write-JsonReport -Path $output -Payload @{
@@ -129,6 +132,8 @@ if ($Command -eq 'probe') {
         import_executed = $false
         commit_hook_installed = $false
         supported_commands = $supportedCommands
+        embedding_provider = $EmbeddingProvider
+        embedding_model = if ($EmbeddingProvider -eq 'token-hash') { 'local-token-hash' } else { $EmbeddingModel }
         status = if ($null -eq $uvPath) { 'uv-unavailable' } else { 'ready-to-run' }
         next_action = 'Run rebuild after SQLite memory refresh; do not install hooks or crawl project files directly.'
     }
@@ -148,6 +153,7 @@ $arguments = @(
     '--python', '3.12',
     '--with', 'lancedb',
     '--with', 'pyarrow',
+    '--with', 'fastembed==0.8.0',
     'python',
     $scriptPath,
     '--command', $Command,
@@ -155,7 +161,9 @@ $arguments = @(
     '--sqlite', $database,
     '--store', $store,
     '--output', $output,
-    '--limit', ([string]$Limit)
+    '--limit', ([string]$Limit),
+    '--embedding-provider', $EmbeddingProvider,
+    '--embedding-model', $EmbeddingModel
 )
 
 if (-not [string]::IsNullOrWhiteSpace($Query)) {

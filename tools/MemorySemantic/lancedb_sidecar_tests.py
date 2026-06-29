@@ -1,6 +1,23 @@
 from pathlib import Path
 
-from lancedb_sidecar import ensure_generated_store_path, rerank_rows
+from lancedb_sidecar import (
+    DEFAULT_EMBEDDING_MODEL,
+    evaluate_cases,
+    ensure_generated_store_path,
+    make_embedding_provider,
+    rerank_rows,
+)
+
+
+def test_default_embedding_provider_is_local_fastembed_multilingual_onnx():
+    provider = make_embedding_provider("token-hash", "")
+    fallback = provider.metadata()
+
+    assert fallback["embedding_provider"] == "token-hash"
+    assert fallback["embedding_model"] == "local-token-hash"
+    assert fallback["embedding_dimensions"] == 64
+
+    assert DEFAULT_EMBEDDING_MODEL == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 
 def test_rerank_prefers_typed_formula_over_generic_chunk():
@@ -31,6 +48,114 @@ def test_rerank_prefers_typed_formula_over_generic_chunk():
     assert ranked[0]["rerank_score"] < ranked[1]["rerank_score"]
 
 
+def test_rerank_prefers_formula_source_over_quality_gate_doc_chunk():
+    rows = [
+        {
+            "id": "chunk.docs-memory-lancedb-spike-md.1",
+            "type": "chunk",
+            "status": "current",
+            "title": "docs/memory/lancedb-spike.md",
+            "body": "current_ofi_formula eval case should return formula_version.tc-dn-hofi3.current",
+            "source_path": "docs/memory/lancedb-spike.md",
+            "_distance": 9.02,
+        },
+        {
+            "id": "formula_version.tc-dn-hofi3.current",
+            "type": "formula_version",
+            "status": "current",
+            "title": "Current TC-DN-HOFI3 OFI formula",
+            "body": "The actual OFI formula is canonical and current.",
+            "source_path": "docs/formulas.md",
+            "_distance": 12.06,
+        },
+    ]
+
+    ranked = rerank_rows(rows, "найди актуальную OFI-формулу actual OFI formula", limit=2)
+
+    assert ranked[0]["id"] == "formula_version.tc-dn-hofi3.current"
+
+    english_ranked = rerank_rows(rows, "actual OFI formula", limit=2)
+
+    assert english_ranked[0]["id"] == "formula_version.tc-dn-hofi3.current"
+
+
+def test_eval_cases_gate_expected_rank_and_sources():
+    results_by_case = {
+        "current_ofi_formula": [
+            {
+                "id": "formula_version.tc-dn-hofi3.current",
+                "type": "formula_version",
+                "status": "current",
+                "source_path": "docs/formulas.md",
+            }
+        ],
+        "funding_source_changed": [
+            {
+                "id": "adr.0004-funding-source-context",
+                "type": "adr",
+                "status": "current",
+                "source_path": "docs/decisions/0004-funding-source-context.md",
+            }
+        ],
+        "exchange_adapter_impact": [
+            {
+                "id": "relation.exchange-adapter.infrastructure",
+                "type": "relation",
+                "status": "current",
+                "source_path": "CryptoIndicatorApp.Infrastructure/Binance/ExchangeAdapter.cs",
+            }
+        ],
+        "exclude_superseded_rule": [],
+    }
+
+    report = evaluate_cases(lambda case: results_by_case[case["id"]])
+
+    assert report["passed"] is True
+    assert report["passed_count"] == 4
+    assert report["failed_count"] == 0
+
+
+def test_eval_cases_fail_when_superseded_rule_is_returned():
+    def search_case(case):
+        if case["id"] == "exclude_superseded_rule":
+            return [
+                {
+                    "id": "rule.legacy-superseded",
+                    "type": "rule",
+                    "status": "superseded",
+                    "source_path": "docs/memory/rules.md",
+                }
+            ]
+
+        return []
+
+    report = evaluate_cases(search_case)
+
+    assert report["passed"] is False
+    failed_ids = {case["id"] for case in report["cases"] if not case["passed"]}
+    assert "exclude_superseded_rule" in failed_ids
+
+
+def test_eval_cases_allow_current_results_for_superseded_exclusion_case():
+    def search_case(case):
+        if case["id"] == "exclude_superseded_rule":
+            return [
+                {
+                    "id": "chunk.agents-md.1",
+                    "type": "chunk",
+                    "status": "current",
+                    "source_path": "AGENTS.md",
+                }
+            ]
+
+        return []
+
+    report = evaluate_cases(search_case)
+    exclusion_case = next(case for case in report["cases"] if case["id"] == "exclude_superseded_rule")
+
+    assert exclusion_case["passed"] is True
+
+
 def test_store_path_guard_allows_only_generated_child_paths():
     project_root = Path.cwd()
     safe_path = project_root / "docs" / "memory" / "generated" / "lancedb"
@@ -50,6 +175,11 @@ def test_store_path_guard_allows_only_generated_child_paths():
 
 
 if __name__ == "__main__":
+    test_default_embedding_provider_is_local_fastembed_multilingual_onnx()
     test_rerank_prefers_typed_formula_over_generic_chunk()
+    test_rerank_prefers_formula_source_over_quality_gate_doc_chunk()
+    test_eval_cases_gate_expected_rank_and_sources()
+    test_eval_cases_fail_when_superseded_rule_is_returned()
+    test_eval_cases_allow_current_results_for_superseded_exclusion_case()
     test_store_path_guard_allows_only_generated_child_paths()
     print("ok")
