@@ -1021,7 +1021,7 @@
 - [x] Add `docs/memory/retain-policy.md` with redaction, delete, export, allowlist, denylist, and enablement gates.
 - [x] Update `docs/memory/contract.md`, `docs/memory/README.md`, and `docs/memory/open-questions.md`.
 - [x] Update curated import manifest tooling only as needed; do not enable external retain or Codex auto-retain.
-- [ ] Run narrow tests, memory refresh/check evidence, build/diff hygiene, commit, push, and open a PR.
+- [x] Run narrow tests, memory refresh/check evidence, build/diff hygiene, commit, push, and open a PR.
 
 ## Curated Retain Policy Results
 
@@ -1031,3 +1031,10 @@
 - Real retain/import, external memory writes, Codex auto-retain, Cloud, and post-commit rebuild remain disabled.
 - Narrow GREEN verification passed: `CuratedRetainPolicyTests|HindsightCuratedImportTests` `4/4`.
 - Expanded memory guardrail verification passed: `CuratedRetainPolicyTests|HindsightCuratedImportTests|MemoryContractTests|ManualMemoryGateTests` `20/20`.
+- Full solution tests passed: `dotnet test CryptoIndicatorApp.sln --no-restore` returned `104/104`.
+- Build passed: `dotnet build CryptoIndicatorApp.sln --no-restore` completed with `0` warnings and `0` errors.
+- `git diff --check` passed before commit.
+- Post-commit `memory-refresh-all` completed with SQLite stale-check `issues: []`, LanceDB indexed count `344`, and eval `9/9`.
+- `memory status` reported `NeedsRefresh=False`, `WorkingTreeDirty=False`, and `MarkerExists=False`.
+- `memory-pre-push-check` passed with `passed_count=9`, `failed_count=0`, no Cloud, no Codex auto-retain, no post-commit refresh, and no hook installation.
+- Branch `codex/curated-retain-policy` was pushed and draft PR #2 was opened.
