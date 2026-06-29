@@ -953,3 +953,19 @@
 - Real installer `-PlanOnly` wrote an ignored report with `installs_hooks=false`; `.git/hooks/pre-push` remained absent.
 - Verification passed: Infrastructure memory tests `19/19`, Memory CLI tests `4/4`, Python sidecar tests `ok`, solution build completed with `0` warnings and `0` errors, and `git diff --check` passed.
 - Git status before final refresh contained only the optional-hook slice: `ManualMemoryGateTests`, ADR/docs/lessons/todo, and the new installer script.
+
+## Memory Reminder Trigger Rules Todo
+
+- [x] Add short Codex reminder triggers to `AGENTS.md` for push/PR, ADR/formula decisions, `/compact`, and failed experiments/regressions.
+- [x] Add a matching "Когда Codex должен напоминать" section to the external harness memory-management note.
+- [x] Verify the rule text forbids Codex auto-retain hooks and post-commit hooks for now.
+- [x] Run memory refresh/check evidence, diff hygiene, and commit the repo instruction slice if clean.
+
+## Memory Reminder Trigger Rules Results
+
+- Added `AGENTS.md` reminder triggers for explicit `commit`, `push`, PR, `/compact`, ADR, formula, experiment, and regression moments.
+- The triggers only remind which command to run; they do not add Codex auto-retain hooks, post-commit hooks, after-save hooks, or background memory refresh.
+- Updated `C:\Users\MECHREVO\Desktop\harness management\memory management.md` with a matching "Когда Codex должен напоминать" section.
+- `scripts/memory-refresh-all.ps1` completed with SQLite stale-check `issues: []` and LanceDB eval passing.
+- `scripts/memory-pre-push-check.ps1` passed with LanceDB eval `9/9`, `failed_count=0`, Cloud/Codex auto-retain/post-commit refresh disabled.
+- `git diff --check` passed.

@@ -21,6 +21,17 @@ Project-specific rules in this file override generic imported or global instruct
 - Do not auto-commit secrets, raw recordings, generated memory exports, local machine state, or unrelated user changes.
 - If the worktree is mixed, verification failed, or the commit boundary is unclear, stop at a clean point, record status in `tasks/todo.md`, and ask before committing.
 
+## Memory Management Reminder Triggers
+
+These are reminder rules only. Do not add Codex auto-retain hooks, git post-commit hooks, after-save hooks, or background memory refresh until a separate ADR approves retention, deletion, export, and stale-fact controls.
+
+- Before `push` or PR creation, remind the user to run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-pre-push-check.ps1`.
+- Before committing changes that update ADRs, formulas, experiments, regressions, lessons, or memory rules, remind the user to run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
+- After an architectural decision or formula decision, remind the user to update the human-authored source (`docs/decisions/*`, `TC-DN-HOFI3.md`, `docs/formulas.md`, or `docs/memory/*`) and then run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
+- Before `/compact`, remind the user to stop at a clean handoff point, update `tasks/todo.md`, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`, and include the next command in the handoff.
+- After a failed experiment or regression, remind the user to update `tasks/lessons.md` or an experiment summary, then run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
+- Keep these reminders limited to explicit `commit`, `push`, PR, `/compact`, ADR, formula, experiment, and regression moments.
+
 ## Project Scope
 
 This project is a Windows analytics application for the TC-DN-HOFI3 Binance USDS-M Futures indicator.
