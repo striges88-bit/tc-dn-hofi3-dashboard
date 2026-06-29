@@ -115,10 +115,11 @@ public sealed class ManualMemoryGateTests
         Assert.Contains("manual memory gate", adr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("memory-pre-push-check.ps1", adr, StringComparison.Ordinal);
         Assert.Contains("post-commit", adr, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("not add", adr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not run rebuild", adr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("memory-pre-push-check", contract, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("manual", contract, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("no post-commit", contract, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("post-commit marker", contract, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not run rebuild", contract, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("memory-pre-push-check.ps1", scriptsReadme, StringComparison.Ordinal);
         Assert.Contains("memory-pre-push-check", lessons, StringComparison.OrdinalIgnoreCase);
     }
@@ -272,6 +273,101 @@ public sealed class ManualMemoryGateTests
         Assert.Contains("optional pre-push", lessons, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task InstallPostCommitMarkerHookPlanDoesNotInstallHookOrRunRebuild()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "install-memory-post-commit-marker-hook.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        using var temp = TemporaryDirectory.Create();
+        var hookPath = Path.Combine(temp.Path, "post-commit");
+        var reportPath = Path.Combine(temp.Path, "install-report.json");
+
+        var result = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(Root)} -HookPath {Quote(hookPath)} -OutputPath {Quote(reportPath)} -PlanOnly");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        Assert.False(File.Exists(hookPath));
+        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal(1, root.GetProperty("schema_version").GetInt32());
+        Assert.Equal("scripts/install-memory-post-commit-marker-hook.ps1", root.GetProperty("generator").GetString());
+        Assert.Equal("plan-only", root.GetProperty("mode").GetString());
+        Assert.Equal("planned", root.GetProperty("status").GetString());
+        Assert.Equal("post-commit", root.GetProperty("hook_type").GetString());
+        Assert.True(root.GetProperty("manual_only").GetBoolean());
+        Assert.True(root.GetProperty("requires_confirm").GetBoolean());
+        Assert.True(root.GetProperty("writes_marker").GetBoolean());
+        Assert.True(root.GetProperty("uses_lock").GetBoolean());
+        Assert.True(root.GetProperty("timeout_seconds").GetInt32() > 0);
+        Assert.False(root.GetProperty("installs_hooks").GetBoolean());
+        Assert.False(root.GetProperty("post_commit_hook_installed").GetBoolean());
+        AssertPostCommitMarkerSafetyFlags(root);
+    }
+
+    [Fact]
+    public async Task InstallPostCommitMarkerHookConfirmWritesManagedMarkerOnlyHookAndDisableRemovesIt()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "install-memory-post-commit-marker-hook.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        using var temp = TemporaryDirectory.Create();
+        var hookPath = Path.Combine(temp.Path, "post-commit");
+        var reportPath = Path.Combine(temp.Path, "install-report.json");
+
+        var install = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(Root)} -HookPath {Quote(hookPath)} -OutputPath {Quote(reportPath)} -Confirm -TimeoutSeconds 7");
+
+        Assert.True(install.ExitCode == 0, install.ToString());
+        Assert.True(File.Exists(hookPath), $"Missing hook: {hookPath}");
+
+        var hook = File.ReadAllText(hookPath);
+        Assert.StartsWith("#!/bin/sh\n", hook, StringComparison.Ordinal);
+        Assert.DoesNotContain("\r\n", hook, StringComparison.Ordinal);
+        Assert.Contains("TC-DN-HOFI3 managed memory post-commit marker hook", hook, StringComparison.Ordinal);
+        Assert.Contains("memory-mark-needs-refresh.ps1", hook, StringComparison.Ordinal);
+        Assert.Contains("-TimeoutSeconds 7", hook, StringComparison.Ordinal);
+        Assert.DoesNotContain("memory-refresh-all", hook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("lancedb", hook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("retain", hook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("recordings", hook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(".hindsight", hook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", hook, StringComparison.OrdinalIgnoreCase);
+
+        using (var installReport = JsonDocument.Parse(File.ReadAllText(reportPath)))
+        {
+            var root = installReport.RootElement;
+            Assert.Equal("install", root.GetProperty("mode").GetString());
+            Assert.Equal("installed", root.GetProperty("status").GetString());
+            Assert.True(root.GetProperty("installs_hooks").GetBoolean());
+            Assert.True(root.GetProperty("post_commit_hook_installed").GetBoolean());
+            Assert.True(root.GetProperty("hook_invokes_marker_helper").GetBoolean());
+            Assert.True(root.GetProperty("writes_marker").GetBoolean());
+            AssertPostCommitMarkerSafetyFlags(root);
+        }
+
+        var disableReportPath = Path.Combine(temp.Path, "disable-report.json");
+        var disable = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(Root)} -HookPath {Quote(hookPath)} -OutputPath {Quote(disableReportPath)} -Disable -Confirm");
+
+        Assert.True(disable.ExitCode == 0, disable.ToString());
+        Assert.False(File.Exists(hookPath));
+
+        using var disableReport = JsonDocument.Parse(File.ReadAllText(disableReportPath));
+        var disableRoot = disableReport.RootElement;
+        Assert.Equal("disable", disableRoot.GetProperty("mode").GetString());
+        Assert.Equal("disabled", disableRoot.GetProperty("status").GetString());
+        Assert.True(disableRoot.GetProperty("managed_hook_removed").GetBoolean());
+        Assert.False(disableRoot.GetProperty("installs_hooks").GetBoolean());
+        Assert.False(disableRoot.GetProperty("post_commit_hook_installed").GetBoolean());
+        AssertPostCommitMarkerSafetyFlags(disableRoot);
+    }
+
     private static string ReadText(string relativePath)
     {
         var path = Path.Combine(Root, relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -321,6 +417,21 @@ public sealed class ManualMemoryGateTests
         Assert.False(root.GetProperty("hook_invokes_refresh_all").GetBoolean());
         Assert.False(root.GetProperty("post_commit_auto_refresh_enabled").GetBoolean());
         Assert.False(root.GetProperty("commit_hook_installed").GetBoolean());
+        Assert.False(root.GetProperty("cloud_enabled").GetBoolean());
+        Assert.False(root.GetProperty("codex_auto_retain_enabled").GetBoolean());
+        Assert.False(root.GetProperty("touches_raw_jsonl").GetBoolean());
+        Assert.False(root.GetProperty("touches_hindsight_store").GetBoolean());
+        Assert.False(root.GetProperty("touches_secret_storage").GetBoolean());
+        Assert.False(root.GetProperty("uses_generated_exports_as_source").GetBoolean());
+        Assert.False(root.GetProperty("touches_build_artifacts").GetBoolean());
+    }
+
+    private static void AssertPostCommitMarkerSafetyFlags(JsonElement root)
+    {
+        Assert.False(root.GetProperty("runs_refresh_all").GetBoolean());
+        Assert.False(root.GetProperty("hook_invokes_refresh_all").GetBoolean());
+        Assert.False(root.GetProperty("rebuilds_memory").GetBoolean());
+        Assert.False(root.GetProperty("imports_curated_retain").GetBoolean());
         Assert.False(root.GetProperty("cloud_enabled").GetBoolean());
         Assert.False(root.GetProperty("codex_auto_retain_enabled").GetBoolean());
         Assert.False(root.GetProperty("touches_raw_jsonl").GetBoolean());

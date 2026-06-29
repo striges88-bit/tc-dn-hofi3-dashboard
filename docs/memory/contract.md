@@ -43,13 +43,17 @@ Required metadata:
 - `status`: `current`, `proposed`, `superseded`, or `failed`
 - `source_path`
 - `source_hash`
+- `commit_sha` for commit-addressed generated records
+- `tree_sha` for commit-addressed generated records
+- `source_blob_sha` for commit-addressed generated records
+- `indexed_at`
 - `created_at`
 - `updated_at`
 - `confidence`
 - `valid_from`
 - `valid_until`
 
-Any generated node without `source_path` and `source_hash` is invalid for retrieval. `confidence` is evidence quality, not permission to override higher-priority sources.
+Any generated node without `source_path` and `source_hash` is invalid for retrieval. Any commit-addressed generated node without `commit_sha`, `tree_sha`, `source_blob_sha`, and `indexed_at` is invalid for commit-grounded retrieval. `confidence` is evidence quality, not permission to override higher-priority sources.
 
 ## Edge Schema
 
@@ -90,7 +94,7 @@ Required tables:
 - `search_documents_fts`
 - `query_log`
 
-Typed records must preserve source grounding: `id`, `status`, `source_path`, `source_hash`, `created_at` or `updated_at`, `valid_from`, `valid_until`, and `confidence` where applicable. Canonical status lives in SQLite; LanceDB may copy status metadata only for filtering and reranking.
+Typed records must preserve source grounding: `id`, `status`, `source_path`, `source_hash`, `commit_sha`, `tree_sha`, `source_blob_sha`, `indexed_at`, `created_at` or `updated_at`, `valid_from`, `valid_until`, and `confidence` where applicable. Canonical status lives in SQLite; LanceDB may copy status and commit/source metadata only for filtering, validation, and reranking.
 
 ## Retrieval Protocol
 
@@ -113,6 +117,7 @@ Known retrieval facts that must remain easy to answer:
 ## Staleness And Contradictions
 
 - A generated node without `source_path` or `source_hash` is stale.
+- A commit-addressed generated node without `commit_sha`, `tree_sha`, `source_blob_sha`, or `indexed_at` is stale.
 - A `superseded` decision must not rank above a `current` ADR or current source code.
 - A failed experiment outcome is a lesson or risk note, not a formula decision.
 - A formula decision needs explicit approval and deterministic replay/test evidence before it can change formula, threshold, filter, or cadence memory.
@@ -132,23 +137,25 @@ Use SQLite diagnostics only:
 
 ## Refresh Rules
 
-The MVP refresh mechanism is a manual refresh command. Do not add a git post-commit hook as a memory refresh path because Git/PATH availability is fragile on Windows and hidden refresh can index mixed worktree states.
+The MVP refresh mechanism is a manual or commit-addressed refresh command. Do not add a git post-commit hook as a memory refresh path because Git/PATH availability is fragile on Windows and hidden refresh can index mixed worktree states. A post-commit marker hook is allowed only as an explicit opt-in local helper that writes `docs/memory/generated/memory-needs-refresh.marker.json`; it must not run rebuild, `memory-refresh-all`, LanceDB rebuild/eval, curated retain, Cloud, or Codex auto-retain.
 
-Use `scripts/memory-refresh-all.ps1` as the preferred manual full rebuild wrapper. It runs legacy JSON refresh, SQLite refresh, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order, then writes an ignored report under `docs/memory/generated/`.
+Use `scripts/memory-refresh-all.ps1` as the preferred manual full rebuild wrapper. It runs legacy JSON refresh, SQLite `refresh-from-commit --commit HEAD`, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order, then writes an ignored report under `docs/memory/generated/`.
 
-Use `scripts/memory-pre-push-check.ps1` as a manual evidence gate after `memory-refresh-all` and before push or PR review. It validates the generated refresh/eval reports, does not run a rebuild by default, does not install hooks, and keeps no post-commit memory automation in the MVP flow.
+Use `scripts/memory-pre-push-check.ps1` as a manual evidence gate after `memory-refresh-all` and before push or PR review. It validates the generated refresh/eval reports, does not run a rebuild by default, does not install hooks, and keeps no post-commit refresh automation in the MVP flow.
 
-`scripts/install-memory-pre-push-hook.ps1` is the only approved optional hook installer. It requires `-Confirm`, refuses unmanaged existing hooks, installs a local managed `pre-push` hook that calls only `scripts/memory-pre-push-check.ps1`, and does not run `memory-refresh-all` inside the hook. Disable the managed hook with `scripts/install-memory-pre-push-hook.ps1 -Disable -Confirm`.
+`scripts/install-memory-pre-push-hook.ps1` is the approved optional pre-push hook installer. It requires `-Confirm`, refuses unmanaged existing hooks, installs a local managed `pre-push` hook that calls only `scripts/memory-pre-push-check.ps1`, and does not run `memory-refresh-all` inside the hook. Disable the managed hook with `scripts/install-memory-pre-push-hook.ps1 -Disable -Confirm`.
+
+`scripts/install-memory-post-commit-marker-hook.ps1` is the approved optional post-commit marker hook installer. It requires `-Confirm`, refuses unmanaged existing hooks, installs a local managed `post-commit` hook that calls only `scripts/memory-mark-needs-refresh.ps1`, and does not run rebuild. Disable the managed hook with `scripts/install-memory-post-commit-marker-hook.ps1 -Disable -Confirm`.
 
 The manual refresh script and `tools/Memory` CLI may write ignored files under `docs/memory/generated/`, including `project-memory.sqlite`. They must not rewrite human-authored docs, app code, formulas, config, or tests.
 
-LanceDB sidecar refresh is manual during the spike. `memory-refresh-all` must not install hooks, enable Codex auto-retain, call Cloud services, crawl project files directly for LanceDB, or import raw JSONL recordings, generated exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps. Do not install a git post-commit hook, after-save hook, or background updater until local clean rebuild/delete/reindex behavior and the semantic quality gate are verified and documented with the generated JSON/Markdown eval reports.
+LanceDB sidecar refresh is manual during the spike. `memory-refresh-all` must not install hooks, enable Codex auto-retain, call Cloud services, crawl project files directly for LanceDB, or import raw JSONL recordings, generated exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps. Do not install a git post-commit refresh hook, after-save hook, or background updater until local clean rebuild/delete/reindex behavior and the semantic quality gate are verified and documented with the generated JSON/Markdown eval reports.
 
-Do not add post-commit auto-refresh for project memory. The only Git helper allowed in the current contract is the explicit opt-in pre-push wrapper around `memory-pre-push-check`, not hidden refresh automation.
+Do not add post-commit auto-refresh for project memory. The allowed Git helpers are explicit opt-in only: the pre-push wrapper around `memory-pre-push-check`, and the post-commit marker helper that marks stale memory but does not run rebuild.
 
 ## Tool Strategy
 
-- SQLite FTS5 is the canonical local memory store for generated retrieval/status metadata. Use `tools/Memory` for `refresh`, `search`, `explain`, and `stale-check`.
+- SQLite FTS5 is the canonical local memory store for generated retrieval/status metadata. Use `tools/Memory` for `refresh-from-commit`, `status`, `search`, `explain`, and `stale-check`. Keep plain `refresh` only as a working-tree diagnostic path.
 - LanceDB is an active local semantic sidecar spike and production-candidate semantic quality layer. It may add embeddings, hybrid search, metadata filtering, cleanup, and reranking, but SQLite remains the canonical status store and LanceDB must not own canonical status.
 - Use `scripts/lancedb-sidecar.ps1` for local `probe`, `rebuild`, `search`, `explain`, `eval`, and `cleanup`. It reads SQLite `search_documents` only and writes generated data under `docs/memory/generated/lancedb`.
 - The current LanceDB candidate uses local FastEmbed/ONNX by default with model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` and wrapper pin `fastembed==0.8.0`. The deterministic token-hash provider remains fallback/test-only.

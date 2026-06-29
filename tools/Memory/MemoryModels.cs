@@ -8,7 +8,26 @@ public sealed record ProjectMemorySnapshot(
     IReadOnlyList<FormulaVersionRecord> FormulaVersions,
     IReadOnlyList<SymbolRecord> Symbols,
     IReadOnlyList<EventRecord> Events,
-    IReadOnlyList<RelationRecord> Relations);
+    IReadOnlyList<RelationRecord> Relations,
+    MemorySnapshotMetadata Metadata);
+
+public sealed record MemorySnapshotMetadata(
+    string RefreshSource,
+    string? CommitSha,
+    string? TreeSha,
+    IReadOnlyDictionary<string, string> SourceBlobShas,
+    string IndexedAt)
+{
+    public static MemorySnapshotMetadata ForWorkingTree(string indexedAt)
+    {
+        return new MemorySnapshotMetadata(
+            "working-tree",
+            null,
+            null,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            indexedAt);
+    }
+}
 
 public sealed record IndexedFile(string Path, string Hash, long SizeBytes);
 
@@ -72,6 +91,11 @@ public sealed record RefreshResult(
     string CanonicalStore,
     string SemanticSidecar,
     string HindsightStatus,
+    string RefreshSource,
+    string? CommitSha,
+    string? TreeSha,
+    string IndexedAt,
+    int SourceBlobShaCount,
     int IndexedFiles,
     IReadOnlyList<string> Tables,
     IReadOnlyList<string> IndexedPaths);
@@ -97,3 +121,13 @@ public sealed record ExplainResult(
 public sealed record StaleCheckResult(IReadOnlyList<StaleIssue> Issues);
 
 public sealed record StaleIssue(string Code, string Id, string SourcePath, string Message);
+
+public sealed record MemoryStatusResult(
+    string? Head,
+    string? IndexedCommit,
+    string? IndexedTree,
+    string? IndexedAt,
+    bool MarkerExists,
+    bool NeedsRefresh,
+    bool WorkingTreeDirty,
+    string MarkerPath);

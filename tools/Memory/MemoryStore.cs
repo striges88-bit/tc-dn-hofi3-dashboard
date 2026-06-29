@@ -29,36 +29,55 @@ public sealed class MemoryStore : IDisposable
     {
         RecreateSchema();
         using var transaction = _connection.BeginTransaction();
+        var metadata = snapshot.Metadata;
+
+        SetMetadata("refresh_source", metadata.RefreshSource, transaction);
+        SetMetadata("commit_sha", metadata.CommitSha, transaction);
+        SetMetadata("tree_sha", metadata.TreeSha, transaction);
+        SetMetadata("indexed_at", metadata.IndexedAt, transaction);
 
         foreach (var file in snapshot.Files)
         {
             Execute(
-                "INSERT INTO files(path, hash, size_bytes, indexed_at) VALUES ($path, $hash, $size, $indexed)",
+                """
+                INSERT INTO files(path, hash, size_bytes, commit_sha, tree_sha, source_blob_sha, indexed_at)
+                VALUES ($path, $hash, $size, $commit, $tree, $blob, $indexed)
+                """,
                 transaction,
                 ("$path", file.Path),
                 ("$hash", file.Hash),
                 ("$size", file.SizeBytes),
-                ("$indexed", Now()));
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
+                ("$blob", SourceBlobSha(metadata, file.Path)),
+                ("$indexed", metadata.IndexedAt));
             Execute(
-                "INSERT INTO sources(id, source_path, source_hash, updated_at) VALUES ($id, $path, $hash, $updated)",
+                """
+                INSERT INTO sources(id, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, indexed_at, updated_at)
+                VALUES ($id, $path, $hash, $blob, $commit, $tree, $indexed, $updated)
+                """,
                 transaction,
                 ("$id", $"source.{file.Path}"),
                 ("$path", file.Path),
                 ("$hash", file.Hash),
-                ("$updated", Now()));
+                ("$blob", SourceBlobSha(metadata, file.Path)),
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
+                ("$indexed", metadata.IndexedAt),
+                ("$updated", metadata.IndexedAt));
         }
 
         foreach (var document in snapshot.SearchDocuments)
         {
-            InsertSearchDocument(document, transaction);
+            InsertSearchDocument(document, metadata, transaction);
         }
 
         foreach (var rule in snapshot.Rules)
         {
             Execute(
                 """
-                INSERT INTO rules(id, status, active_scope, text, source_path, source_hash, updated_at)
-                VALUES ($id, $status, $scope, $text, $source, $hash, $updated)
+                INSERT INTO rules(id, status, active_scope, text, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, indexed_at, updated_at)
+                VALUES ($id, $status, $scope, $text, $source, $hash, $blob, $commit, $tree, $indexed, $updated)
                 """,
                 transaction,
                 ("$id", rule.Id),
@@ -67,15 +86,19 @@ public sealed class MemoryStore : IDisposable
                 ("$text", rule.Text),
                 ("$source", rule.SourcePath),
                 ("$hash", rule.SourceHash),
-                ("$updated", Now()));
+                ("$blob", SourceBlobSha(metadata, rule.SourcePath)),
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
+                ("$indexed", metadata.IndexedAt),
+                ("$updated", metadata.IndexedAt));
         }
 
         foreach (var adr in snapshot.Adrs)
         {
             Execute(
                 """
-                INSERT INTO adr(id, status, title, text, source_path, source_hash, updated_at)
-                VALUES ($id, $status, $title, $text, $source, $hash, $updated)
+                INSERT INTO adr(id, status, title, text, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, indexed_at, updated_at)
+                VALUES ($id, $status, $title, $text, $source, $hash, $blob, $commit, $tree, $indexed, $updated)
                 """,
                 transaction,
                 ("$id", adr.Id),
@@ -84,15 +107,19 @@ public sealed class MemoryStore : IDisposable
                 ("$text", adr.Text),
                 ("$source", adr.SourcePath),
                 ("$hash", adr.SourceHash),
-                ("$updated", Now()));
+                ("$blob", SourceBlobSha(metadata, adr.SourcePath)),
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
+                ("$indexed", metadata.IndexedAt),
+                ("$updated", metadata.IndexedAt));
         }
 
         foreach (var formula in snapshot.FormulaVersions)
         {
             Execute(
                 """
-                INSERT INTO formula_versions(id, status, owner, text, source_path, source_hash, updated_at)
-                VALUES ($id, $status, $owner, $text, $source, $hash, $updated)
+                INSERT INTO formula_versions(id, status, owner, text, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, indexed_at, updated_at)
+                VALUES ($id, $status, $owner, $text, $source, $hash, $blob, $commit, $tree, $indexed, $updated)
                 """,
                 transaction,
                 ("$id", formula.Id),
@@ -101,26 +128,37 @@ public sealed class MemoryStore : IDisposable
                 ("$text", formula.Text),
                 ("$source", formula.SourcePath),
                 ("$hash", formula.SourceHash),
-                ("$updated", Now()));
+                ("$blob", SourceBlobSha(metadata, formula.SourcePath)),
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
+                ("$indexed", metadata.IndexedAt),
+                ("$updated", metadata.IndexedAt));
         }
 
         foreach (var symbol in snapshot.Symbols)
         {
             Execute(
-                "INSERT INTO symbols(symbol, source_path, source_hash, updated_at) VALUES ($symbol, $source, $hash, $updated)",
+                """
+                INSERT INTO symbols(symbol, source_path, source_hash, commit_sha, tree_sha, source_blob_sha, indexed_at, updated_at)
+                VALUES ($symbol, $source, $hash, $commit, $tree, $blob, $indexed, $updated)
+                """,
                 transaction,
                 ("$symbol", symbol.Symbol),
                 ("$source", symbol.SourcePath),
                 ("$hash", symbol.SourceHash),
-                ("$updated", Now()));
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
+                ("$blob", SourceBlobSha(metadata, symbol.SourcePath)),
+                ("$indexed", metadata.IndexedAt),
+                ("$updated", metadata.IndexedAt));
         }
 
         foreach (var memoryEvent in snapshot.Events)
         {
             Execute(
                 """
-                INSERT INTO events(id, event_type, symbol, text, source_path, source_hash, updated_at)
-                VALUES ($id, $type, $symbol, $text, $source, $hash, $updated)
+                INSERT INTO events(id, event_type, symbol, text, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, indexed_at, updated_at)
+                VALUES ($id, $type, $symbol, $text, $source, $hash, $blob, $commit, $tree, $indexed, $updated)
                 """,
                 transaction,
                 ("$id", memoryEvent.Id),
@@ -129,15 +167,19 @@ public sealed class MemoryStore : IDisposable
                 ("$text", memoryEvent.Text),
                 ("$source", memoryEvent.SourcePath),
                 ("$hash", memoryEvent.SourceHash),
-                ("$updated", Now()));
+                ("$blob", SourceBlobSha(metadata, memoryEvent.SourcePath)),
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
+                ("$indexed", metadata.IndexedAt),
+                ("$updated", metadata.IndexedAt));
         }
 
         foreach (var relation in snapshot.Relations)
         {
             Execute(
                 """
-                INSERT INTO relations(id, from_id, relation, to_id, text, source_path, source_hash, updated_at)
-                VALUES ($id, $from, $relation, $to, $text, $source, $hash, $updated)
+                INSERT INTO relations(id, from_id, relation, to_id, text, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, indexed_at, updated_at)
+                VALUES ($id, $from, $relation, $to, $text, $source, $hash, $blob, $commit, $tree, $indexed, $updated)
                 """,
                 transaction,
                 ("$id", relation.Id),
@@ -147,7 +189,11 @@ public sealed class MemoryStore : IDisposable
                 ("$text", relation.Text),
                 ("$source", relation.SourcePath),
                 ("$hash", relation.SourceHash),
-                ("$updated", Now()));
+                ("$blob", SourceBlobSha(metadata, relation.SourcePath)),
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
+                ("$indexed", metadata.IndexedAt),
+                ("$updated", metadata.IndexedAt));
         }
 
         transaction.Commit();
@@ -157,6 +203,11 @@ public sealed class MemoryStore : IDisposable
             "sqlite-fts5",
             "lancedb-fastembed-local-candidate",
             "historical-failed",
+            metadata.RefreshSource,
+            metadata.CommitSha,
+            metadata.TreeSha,
+            metadata.IndexedAt,
+            metadata.SourceBlobShas.Count,
             snapshot.Files.Count,
             GetTableNames(),
             snapshot.Files.Select(file => file.Path).Order(StringComparer.Ordinal).ToArray());
@@ -176,11 +227,34 @@ public sealed class MemoryStore : IDisposable
         return new ExplainResult("EXPLAIN QUERY PLAN", query, plan, results, (decimal)stopwatch.Elapsed.TotalMilliseconds, logRows);
     }
 
+    public MemoryStatusResult Status(string projectRoot)
+    {
+        var head = GitCommitMemoryIndexer.ReadHead(projectRoot);
+        var indexedCommit = GetMetadata("commit_sha");
+        var indexedTree = GetMetadata("tree_sha");
+        var indexedAt = GetMetadata("indexed_at");
+        var markerPath = MemoryRefreshMarker.GetMarkerPath(projectRoot);
+        var markerExists = File.Exists(markerPath);
+        var needsRefresh = markerExists
+            || string.IsNullOrWhiteSpace(indexedCommit)
+            || (!string.IsNullOrWhiteSpace(head) && !indexedCommit.Equals(head, StringComparison.OrdinalIgnoreCase));
+
+        return new MemoryStatusResult(
+            head,
+            indexedCommit,
+            indexedTree,
+            indexedAt,
+            markerExists,
+            needsRefresh,
+            GitCommitMemoryIndexer.IsWorkingTreeDirty(projectRoot),
+            ToRepoPath(projectRoot, markerPath));
+    }
+
     public StaleCheckResult StaleCheck(string projectRoot)
     {
         var issues = new List<StaleIssue>();
 
-        using (var command = CreateCommand("SELECT id, source_path, source_hash FROM search_documents"))
+        using (var command = CreateCommand("SELECT id, source_path, source_hash, source_blob_sha, commit_sha FROM search_documents"))
         using (var reader = command.ExecuteReader())
         {
             while (reader.Read())
@@ -188,6 +262,30 @@ public sealed class MemoryStore : IDisposable
                 var id = reader.GetString(0);
                 var sourcePath = reader.GetString(1);
                 var sourceHash = reader.GetString(2);
+                var sourceBlobSha = reader.IsDBNull(3) ? null : reader.GetString(3);
+                var commitSha = reader.IsDBNull(4) ? null : reader.GetString(4);
+
+                if (!string.IsNullOrWhiteSpace(commitSha))
+                {
+                    if (string.IsNullOrWhiteSpace(sourceBlobSha))
+                    {
+                        issues.Add(new StaleIssue("missing_source_blob_sha", id, sourcePath, "Commit-addressed source has no source_blob_sha."));
+                        continue;
+                    }
+
+                    var currentBlobSha = GitCommitMemoryIndexer.ReadBlobSha(projectRoot, commitSha, sourcePath);
+                    if (string.IsNullOrWhiteSpace(currentBlobSha))
+                    {
+                        issues.Add(new StaleIssue("missing_source", id, sourcePath, "Source file does not exist in indexed commit."));
+                    }
+                    else if (!currentBlobSha.Equals(sourceBlobSha, StringComparison.OrdinalIgnoreCase))
+                    {
+                        issues.Add(new StaleIssue("source_blob_mismatch", id, sourcePath, "Source blob changed for indexed commit."));
+                    }
+
+                    continue;
+                }
+
                 var fullPath = Path.Combine(projectRoot, sourcePath.Replace('/', Path.DirectorySeparatorChar));
                 if (!File.Exists(fullPath))
                 {
@@ -242,12 +340,12 @@ public sealed class MemoryStore : IDisposable
         }
     }
 
-    private void InsertSearchDocument(SearchDocument document, SqliteTransaction transaction)
+    private void InsertSearchDocument(SearchDocument document, MemorySnapshotMetadata metadata, SqliteTransaction transaction)
     {
         Execute(
             """
-            INSERT INTO search_documents(id, type, status, title, body, source_path, source_hash, confidence, valid_from, valid_until, updated_at)
-            VALUES ($id, $type, $status, $title, $body, $source, $hash, $confidence, $validFrom, $validUntil, $updated)
+            INSERT INTO search_documents(id, type, status, title, body, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, confidence, valid_from, valid_until, indexed_at, updated_at)
+            VALUES ($id, $type, $status, $title, $body, $source, $hash, $blob, $commit, $tree, $confidence, $validFrom, $validUntil, $indexed, $updated)
             """,
             transaction,
             ("$id", document.Id),
@@ -257,10 +355,14 @@ public sealed class MemoryStore : IDisposable
             ("$body", document.Body),
             ("$source", document.SourcePath),
             ("$hash", document.SourceHash),
+            ("$blob", SourceBlobSha(metadata, document.SourcePath)),
+            ("$commit", metadata.CommitSha),
+            ("$tree", metadata.TreeSha),
             ("$confidence", document.Confidence),
             ("$validFrom", document.ValidFrom),
             ("$validUntil", document.ValidUntil),
-            ("$updated", Now()));
+            ("$indexed", metadata.IndexedAt),
+            ("$updated", metadata.IndexedAt));
         Execute(
             """
             INSERT INTO search_documents_fts(id, title, body, type, status, source_path)
@@ -277,8 +379,8 @@ public sealed class MemoryStore : IDisposable
         {
             Execute(
                 """
-                INSERT INTO chunks(id, file_path, ordinal, text, source_path, source_hash, status)
-                VALUES ($id, $file, $ordinal, $text, $source, $hash, $status)
+                INSERT INTO chunks(id, file_path, ordinal, text, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, indexed_at, status)
+                VALUES ($id, $file, $ordinal, $text, $source, $hash, $blob, $commit, $tree, $indexed, $status)
                 """,
                 transaction,
                 ("$id", document.Id),
@@ -287,6 +389,10 @@ public sealed class MemoryStore : IDisposable
                 ("$text", document.Body),
                 ("$source", document.SourcePath),
                 ("$hash", document.SourceHash),
+                ("$blob", SourceBlobSha(metadata, document.SourcePath)),
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
+                ("$indexed", metadata.IndexedAt),
                 ("$status", document.Status));
         }
     }
@@ -442,6 +548,34 @@ public sealed class MemoryStore : IDisposable
         return Convert.ToInt32(command.ExecuteScalar());
     }
 
+    private string? GetMetadata(string key)
+    {
+        if (!TableExists("memory_metadata"))
+        {
+            return null;
+        }
+
+        using var command = CreateCommand("SELECT value FROM memory_metadata WHERE key = $key");
+        command.Parameters.AddWithValue("$key", key);
+        return command.ExecuteScalar() as string;
+    }
+
+    private void SetMetadata(string key, string? value, SqliteTransaction transaction)
+    {
+        Execute(
+            "INSERT INTO memory_metadata(key, value) VALUES ($key, $value)",
+            transaction,
+            ("$key", key),
+            ("$value", value));
+    }
+
+    private bool TableExists(string tableName)
+    {
+        using var command = CreateCommand("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $name");
+        command.Parameters.AddWithValue("$name", tableName);
+        return Convert.ToInt32(command.ExecuteScalar()) > 0;
+    }
+
     private SqliteCommand CreateCommand(string sql)
     {
         var command = _connection.CreateCommand();
@@ -477,6 +611,23 @@ public sealed class MemoryStore : IDisposable
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    private static string? SourceBlobSha(MemorySnapshotMetadata metadata, string sourcePath)
+    {
+        return metadata.SourceBlobShas.TryGetValue(sourcePath, out var blobSha) ? blobSha : null;
+    }
+
+    private static string ToRepoPath(string projectRoot, string path)
+    {
+        var root = Path.GetFullPath(projectRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var fullPath = Path.GetFullPath(path);
+        if (!fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        {
+            return path;
+        }
+
+        return fullPath[root.Length..].TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace('\\', '/');
     }
 
     private static int ExtractChunkOrdinal(string id)

@@ -23,12 +23,12 @@ Project-specific rules in this file override generic imported or global instruct
 
 ## Memory Management Reminder Triggers
 
-These are reminder rules only. Do not add Codex auto-retain hooks, git post-commit hooks, after-save hooks, or background memory refresh until a separate ADR approves retention, deletion, export, and stale-fact controls.
+These are reminder rules only. Do not add Codex auto-retain hooks, git post-commit refresh hooks, after-save hooks, or background memory refresh until a separate ADR approves retention, deletion, export, and stale-fact controls. A marker-only post-commit hook is allowed only when explicitly installed by the user.
 
-- Before `push` or PR creation, remind the user to run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-pre-push-check.ps1`.
-- Before committing changes that update ADRs, formulas, experiments, regressions, lessons, or memory rules, remind the user to run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
-- After an architectural decision or formula decision, remind the user to update the human-authored source (`docs/decisions/*`, `TC-DN-HOFI3.md`, `docs/formulas.md`, or `docs/memory/*`) and then run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
-- Before `/compact`, remind the user to stop at a clean handoff point, update `tasks/todo.md`, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`, and include the next command in the handoff.
+- Before `push` or PR creation, remind the user to run `.\.dotnet\dotnet.exe run --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- status --project-root . --json`; if `needs_refresh=true`, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`, then run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-pre-push-check.ps1`.
+- Around commits that update ADRs, formulas, experiments, regressions, lessons, or memory rules, remind the user that `memory-refresh-all` indexes `HEAD`: commit the durable source first, then run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
+- After an architectural decision or formula decision, remind the user to update the human-authored source (`docs/decisions/*`, `TC-DN-HOFI3.md`, `docs/formulas.md`, or `docs/memory/*`), commit it, and then run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
+- Before `/compact`, remind the user to stop at a clean handoff point, update `tasks/todo.md`, run `memory status`, and run `memory-refresh-all` only when the source changes to index are already committed; if the work is mid-slice, record the next command instead of forcing refresh.
 - After a failed experiment or regression, remind the user to update `tasks/lessons.md` or an experiment summary, then run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
 - Keep these reminders limited to explicit `commit`, `push`, PR, `/compact`, ADR, formula, experiment, and regression moments.
 

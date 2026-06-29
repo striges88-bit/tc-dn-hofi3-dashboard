@@ -1,3 +1,5 @@
+import subprocess
+import tempfile
 from pathlib import Path
 
 from lancedb_sidecar import (
@@ -8,6 +10,8 @@ from lancedb_sidecar import (
     make_embedding_provider,
     rerank_rows,
     render_eval_markdown,
+    find_git_executable,
+    source_matches,
 )
 
 
@@ -30,6 +34,42 @@ def test_token_hash_fallback_can_embed_text():
     assert len(vector) == 64
     assert any(value != 0 for value in vector)
     assert round(sum(value * value for value in vector), 6) == 1.0
+
+
+def test_commit_source_match_uses_git_blob_instead_of_dirty_worktree():
+    git = find_git_executable()
+    if git is None:
+        return
+
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        source = root / "docs" / "formulas.md"
+        source.parent.mkdir(parents=True)
+        source.write_text("committed formula\n", encoding="utf-8")
+
+        run_git(git, root, "init")
+        run_git(git, root, "config", "user.name", "LanceDB Test")
+        run_git(git, root, "config", "user.email", "lancedb-test@example.invalid")
+        run_git(git, root, "add", "docs/formulas.md")
+        run_git(git, root, "commit", "-m", "initial formula")
+        commit_sha = run_git(git, root, "rev-parse", "HEAD").strip()
+        blob_sha = run_git(git, root, "rev-parse", "HEAD:docs/formulas.md").strip()
+
+        source.write_text("dirty uncommitted formula\n", encoding="utf-8")
+
+        assert source_matches(root, "docs/formulas.md", "not-used", commit_sha, blob_sha) is True
+        assert source_matches(root, "docs/formulas.md", "not-used", commit_sha, "0000000") is False
+
+
+def run_git(git: str, root: Path, *args: str) -> str:
+    result = subprocess.run(
+        [git, "-C", str(root), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return result.stdout
 
 
 def test_rerank_prefers_typed_formula_over_generic_chunk():
@@ -315,6 +355,7 @@ def test_store_path_guard_allows_only_generated_child_paths():
 if __name__ == "__main__":
     test_default_embedding_provider_is_local_fastembed_multilingual_onnx()
     test_token_hash_fallback_can_embed_text()
+    test_commit_source_match_uses_git_blob_instead_of_dirty_worktree()
     test_rerank_prefers_typed_formula_over_generic_chunk()
     test_rerank_prefers_formula_source_over_quality_gate_doc_chunk()
     test_eval_cases_gate_expected_rank_and_sources()

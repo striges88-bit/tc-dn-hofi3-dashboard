@@ -46,4 +46,6 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - Before enabling hooks or memory automation, require a compact generated eval report with query, expected ids/types, matched rank, source path, confidence, and gap notes; pass/fail counts alone are not enough evidence.
 - Use `memory-pre-push-check` as a manual evidence gate after `memory-refresh-all`; do not add post-commit memory refresh automation because it can index intermediate or mixed worktree states as fresh facts.
 - Optional pre-push memory hooks must be explicit opt-in (`install-memory-pre-push-hook.ps1 -Confirm`), disableable (`-Disable -Confirm`), managed-marker only, and must call `memory-pre-push-check` without running rebuilds.
+- Optional post-commit memory hooks must be marker-only: explicit opt-in, disableable, managed-marker only, and must write a refresh-needed marker but not run rebuild, `memory-refresh-all`, LanceDB, curated retain, Cloud, or Codex auto-retain.
+- When `memory-refresh-all` uses `refresh-from-commit --commit HEAD`, run it after committing durable source changes or before push/PR, not before the commit; otherwise it correctly indexes the previous `HEAD`.
 - Pin local embedding package versions in wrapper scripts and record provider/model/package metadata in reports; unpinned semantic dependencies can silently change retrieval baselines.

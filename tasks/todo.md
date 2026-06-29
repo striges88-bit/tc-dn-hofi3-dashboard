@@ -969,3 +969,24 @@
 - `scripts/memory-refresh-all.ps1` completed with SQLite stale-check `issues: []` and LanceDB eval passing.
 - `scripts/memory-pre-push-check.ps1` passed with LanceDB eval `9/9`, `failed_count=0`, Cloud/Codex auto-retain/post-commit refresh disabled.
 - `git diff --check` passed.
+
+## Commit-Addressed Memory Refresh Todo
+
+- [x] Add ADR for commit-addressed memory refresh: Git tree/commit is the refresh source, not the live working directory.
+- [x] Add RED CLI tests for `memory refresh-from-commit --commit HEAD`, commit metadata, and `memory status`.
+- [x] Add SQLite metadata fields: `commit_sha`, `tree_sha`, `source_blob_sha`, and `indexed_at`.
+- [x] Implement `refresh-from-commit` so it indexes files from the requested Git commit tree and ignores uncommitted working-tree changes.
+- [x] Implement `memory status` showing `head`, `indexed_commit`, and `needs_refresh`.
+- [x] Add marker-only post-commit hook installer with `-Confirm`, `-Disable`, timeout/lock/report guardrails.
+- [x] Update docs/contracts/scripts/lessons with curated retain as a deferred stage behind redaction/delete/export policy.
+- [x] Run narrow tests, memory refresh/check evidence, build, diff hygiene, and commit the verified slice.
+
+## Commit-Addressed Memory Refresh Compact Handoff
+
+- Implemented and verified the core `tools/Memory` path: `refresh-from-commit --commit HEAD`, `status`, `commit_sha`, `tree_sha`, `source_blob_sha`, `indexed_at`, marker clearing, and working-tree-dirty reporting.
+- Added `GitCommitMemoryIndexer.cs` and `MemoryRefreshMarker.cs`; commit refresh reads Git blob content from the requested commit tree and does not use the live working directory as the source.
+- Added `scripts/memory-mark-needs-refresh.ps1` and `scripts/install-memory-post-commit-marker-hook.ps1`, plus hook guardrail tests in `ManualMemoryGateTests`.
+- Added ADR `docs/decisions/0007-commit-addressed-memory-refresh.md` and updated `AGENTS.md`, memory contract/README, scripts README, lessons, and LanceDB sidecar metadata handling.
+- `scripts/memory-refresh-all.ps1` now runs SQLite `refresh-from-commit --commit HEAD`; LanceDB source validation now checks Git blob metadata for commit-indexed rows instead of the dirty working tree.
+- Verification passed: `ManualMemoryGateTests|MemoryRefreshAllTests` passed `10/10`; expanded Infrastructure memory tests passed `25/25`; `MemoryCliTests` passed `6/6`; Python LanceDB sidecar tests returned `ok`; solution build completed with `0` warnings and `0` errors; `git diff --check` passed.
+- Post-commit memory evidence passed: `memory-refresh-all` completed with SQLite stale-check `issues: []`, LanceDB rebuild indexed commit metadata, LanceDB eval passed `9/9`, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.

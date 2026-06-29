@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import sqlite3
+import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -298,7 +299,8 @@ def load_sqlite_records(project_root: Path, sqlite_path: Path, provider: "Embedd
     try:
         rows = connection.execute(
             """
-            SELECT id, type, status, title, body, source_path, source_hash, confidence, updated_at
+            SELECT id, type, status, title, body, source_path, source_hash, confidence, updated_at,
+                   commit_sha, tree_sha, source_blob_sha, indexed_at
             FROM search_documents
             WHERE status IN ('current', 'proposed')
               AND source_path IS NOT NULL
@@ -315,7 +317,7 @@ def load_sqlite_records(project_root: Path, sqlite_path: Path, provider: "Embedd
     for row in rows:
         source_path = row["source_path"]
         source_hash = row["source_hash"]
-        if not source_matches(project_root, source_path, source_hash):
+        if not source_matches(project_root, source_path, source_hash, row["commit_sha"], row["source_blob_sha"]):
             continue
 
         base_records.append(
@@ -327,6 +329,10 @@ def load_sqlite_records(project_root: Path, sqlite_path: Path, provider: "Embedd
                 "body": row["body"],
                 "source_path": source_path,
                 "source_hash": source_hash,
+                "commit_sha": row["commit_sha"],
+                "tree_sha": row["tree_sha"],
+                "source_blob_sha": row["source_blob_sha"],
+                "indexed_at": row["indexed_at"],
                 "confidence": float(row["confidence"]),
                 "updated_at": row["updated_at"],
             }
@@ -346,13 +352,54 @@ def load_sqlite_records(project_root: Path, sqlite_path: Path, provider: "Embedd
     return records
 
 
-def source_matches(project_root: Path, source_path: str, expected_hash: str) -> bool:
+def source_matches(
+    project_root: Path,
+    source_path: str,
+    expected_hash: str,
+    commit_sha: str | None = None,
+    source_blob_sha: str | None = None,
+) -> bool:
+    if commit_sha:
+        if not source_blob_sha:
+            return False
+
+        actual_blob_sha = read_git_blob_sha(project_root, commit_sha, source_path)
+        return actual_blob_sha is not None and actual_blob_sha.lower() == source_blob_sha.lower()
+
     candidate = project_root / source_path.replace("/", os.sep)
     if not candidate.exists() or not candidate.is_file():
         return False
 
     actual_hash = hashlib.sha256(candidate.read_bytes()).hexdigest()
     return actual_hash.lower() == expected_hash.lower()
+
+
+def read_git_blob_sha(project_root: Path, commit_sha: str, source_path: str) -> str | None:
+    git = find_git_executable()
+    if git is None:
+        return None
+
+    repo_path = source_path.replace(os.sep, "/")
+    result = subprocess.run(
+        [git, "-C", str(project_root), "rev-parse", "--verify", f"{commit_sha}:{repo_path}"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    if result.returncode != 0:
+        return None
+
+    value = result.stdout.strip()
+    return value or None
+
+
+def find_git_executable() -> str | None:
+    common = Path("C:/Program Files/Git/cmd/git.exe")
+    if common.exists():
+        return str(common)
+
+    return shutil.which("git")
 
 
 def record_text(record: dict[str, Any]) -> str:
@@ -523,6 +570,10 @@ def project_search_row(row: dict[str, Any]) -> dict[str, Any]:
         "rerank_score": row.get("rerank_score"),
         "embedding_provider": row.get("embedding_provider"),
         "embedding_model": row.get("embedding_model"),
+        "commit_sha": row.get("commit_sha"),
+        "tree_sha": row.get("tree_sha"),
+        "source_blob_sha": row.get("source_blob_sha"),
+        "indexed_at": row.get("indexed_at"),
     }
 
 
@@ -545,6 +596,8 @@ def summarize_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "type": record["type"],
             "status": record["status"],
             "source_path": record["source_path"],
+            "commit_sha": record.get("commit_sha"),
+            "source_blob_sha": record.get("source_blob_sha"),
         }
         for record in records[:10]
     ]

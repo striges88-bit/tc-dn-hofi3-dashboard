@@ -3,9 +3,11 @@ namespace CryptoIndicatorApp.Memory;
 public enum MemoryCommand
 {
     Refresh,
+    RefreshFromCommit,
     Search,
     Explain,
     StaleCheck,
+    Status,
 }
 
 public sealed record MemoryCliOptions(
@@ -13,27 +15,31 @@ public sealed record MemoryCliOptions(
     string ProjectRoot,
     string DatabasePath,
     string Query,
+    string Commit,
     bool Json)
 {
     public static MemoryCliOptions Parse(string[] args)
     {
         if (args.Length == 0)
         {
-            throw new InvalidOperationException("Command is required: refresh, search, explain, or stale-check.");
+            throw new InvalidOperationException("Command is required: refresh, refresh-from-commit, search, explain, stale-check, or status.");
         }
 
         var command = args[0].ToLowerInvariant() switch
         {
             "refresh" => MemoryCommand.Refresh,
+            "refresh-from-commit" => MemoryCommand.RefreshFromCommit,
             "search" => MemoryCommand.Search,
             "explain" => MemoryCommand.Explain,
             "stale-check" => MemoryCommand.StaleCheck,
+            "status" => MemoryCommand.Status,
             _ => throw new InvalidOperationException($"Unknown memory command: {args[0]}")
         };
 
         var projectRoot = string.Empty;
         var databasePath = string.Empty;
         var query = string.Empty;
+        var commit = "HEAD";
         var json = false;
 
         for (var index = 1; index < args.Length; index++)
@@ -49,6 +55,9 @@ public sealed record MemoryCliOptions(
                     break;
                 case "--query":
                     query = ReadValue(args, ref index, argument);
+                    break;
+                case "--commit":
+                    commit = ReadValue(args, ref index, argument);
                     break;
                 case "--json":
                     json = true;
@@ -66,7 +75,12 @@ public sealed record MemoryCliOptions(
             throw new InvalidOperationException("--query is required for search and explain.");
         }
 
-        return new MemoryCliOptions(command, projectRoot, databasePath, query, json);
+        if (command is MemoryCommand.RefreshFromCommit && string.IsNullOrWhiteSpace(commit))
+        {
+            throw new InvalidOperationException("--commit is required for refresh-from-commit.");
+        }
+
+        return new MemoryCliOptions(command, projectRoot, databasePath, query, commit, json);
     }
 
     private static string ReadValue(string[] args, ref int index, string option)

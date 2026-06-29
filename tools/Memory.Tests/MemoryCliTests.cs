@@ -70,6 +70,86 @@ public sealed class MemoryCliTests
     }
 
     [Fact]
+    public void RefreshFromCommitIndexesGitTreeMetadataAndIgnoresWorkingTreeChanges()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.WriteStandardMemoryFiles();
+        fixture.Write(
+            "docs/formulas.md",
+            "# Formulas\n\n"
+            + "The committedonlyphrase OFI formula phrase is the current formula_version.\n"
+            + "Owner: docs/formulas.md\n");
+        fixture.InitializeGitRepository();
+
+        var head = fixture.RunGit("rev-parse", "HEAD").Trim();
+        var tree = fixture.RunGit("rev-parse", "HEAD^{tree}").Trim();
+
+        fixture.Write(
+            "docs/formulas.md",
+            "# Formulas\n\n"
+            + "The uncommittedonlyphrase OFI formula phrase must not enter commit-addressed memory.\n"
+            + "Owner: docs/formulas.md\n");
+
+        using var refresh = fixture.RunMemoryCli("refresh-from-commit", "--commit", "HEAD", "--json");
+        Assert.Equal(0, refresh.ExitCode);
+        using var refreshJson = JsonDocument.Parse(refresh.StandardOutput);
+        var refreshRoot = refreshJson.RootElement;
+
+        Assert.Equal("git-commit", refreshRoot.GetProperty("refresh_source").GetString());
+        Assert.Equal(head, refreshRoot.GetProperty("commit_sha").GetString());
+        Assert.Equal(tree, refreshRoot.GetProperty("tree_sha").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(refreshRoot.GetProperty("indexed_at").GetString()));
+        Assert.True(refreshRoot.GetProperty("source_blob_sha_count").GetInt32() > 0);
+
+        using var committed = fixture.RunMemoryCli("search", "--query", "committedonlyphrase", "--json");
+        Assert.Equal(0, committed.ExitCode);
+        using var committedJson = JsonDocument.Parse(committed.StandardOutput);
+        Assert.NotEmpty(committedJson.RootElement.GetProperty("results").EnumerateArray());
+
+        using var uncommitted = fixture.RunMemoryCli("search", "--query", "uncommittedonlyphrase", "--json");
+        Assert.Equal(0, uncommitted.ExitCode);
+        using var uncommittedJson = JsonDocument.Parse(uncommitted.StandardOutput);
+        Assert.Empty(uncommittedJson.RootElement.GetProperty("results").EnumerateArray());
+
+        using var status = fixture.RunMemoryCli("status", "--json");
+        Assert.Equal(0, status.ExitCode);
+        using var statusJson = JsonDocument.Parse(status.StandardOutput);
+        var statusRoot = statusJson.RootElement;
+        Assert.Equal(head, statusRoot.GetProperty("head").GetString());
+        Assert.Equal(head, statusRoot.GetProperty("indexed_commit").GetString());
+        Assert.False(statusRoot.GetProperty("needs_refresh").GetBoolean());
+        Assert.True(statusRoot.GetProperty("working_tree_dirty").GetBoolean());
+    }
+
+    [Fact]
+    public void StatusReportsNeedsRefreshWhenMarkerExistsAndRefreshFromCommitClearsMarker()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.WriteStandardMemoryFiles();
+        fixture.InitializeGitRepository();
+
+        using var refresh = fixture.RunMemoryCli("refresh-from-commit", "--commit", "HEAD", "--json");
+        Assert.Equal(0, refresh.ExitCode);
+
+        fixture.Write("docs/memory/generated/memory-needs-refresh.marker.json", "{\"reason\":\"post-commit\"}\n");
+
+        using var staleStatus = fixture.RunMemoryCli("status", "--json");
+        Assert.Equal(0, staleStatus.ExitCode);
+        using var staleJson = JsonDocument.Parse(staleStatus.StandardOutput);
+        Assert.True(staleJson.RootElement.GetProperty("marker_exists").GetBoolean());
+        Assert.True(staleJson.RootElement.GetProperty("needs_refresh").GetBoolean());
+
+        using var secondRefresh = fixture.RunMemoryCli("refresh-from-commit", "--commit", "HEAD", "--json");
+        Assert.Equal(0, secondRefresh.ExitCode);
+
+        using var freshStatus = fixture.RunMemoryCli("status", "--json");
+        Assert.Equal(0, freshStatus.ExitCode);
+        using var freshJson = JsonDocument.Parse(freshStatus.StandardOutput);
+        Assert.False(freshJson.RootElement.GetProperty("marker_exists").GetBoolean());
+        Assert.False(freshJson.RootElement.GetProperty("needs_refresh").GetBoolean());
+    }
+
+    [Fact]
     public void SearchFindsCurrentFactsAndDoesNotReturnSupersededRules()
     {
         using var fixture = MemoryProjectFixture.Create();
@@ -265,6 +345,40 @@ public sealed class MemoryCliTests
             Assert.Equal(0, refresh.ExitCode);
         }
 
+        public void InitializeGitRepository()
+        {
+            RunGit("init");
+            RunGit("config", "user.name", "Memory CLI Test");
+            RunGit("config", "user.email", "memory-cli-test@example.invalid");
+            RunGit("add", ".");
+            RunGit("commit", "-m", "initial memory test fixture");
+        }
+
+        public string RunGit(params string[] arguments)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = GitPath,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = Root,
+            };
+            foreach (var argument in arguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
+
+            using var process = Process.Start(startInfo);
+            Assert.NotNull(process);
+            Assert.True(process!.WaitForExit(TimeSpan.FromSeconds(30)), "git command timed out.");
+            var stdout = process.StandardOutput.ReadToEnd();
+            var stderr = process.StandardError.ReadToEnd();
+            Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed with {process.ExitCode}\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}");
+            return stdout;
+        }
+
         public CliResult RunMemoryCli(params string[] arguments)
         {
             var args = new List<string>(arguments);
@@ -294,8 +408,26 @@ public sealed class MemoryCliTests
         {
             if (Directory.Exists(Root))
             {
+                ClearReadOnlyAttributes(Root);
                 Directory.Delete(Root, recursive: true);
             }
         }
+
+        private static void ClearReadOnlyAttributes(string root)
+        {
+            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+
+            foreach (var directory in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories))
+            {
+                File.SetAttributes(directory, FileAttributes.Directory);
+            }
+        }
     }
+
+    private static string GitPath => File.Exists(@"C:\Program Files\Git\cmd\git.exe")
+        ? @"C:\Program Files\Git\cmd\git.exe"
+        : "git";
 }

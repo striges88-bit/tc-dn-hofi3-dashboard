@@ -19,26 +19,30 @@ internal static class MemorySchema
         "DROP TABLE IF EXISTS todos",
         "DROP TABLE IF EXISTS search_documents",
         "DROP TABLE IF EXISTS query_log",
+        "DROP TABLE IF EXISTS memory_metadata",
         "DROP TABLE IF EXISTS search_documents_fts",
         """
         CREATE TABLE files(
             path TEXT PRIMARY KEY,
             hash TEXT NOT NULL,
             size_bytes INTEGER NOT NULL,
+            commit_sha TEXT NULL,
+            tree_sha TEXT NULL,
+            source_blob_sha TEXT NULL,
             indexed_at TEXT NOT NULL
         )
         """,
-        "CREATE TABLE symbols(symbol TEXT PRIMARY KEY, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, updated_at TEXT NOT NULL)",
-        "CREATE TABLE chunks(id TEXT PRIMARY KEY, file_path TEXT NOT NULL, ordinal INTEGER NOT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, status TEXT NOT NULL)",
-        "CREATE TABLE rules(id TEXT PRIMARY KEY, status TEXT NOT NULL, active_scope TEXT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, updated_at TEXT NOT NULL)",
-        "CREATE TABLE adr(id TEXT PRIMARY KEY, status TEXT NOT NULL, title TEXT NOT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, updated_at TEXT NOT NULL)",
-        "CREATE TABLE formula_versions(id TEXT PRIMARY KEY, status TEXT NOT NULL, owner TEXT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, updated_at TEXT NOT NULL)",
-        "CREATE TABLE metrics(id TEXT PRIMARY KEY, name TEXT NOT NULL, value TEXT NULL, source_path TEXT NULL, source_hash TEXT NULL, updated_at TEXT NOT NULL)",
-        "CREATE TABLE experiments(id TEXT PRIMARY KEY, status TEXT NOT NULL, outcome TEXT NULL, source_path TEXT NULL, source_hash TEXT NULL, updated_at TEXT NOT NULL)",
-        "CREATE TABLE events(id TEXT PRIMARY KEY, event_type TEXT NOT NULL, symbol TEXT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, updated_at TEXT NOT NULL)",
-        "CREATE TABLE relations(id TEXT PRIMARY KEY, from_id TEXT NOT NULL, relation TEXT NOT NULL, to_id TEXT NOT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, updated_at TEXT NOT NULL)",
-        "CREATE TABLE sources(id TEXT PRIMARY KEY, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, updated_at TEXT NOT NULL)",
-        "CREATE TABLE todos(id TEXT PRIMARY KEY, status TEXT NOT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        "CREATE TABLE symbols(symbol TEXT PRIMARY KEY, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, source_blob_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        "CREATE TABLE chunks(id TEXT PRIMARY KEY, file_path TEXT NOT NULL, ordinal INTEGER NOT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, status TEXT NOT NULL)",
+        "CREATE TABLE rules(id TEXT PRIMARY KEY, status TEXT NOT NULL, active_scope TEXT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        "CREATE TABLE adr(id TEXT PRIMARY KEY, status TEXT NOT NULL, title TEXT NOT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        "CREATE TABLE formula_versions(id TEXT PRIMARY KEY, status TEXT NOT NULL, owner TEXT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        "CREATE TABLE metrics(id TEXT PRIMARY KEY, name TEXT NOT NULL, value TEXT NULL, source_path TEXT NULL, source_hash TEXT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        "CREATE TABLE experiments(id TEXT PRIMARY KEY, status TEXT NOT NULL, outcome TEXT NULL, source_path TEXT NULL, source_hash TEXT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        "CREATE TABLE events(id TEXT PRIMARY KEY, event_type TEXT NOT NULL, symbol TEXT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        "CREATE TABLE relations(id TEXT PRIMARY KEY, from_id TEXT NOT NULL, relation TEXT NOT NULL, to_id TEXT NOT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        "CREATE TABLE sources(id TEXT PRIMARY KEY, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        "CREATE TABLE todos(id TEXT PRIMARY KEY, status TEXT NOT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
         """
         CREATE TABLE search_documents(
             id TEXT PRIMARY KEY,
@@ -48,9 +52,13 @@ internal static class MemorySchema
             body TEXT NOT NULL,
             source_path TEXT NOT NULL,
             source_hash TEXT NOT NULL,
+            source_blob_sha TEXT NULL,
+            commit_sha TEXT NULL,
+            tree_sha TEXT NULL,
             confidence REAL NOT NULL,
             valid_from TEXT NULL,
             valid_until TEXT NULL,
+            indexed_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
         """,
@@ -76,6 +84,12 @@ internal static class MemorySchema
             explain_plan TEXT NULL,
             status TEXT NOT NULL,
             error_message TEXT NULL
+        )
+        """,
+        """
+        CREATE TABLE memory_metadata(
+            key TEXT PRIMARY KEY,
+            value TEXT NULL
         )
         """
     ];

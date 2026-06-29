@@ -47,6 +47,7 @@ public sealed class ProjectMemoryIndexer
 
     public async Task<ProjectMemorySnapshot> BuildSnapshotAsync()
     {
+        var indexedAt = DateTimeOffset.UtcNow.ToString("O");
         var files = new List<IndexedFile>();
         var documents = new List<SearchDocument>();
         var rules = new List<RuleRecord>();
@@ -73,7 +74,16 @@ public sealed class ProjectMemoryIndexer
             AddSpecializedRecords(relativePath, hash, text, documents, rules, adrs, formulas, symbols, events, relations);
         }
 
-        return new ProjectMemorySnapshot(files, documents, rules, adrs, formulas, symbols, events, relations);
+        return new ProjectMemorySnapshot(
+            files,
+            documents,
+            rules,
+            adrs,
+            formulas,
+            symbols,
+            events,
+            relations,
+            MemorySnapshotMetadata.ForWorkingTree(indexedAt));
     }
 
     private void AddSpecializedRecords(
@@ -207,6 +217,12 @@ public sealed class ProjectMemoryIndexer
     private bool ShouldIndexFile(FileInfo file)
     {
         var relativePath = GetRelativePath(file.FullName);
+        return ShouldIndexRelativePath(relativePath);
+    }
+
+    internal static bool ShouldIndexRelativePath(string relativePath)
+    {
+        relativePath = relativePath.Replace('\\', '/');
         foreach (var prefix in ExcludedPrefixes)
         {
             if (relativePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
@@ -223,13 +239,16 @@ public sealed class ProjectMemoryIndexer
             return false;
         }
 
-        if (file.Name.Equals("AGENTS.md", StringComparison.OrdinalIgnoreCase)
-            || file.Name.Equals("README.md", StringComparison.OrdinalIgnoreCase))
+        var fileName = Path.GetFileName(relativePath);
+        var extension = Path.GetExtension(relativePath);
+
+        if (fileName.Equals("AGENTS.md", StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals("README.md", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        if (file.Name.StartsWith(".env", StringComparison.OrdinalIgnoreCase)
+        if (fileName.StartsWith(".env", StringComparison.OrdinalIgnoreCase)
             || relativePath.Contains("secret", StringComparison.OrdinalIgnoreCase)
             || relativePath.Contains("credential", StringComparison.OrdinalIgnoreCase)
             || relativePath.Contains("api-key", StringComparison.OrdinalIgnoreCase)
@@ -241,7 +260,7 @@ public sealed class ProjectMemoryIndexer
             return false;
         }
 
-        return AllowedExtensions.Contains(file.Extension);
+        return AllowedExtensions.Contains(extension);
     }
 
     private static bool IsStructuredMemoryFile(string path)

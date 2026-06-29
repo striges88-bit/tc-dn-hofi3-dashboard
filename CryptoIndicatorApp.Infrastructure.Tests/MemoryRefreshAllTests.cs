@@ -103,6 +103,12 @@ public sealed class MemoryRefreshAllTests
             Assert.DoesNotContain("/obj/", command, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("publish/", command, StringComparison.OrdinalIgnoreCase);
         });
+
+        var sqliteRefreshCommand = steps.Single(step => step.GetProperty("name").GetString() == "sqlite-refresh")
+            .GetProperty("command")
+            .GetString()!;
+        Assert.Contains("refresh-from-commit", sqliteRefreshCommand, StringComparison.Ordinal);
+        Assert.Contains("--commit HEAD", sqliteRefreshCommand, StringComparison.Ordinal);
     }
 
     [Fact]
