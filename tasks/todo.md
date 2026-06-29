@@ -990,3 +990,19 @@
 - `scripts/memory-refresh-all.ps1` now runs SQLite `refresh-from-commit --commit HEAD`; LanceDB source validation now checks Git blob metadata for commit-indexed rows instead of the dirty working tree.
 - Verification passed: `ManualMemoryGateTests|MemoryRefreshAllTests` passed `10/10`; expanded Infrastructure memory tests passed `25/25`; `MemoryCliTests` passed `6/6`; Python LanceDB sidecar tests returned `ok`; solution build completed with `0` warnings and `0` errors; `git diff --check` passed.
 - Post-commit memory evidence passed: `memory-refresh-all` completed with SQLite stale-check `issues: []`, LanceDB rebuild indexed commit metadata, LanceDB eval passed `9/9`, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+
+## Minimal GitHub Actions CI Todo
+
+- [x] Add a Windows GitHub Actions workflow for minimal .NET CI.
+- [x] Run `dotnet restore` once, then `dotnet build CryptoIndicatorApp.sln --no-restore`.
+- [x] Run relevant deterministic .NET tests, including `tools/Memory.Tests`, without LanceDB/FastEmbed.
+- [x] Verify locally with the project SDK and diff hygiene.
+- [ ] Commit, refresh memory from committed `HEAD`, run the manual pre-push gate, and push.
+- [ ] Check GitHub PR checks; if green, mark the PR ready for review and then merge only after review/merge conditions are clear.
+
+## Minimal GitHub Actions CI Results
+
+- Added `.github/workflows/ci.yml` with a Windows runner because the solution includes WPF/`net8.0-windows`.
+- The workflow runs `dotnet restore CryptoIndicatorApp.sln` once, then `dotnet build CryptoIndicatorApp.sln --configuration Release --no-restore`.
+- The workflow runs solution tests and a separate explicit `tools/Memory.Tests` step; it does not run Python, LanceDB, FastEmbed, Cloud, hooks, or memory rebuilds.
+- Local verification passed: restore completed, Release build completed with `0` warnings and `0` errors, solution tests passed `102/102`, Memory CLI tests passed `6/6`, and `git diff --check` passed.
