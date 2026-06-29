@@ -17,9 +17,17 @@ The application runtime must not depend on these files or generated stores.
 - `gbrain-spike.md`: confirmed upstream GBrain CLI/API surface and current local availability.
 - `open-questions.md`: unresolved questions that should not be silently encoded as facts.
 
-Generated graph, SQLite, or memory exports belong in `docs/memory/generated/`, which is ignored by Git. Use `tools/Memory` for the canonical local SQLite store and `scripts/memory-refresh.ps1` for the legacy JSON refresh report.
+Generated graph, SQLite, or memory exports belong in `docs/memory/generated/`, which is ignored by Git. Use `scripts/memory-refresh-all.ps1` for a full local rebuild, `tools/Memory` for the canonical local SQLite store, and `scripts/memory-refresh.ps1` only for the legacy JSON refresh report.
 
 ## Commands
+
+Run the full manual memory refresh sequence:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1
+```
+
+This runs legacy JSON refresh, SQLite refresh, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order. It writes an ignored report to `docs/memory/generated/memory-refresh-all-report.json`. It does not install hooks, enable Codex auto-retain, use Cloud, crawl project files directly for LanceDB, or import raw JSONL/generated exports/secrets/local proxy details/build artifacts.
 
 Refresh the local generated index:
 

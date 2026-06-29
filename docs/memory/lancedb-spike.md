@@ -40,7 +40,13 @@ The sidecar now uses local FastEmbed/ONNX for semantic recall quality testing. T
 
 ## Clean Rebuild/Delete/Reindex
 
-The first accepted behavior is clean rebuild/delete/reindex:
+The preferred full manual path is:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1
+```
+
+For LanceDB-only diagnostics, the accepted clean rebuild/delete/reindex sequence is:
 
 1. Refresh SQLite with `tools/Memory`.
 2. Run `scripts/lancedb-sidecar.ps1 -Command cleanup`.

@@ -829,3 +829,50 @@
 - Post-compact `stale-check` first failed only on `tasks/todo.md` `source_hash_mismatch`, because this handoff text changed after the previous memory refresh; refresh/rebuild must run after final plan edits.
 - Post-compact verification passed on the final slice: Python sidecar tests returned `ok`; Infrastructure memory/LanceDB tests passed `11/11`; Memory CLI tests passed `4/4`; solution build completed with `0` warnings and `0` errors; LanceDB `eval` passed `4/4`; SQLite `stale-check` returned no issues after the canonical CLI `refresh`.
 - The final `explain` run for `actual OFI formula` returned `formula_version.tc-dn-hofi3.current` first and included `KNNVectorDistance`, `LanceRead`, and `TopK` in the LanceDB plan.
+
+## Memory Refresh-All Wrapper Todo
+
+- [x] Add RED tests for a tooling-only `scripts/memory-refresh-all.ps1` wrapper contract.
+- [x] Isolate and fix the current `Invoke-RefreshStep` child-process runner failure with a one-step legacy refresh repro before running the full wrapper.
+- [x] Ensure the wrapper runs the existing sequence in order: legacy JSON refresh, SQLite refresh, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, LanceDB eval.
+- [x] Keep the wrapper outside the WPF runtime and avoid hooks, Codex auto-retain, direct project crawls, Cloud, raw JSONL, generated exports, secrets, local proxy details, and build artifacts.
+- [x] Write a generated JSON report with step timings, exit codes, and commands without leaking secrets.
+- [x] Update memory docs and lessons so operators use `memory-refresh-all` for full rebuilds instead of mixing partial refresh commands.
+- [x] Run narrow tests, real wrapper smoke, SQLite stale-check, LanceDB eval, build, and diff hygiene.
+- [x] Prepare the verified memory-refresh-all wrapper slice for commit.
+
+## Memory Refresh-All Wrapper Handoff
+
+- Added `CryptoIndicatorApp.Infrastructure.Tests/MemoryRefreshAllTests.cs`; initial RED failed because `scripts/memory-refresh-all.ps1` and docs did not exist.
+- Added `scripts/memory-refresh-all.ps1` with `-PlanOnly`, expected step order, no Cloud/hooks/auto-retain/direct crawl flags, and generated report path `docs/memory/generated/memory-refresh-all-report.json`.
+- Updated `docs/memory/README.md`, `docs/memory/contract.md`, `docs/memory/lancedb-spike.md`, `scripts/README.md`, and `tasks/lessons.md` to prefer `memory-refresh-all` for full manual rebuilds.
+- Narrow plan contract passes: `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter MemoryRefreshAllTests` passed `2/2`.
+- Real full wrapper smoke is not passing yet. First attempt deadlocked on child stdout because the wrapper waited before reading redirected output; temp-file workaround avoided the deadlock but lost `ExitCode` with Windows PowerShell `Start-Process -RedirectStandardOutput`.
+- Current implementation uses `System.Diagnostics.Process` plus async output handlers, but `powershell.exe -File scripts\memory-refresh-all.ps1` exits `1` before writing a full report. A minimal inline reproduction with the same async handler pattern exited `2` with no output, so continue systematic debugging before running the heavy full refresh again.
+- No active `memory-refresh-all` child process remains at handoff.
+- Next exact step after `/compact`: isolate `Invoke-RefreshStep` in a small temporary script file or add temporary diagnostics inside `scripts/memory-refresh-all.ps1` around `Process.Start`, `BeginOutputReadLine`, and `WaitForExit`; verify a single `legacy-json-refresh` step returns exit code `0`, then rerun the full wrapper.
+
+## Memory Refresh-All Wrapper Debug Plan
+
+- [x] Verify `scripts/memory-refresh.ps1` still succeeds when run directly.
+- [x] Reproduce the failure with a one-step script-level runner repro.
+- [x] Identify whether the failure occurs at `Process.Start`, output-read registration, wait/exit-code capture, or strict-mode variable scoping.
+- [x] Patch `scripts/memory-refresh-all.ps1` only after the failing boundary is known.
+- [x] Re-run one-step legacy refresh through the wrapper runner, then the full wrapper.
+
+## Memory Refresh-All Wrapper Debug Results
+
+- Direct `scripts/memory-refresh.ps1` succeeded, so the legacy refresh script was not the failing component.
+- A temporary one-step script-level repro showed `Process.Start`, `BeginOutputReadLine`, `BeginErrorReadLine`, and timed `WaitForExit` completed, then the parent PowerShell process exited before `ExitCode` was read.
+- The same repro using `StandardOutput.ReadToEndAsync()` and `StandardError.ReadToEndAsync()` returned exit code `0`, so the root cause was the PowerShell 5.1 `DataReceivedEventHandler` output path, not the child command.
+- `scripts/memory-refresh-all.ps1` now uses task-based async reads and the full local sequence completed successfully.
+
+## Memory Refresh-All Wrapper Verification Results
+
+- `scripts/memory-refresh-all.ps1` completed the full local sequence: legacy JSON refresh, SQLite refresh, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB eval.
+- `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter MemoryRefreshAllTests` passed `2/2`.
+- `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter "MemoryRefreshAllTests|LanceDbSidecarSpikeTests|MemoryContractTests|HindsightInstallSpikeTests|HindsightCuratedImportTests"` passed `17/17`.
+- `.\.dotnet\dotnet.exe test tools\Memory.Tests\CryptoIndicatorApp.Memory.Tests.csproj --no-restore --filter MemoryCliTests` passed `4/4`.
+- `uv run --python 3.12 --with lancedb --with pyarrow --with fastembed==0.8.0 python tools\MemorySemantic\lancedb_sidecar_tests.py` returned `ok`.
+- `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` completed with `0` warnings and `0` errors.
+- `git diff --check` passed.

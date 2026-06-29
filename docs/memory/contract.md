@@ -134,9 +134,11 @@ Use SQLite diagnostics only:
 
 The MVP refresh mechanism is a manual refresh command. A git post-commit hook may be added later as a convenience wrapper, but it must not be the only update mechanism because Git/PATH availability is fragile on Windows.
 
+Use `scripts/memory-refresh-all.ps1` as the preferred manual full rebuild wrapper. It runs legacy JSON refresh, SQLite refresh, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order, then writes an ignored report under `docs/memory/generated/`.
+
 The manual refresh script and `tools/Memory` CLI may write ignored files under `docs/memory/generated/`, including `project-memory.sqlite`. They must not rewrite human-authored docs, app code, formulas, config, or tests.
 
-LanceDB sidecar refresh is manual during the spike. Do not install a git post-commit hook, after-save hook, or background updater until local clean rebuild/delete/reindex behavior and the semantic quality gate are verified and documented.
+LanceDB sidecar refresh is manual during the spike. `memory-refresh-all` must not install hooks, enable Codex auto-retain, call Cloud services, crawl project files directly for LanceDB, or import raw JSONL recordings, generated exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps. Do not install a git post-commit hook, after-save hook, or background updater until local clean rebuild/delete/reindex behavior and the semantic quality gate are verified and documented.
 
 ## Tool Strategy
 
