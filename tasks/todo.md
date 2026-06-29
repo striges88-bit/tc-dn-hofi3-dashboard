@@ -999,6 +999,8 @@
 - [x] Verify locally with the project SDK and diff hygiene.
 - [ ] Commit, refresh memory from committed `HEAD`, run the manual pre-push gate, and push.
 - [ ] Check GitHub PR checks; if green, mark the PR ready for review and then merge only after review/merge conditions are clear.
+- [x] Fix first GitHub Actions failure caused by PowerShell script hash portability.
+- [x] Update CI actions to Node.js 24-compatible major versions.
 
 ## Minimal GitHub Actions CI Results
 
@@ -1006,3 +1008,7 @@
 - The workflow runs `dotnet restore CryptoIndicatorApp.sln` once, then `dotnet build CryptoIndicatorApp.sln --configuration Release --no-restore`.
 - The workflow runs solution tests and a separate explicit `tools/Memory.Tests` step; it does not run Python, LanceDB, FastEmbed, Cloud, hooks, or memory rebuilds.
 - Local verification passed: restore completed, Release build completed with `0` warnings and `0` errors, solution tests passed `102/102`, Memory CLI tests passed `6/6`, and `git diff --check` passed.
+- First GitHub Actions run failed in Infrastructure tests because `scripts/memory-refresh.ps1` and `scripts/hindsight-curated-import.ps1` depended on `Get-FileHash`, which was not available in the runner's `powershell.exe` process.
+- The same run also emitted a GitHub Actions warning that `actions/checkout@v4` and `actions/setup-dotnet@v4` target deprecated Node.js 20.
+- Replaced script hashing with portable .NET `SHA256`, removed duplicate `codex/**` push CI trigger, and updated CI actions to `actions/checkout@v7` and `actions/setup-dotnet@v5`.
+- Local re-verification after the CI fix passed: failed Infrastructure subset `10/10`, restore, Release build with `0` warnings/errors, solution tests `102/102`, and Memory CLI tests `6/6`.

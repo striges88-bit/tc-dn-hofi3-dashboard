@@ -49,3 +49,5 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - Optional post-commit memory hooks must be marker-only: explicit opt-in, disableable, managed-marker only, and must write a refresh-needed marker but not run rebuild, `memory-refresh-all`, LanceDB, curated retain, Cloud, or Codex auto-retain.
 - When `memory-refresh-all` uses `refresh-from-commit --commit HEAD`, run it after committing durable source changes or before push/PR, not before the commit; otherwise it correctly indexes the previous `HEAD`.
 - Pin local embedding package versions in wrapper scripts and record provider/model/package metadata in reports; unpinned semantic dependencies can silently change retrieval baselines.
+- For CI-executed PowerShell scripts, avoid relying on optional cmdlets such as `Get-FileHash`; use portable .NET APIs for required hashing so Windows runner environments cannot fail on missing modules.
+- Avoid triggering the same PR CI twice through both `push` on feature branches and `pull_request`; use PR checks plus protected-branch/main checks unless duplicate runs are intentionally needed.

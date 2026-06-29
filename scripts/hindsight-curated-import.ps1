@@ -55,6 +55,25 @@ function Get-RelativeProjectPath {
     return [Uri]::UnescapeDataString($rootUri.MakeRelativeUri($resolvedUri).ToString()).Replace('\', '/')
 }
 
+function Get-Sha256FileHash {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $resolvedPath = (Resolve-Path $Path).Path
+    $stream = [System.IO.File]::OpenRead($resolvedPath)
+    try {
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return [System.BitConverter]::ToString($sha256.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+        }
+        finally {
+            $sha256.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 function Test-DeniedImportPath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
 
@@ -125,7 +144,7 @@ function Add-ImportFile {
 
     $Files.Add([ordered]@{
         path = $relativePath
-        hash = (Get-FileHash -Algorithm SHA256 -Path $File.FullName).Hash.ToLowerInvariant()
+        hash = Get-Sha256FileHash $File.FullName
         size_bytes = $File.Length
     })
 }
