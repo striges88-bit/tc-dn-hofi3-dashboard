@@ -28,7 +28,7 @@ Run the full manual memory refresh sequence:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1
 ```
 
-This runs legacy JSON refresh, SQLite refresh, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order. It writes an ignored report to `docs/memory/generated/memory-refresh-all-report.json`. It does not install hooks, enable Codex auto-retain, use Cloud, crawl project files directly for LanceDB, or import raw JSONL/generated exports/secrets/local proxy details/build artifacts.
+This runs legacy JSON refresh, SQLite refresh, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order. It writes an ignored wrapper report to `docs/memory/generated/memory-refresh-all-report.json`; the LanceDB eval step also writes `docs/memory/generated/lancedb-sidecar-report.json` and `docs/memory/generated/lancedb-eval-report.md`. It does not install hooks, enable Codex auto-retain, use Cloud, crawl project files directly for LanceDB, or import raw JSONL/generated exports/secrets/local proxy details/build artifacts.
 
 Refresh the local generated index:
 
@@ -78,6 +78,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.
 ```
 
 The LanceDB candidate uses local FastEmbed/ONNX embeddings by default with model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` through pinned `fastembed==0.8.0`, plus typed/exact-token reranking and an explicit `eval` gate. The old token-hash provider is fallback/test-only.
+
+The generated eval reports are evidence artifacts for hook/automation review. They include query, expected ids/types, matched rank, source path, confidence, and gap notes, but they are not a source of truth.
 
 Generate the pre-install Hindsight curated import manifest without calling Hindsight:
 

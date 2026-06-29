@@ -24,10 +24,11 @@ SQLite remains authoritative for `current`, `proposed`, `superseded`, `failed`, 
 - Python script: `tools/MemorySemantic/lancedb_sidecar.py`.
 - Store path: `docs/memory/generated/lancedb`.
 - Report path: `docs/memory/generated/lancedb-sidecar-report.json`.
+- Eval Markdown report path: `docs/memory/generated/lancedb-eval-report.md`.
 - Commands: `probe`, `rebuild`, `search`, `explain`, `eval`, and `cleanup`.
 - Runtime mode: local Python embedded through `uv`; no Cloud, no service account, no OpenAI key, no Codex auto-retain.
 
-The sidecar now uses local FastEmbed/ONNX for semantic recall quality testing. The quality gate is explicit: `eval` must pass the required retrieval cases before any hook or background automation is considered.
+The sidecar now uses local FastEmbed/ONNX for semantic recall quality testing. The quality gate is explicit: `eval` must pass the required retrieval cases before any hook or background automation is considered. `eval` writes compact generated JSON and Markdown reports with query, expected ids/types, matched rank, source_path, confidence, and gap notes.
 
 ## Guardrails
 
@@ -82,6 +83,7 @@ Expanded quality gate update 2026-06-29:
 - Added source-backed typed rules in `docs/memory/rules.md` so boundary/guardrail cases do not rely only on generic chunks.
 - Rebuild indexed the current/proposed SQLite records into LanceDB; the ignored generated report records the exact count.
 - `eval` passed `9/9`: current OFI formula, formula owner, funding-source ADR, Binance DTO boundary, REST hot-path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
+- `eval` writes `docs/memory/generated/lancedb-sidecar-report.json` and `docs/memory/generated/lancedb-eval-report.md`; both are ignored generated evidence, not source-of-truth memory.
 
 ## Semantic Quality Gate
 
@@ -96,6 +98,14 @@ Required `eval` cases:
 - `funding_slow_context`: return `adr.0004-funding-source-context` within the accepted rank window.
 - `exchange_adapter_impact`: return a `relation` sourced from `CryptoIndicatorApp.Infrastructure/Binance/`.
 - `exclude_superseded_rule`: do not return `superseded` or `failed` facts for current retrieval.
+
+Required eval report fields:
+
+- Query text.
+- Expected ids/types and source constraints.
+- Matched rank and matched source_path.
+- Matched confidence.
+- Gap notes for failed or incomplete cases.
 
 ## Limitations
 

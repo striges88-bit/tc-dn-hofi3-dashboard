@@ -5,6 +5,7 @@ param(
     [string]$DatabasePath = '',
     [string]$StorePath = '',
     [string]$OutputPath = '',
+    [string]$EvalMarkdownOutputPath = '',
     [string]$Query = '',
     [int]$Limit = 10,
     [ValidateSet('fastembed', 'token-hash')]
@@ -111,6 +112,7 @@ $root = Resolve-ProjectRoot -Candidate $ProjectRoot
 $database = Resolve-RootedOrRelativePath -Root $root -Path $DatabasePath -DefaultPath (Join-Path $root 'docs\memory\generated\project-memory.sqlite')
 $store = Resolve-RootedOrRelativePath -Root $root -Path $StorePath -DefaultPath (Join-Path $root 'docs\memory\generated\lancedb')
 $output = Resolve-RootedOrRelativePath -Root $root -Path $OutputPath -DefaultPath (Join-Path $root 'docs\memory\generated\lancedb-sidecar-report.json')
+$evalMarkdownOutput = Resolve-RootedOrRelativePath -Root $root -Path $EvalMarkdownOutputPath -DefaultPath (Join-Path $root 'docs\memory\generated\lancedb-eval-report.md')
 
 $scriptPath = Join-Path $root 'tools\MemorySemantic\lancedb_sidecar.py'
 $uvPath = Find-Executable -Name 'uv.exe'
@@ -124,6 +126,8 @@ if ($Command -eq 'probe') {
         source_store = 'sqlite-fts5'
         lancedb_store_path = Convert-ToRepoPath -Root $root -Path $store
         sqlite_database_path = Convert-ToRepoPath -Root $root -Path $database
+        eval_json_report_path = Convert-ToRepoPath -Root $root -Path $output
+        eval_markdown_report_path = Convert-ToRepoPath -Root $root -Path $evalMarkdownOutput
         python_script = 'tools/MemorySemantic/lancedb_sidecar.py'
         uv_path = $uvPath
         cloud_enabled = $false
@@ -163,7 +167,8 @@ $arguments = @(
     '--output', $output,
     '--limit', ([string]$Limit),
     '--embedding-provider', $EmbeddingProvider,
-    '--embedding-model', $EmbeddingModel
+    '--embedding-model', $EmbeddingModel,
+    '--eval-markdown-output', $evalMarkdownOutput
 )
 
 if (-not [string]::IsNullOrWhiteSpace($Query)) {

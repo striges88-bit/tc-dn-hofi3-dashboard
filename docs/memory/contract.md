@@ -138,7 +138,7 @@ Use `scripts/memory-refresh-all.ps1` as the preferred manual full rebuild wrappe
 
 The manual refresh script and `tools/Memory` CLI may write ignored files under `docs/memory/generated/`, including `project-memory.sqlite`. They must not rewrite human-authored docs, app code, formulas, config, or tests.
 
-LanceDB sidecar refresh is manual during the spike. `memory-refresh-all` must not install hooks, enable Codex auto-retain, call Cloud services, crawl project files directly for LanceDB, or import raw JSONL recordings, generated exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps. Do not install a git post-commit hook, after-save hook, or background updater until local clean rebuild/delete/reindex behavior and the semantic quality gate are verified and documented.
+LanceDB sidecar refresh is manual during the spike. `memory-refresh-all` must not install hooks, enable Codex auto-retain, call Cloud services, crawl project files directly for LanceDB, or import raw JSONL recordings, generated exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps. Do not install a git post-commit hook, after-save hook, or background updater until local clean rebuild/delete/reindex behavior and the semantic quality gate are verified and documented with the generated JSON/Markdown eval reports.
 
 ## Tool Strategy
 
@@ -147,6 +147,7 @@ LanceDB sidecar refresh is manual during the spike. `memory-refresh-all` must no
 - Use `scripts/lancedb-sidecar.ps1` for local `probe`, `rebuild`, `search`, `explain`, `eval`, and `cleanup`. It reads SQLite `search_documents` only and writes generated data under `docs/memory/generated/lancedb`.
 - The current LanceDB candidate uses local FastEmbed/ONNX by default with model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` and wrapper pin `fastembed==0.8.0`. The deterministic token-hash provider remains fallback/test-only.
 - The LanceDB semantic quality gate must cover current OFI formula retrieval, formula owner retrieval, funding-source decision retrieval, Binance DTO boundary retrieval, REST hot-path ban retrieval, live/replay shared-pipeline retrieval, funding slow-context retrieval, exchange adapter impact retrieval, and exclusion of superseded/failed facts before any automation is added.
+- LanceDB `eval` must write compact generated JSON/Markdown reports with query, expected ids/types, matched rank, source path, confidence, and gap notes. These reports are review evidence only; they do not override SQLite status, ADRs, formulas, or source code.
 - Hindsight is a historical/failed spike. Its upstream Codex, CLI, MCP, and embedded-daemon surfaces are confirmed in `docs/memory/hindsight-spike.md`, but billing/auth, Rust CLI forwarding, retain/import, and operational complexity blocked MVP use.
 - Hindsight must stay below SQLite and generated indexes in source priority and must not become a WPF/.NET runtime dependency.
 - Codex auto-retain must stay disabled during MVP. Use `scripts/hindsight-curated-import.ps1` to generate a pre-install manifest for curated import sources: `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`.

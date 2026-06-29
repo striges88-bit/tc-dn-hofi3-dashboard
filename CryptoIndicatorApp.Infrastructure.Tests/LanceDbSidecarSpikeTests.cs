@@ -40,6 +40,8 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Equal("local-python-embedded", root.GetProperty("mode").GetString());
         Assert.Equal("sqlite-fts5", root.GetProperty("source_store").GetString());
         Assert.Equal("docs/memory/generated/lancedb", root.GetProperty("lancedb_store_path").GetString());
+        Assert.Equal("docs/memory/generated/lancedb-sidecar-report.json", root.GetProperty("eval_json_report_path").GetString());
+        Assert.Equal("docs/memory/generated/lancedb-eval-report.md", root.GetProperty("eval_markdown_report_path").GetString());
         Assert.False(root.GetProperty("cloud_enabled").GetBoolean());
         Assert.False(root.GetProperty("auto_commit_refresh_enabled").GetBoolean());
         Assert.False(root.GetProperty("direct_project_crawl_enabled").GetBoolean());
@@ -82,6 +84,11 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", spike, StringComparison.Ordinal);
         Assert.Contains("eval", spike, StringComparison.Ordinal);
         Assert.Contains("eval` passed `9/9`", spike, StringComparison.Ordinal);
+        Assert.Contains("lancedb-eval-report.md", spike, StringComparison.Ordinal);
+        Assert.Contains("query", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("expected ids", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("source_path", spike, StringComparison.Ordinal);
+        Assert.Contains("gap notes", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("formula_owner", spike, StringComparison.Ordinal);
         Assert.Contains("binance_dto_boundary", spike, StringComparison.Ordinal);
         Assert.Contains("rest_hot_path_ban", spike, StringComparison.Ordinal);
@@ -92,6 +99,7 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("SQLite remains the canonical status store", contract, StringComparison.Ordinal);
         Assert.Contains("local FastEmbed/ONNX", contract, StringComparison.Ordinal);
         Assert.Contains("scripts/lancedb-sidecar.ps1", readme, StringComparison.Ordinal);
+        Assert.Contains("lancedb-eval-report.md", readme, StringComparison.Ordinal);
         Assert.Contains("LanceDB semantic quality gate", openQuestions, StringComparison.Ordinal);
         Assert.Contains("rule.rest-hot-path-ban | current | data-pipeline", rules, StringComparison.Ordinal);
         Assert.Contains("rule.binance-dto-boundary | current | architecture", rules, StringComparison.Ordinal);

@@ -7,6 +7,7 @@ from lancedb_sidecar import (
     ensure_generated_store_path,
     make_embedding_provider,
     rerank_rows,
+    render_eval_markdown,
 )
 
 
@@ -179,6 +180,79 @@ def test_eval_cases_gate_expected_rank_and_sources():
     assert report["failed_count"] == 0
 
 
+def test_eval_report_cases_include_operator_quality_fields():
+    def search_case(case):
+        if case["id"] == "funding_source_changed":
+            return [
+                {
+                    "id": "chunk.docs-memory-readme-md.0",
+                    "type": "chunk",
+                    "status": "current",
+                    "source_path": "docs/memory/README.md",
+                    "confidence": 0.4,
+                },
+                {
+                    "id": "adr.0004-funding-source-context",
+                    "type": "adr",
+                    "status": "current",
+                    "source_path": "docs/decisions/0004-funding-source-context.md",
+                    "confidence": 0.95,
+                },
+            ]
+
+        return []
+
+    report = evaluate_cases(search_case)
+    funding_case = next(case for case in report["cases"] if case["id"] == "funding_source_changed")
+    failed_case = next(case for case in report["cases"] if case["id"] == "current_ofi_formula")
+
+    assert funding_case["query"] == "why funding-source changed funding context source decision"
+    assert funding_case["expected_ids"] == ["adr.0004-funding-source-context"]
+    assert funding_case["matched_rank"] == 2
+    assert funding_case["matched_id"] == "adr.0004-funding-source-context"
+    assert funding_case["matched_source_path"] == "docs/decisions/0004-funding-source-context.md"
+    assert funding_case["matched_confidence"] == 0.95
+    assert funding_case["gap_notes"] == []
+    assert funding_case["top_results"][0]["rank"] == 1
+    assert funding_case["top_results"][1]["rank"] == 2
+
+    assert failed_case["passed"] is False
+    assert failed_case["matched_rank"] is None
+    assert failed_case["gap_notes"]
+    assert "expected result not found" in failed_case["gap_notes"][0]
+
+
+def test_eval_markdown_report_contains_compact_operator_table():
+    report = {
+        "passed": True,
+        "passed_count": 1,
+        "failed_count": 0,
+        "cases": [
+            {
+                "id": "current_ofi_formula",
+                "query": "find current actual OFI formula TC-DN-HOFI3",
+                "passed": True,
+                "expected_ids": ["formula_version.tc-dn-hofi3.current"],
+                "expected_types": [],
+                "matched_rank": 1,
+                "matched_id": "formula_version.tc-dn-hofi3.current",
+                "matched_source_path": "docs/formulas.md",
+                "matched_confidence": 0.98,
+                "gap_notes": [],
+            }
+        ],
+    }
+
+    markdown = render_eval_markdown(report)
+
+    assert "# LanceDB Eval Report" in markdown
+    assert "| Case | Pass | Query | Expected | Rank | Source | Confidence | Gap notes |" in markdown
+    assert "current_ofi_formula" in markdown
+    assert "formula_version.tc-dn-hofi3.current" in markdown
+    assert "docs/formulas.md" in markdown
+    assert "0.98" in markdown
+
+
 def test_eval_cases_fail_when_superseded_rule_is_returned():
     def search_case(case):
         if case["id"] == "exclude_superseded_rule":
@@ -244,6 +318,8 @@ if __name__ == "__main__":
     test_rerank_prefers_typed_formula_over_generic_chunk()
     test_rerank_prefers_formula_source_over_quality_gate_doc_chunk()
     test_eval_cases_gate_expected_rank_and_sources()
+    test_eval_report_cases_include_operator_quality_fields()
+    test_eval_markdown_report_contains_compact_operator_table()
     test_eval_cases_fail_when_superseded_rule_is_returned()
     test_eval_cases_allow_current_results_for_superseded_exclusion_case()
     test_store_path_guard_allows_only_generated_child_paths()

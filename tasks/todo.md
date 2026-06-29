@@ -892,3 +892,18 @@
 - Fixed the token-hash fallback embedding dimension constant and added a Python test that actually embeds text through the fallback provider.
 - Updated docs and tests so the stronger gate is source-backed by `formula_version`, ADR, typed rules, and relation records instead of only generic chunks.
 - Verification passed: Python sidecar tests returned `ok`; `LanceDbSidecarSpikeTests` passed `3/3`; `MemoryCliTests` passed `4/4`; `memory-refresh-all` completed with SQLite stale-check clean and LanceDB eval `9/9`; solution build completed with `0` warnings and `0` errors.
+
+## LanceDB Eval Report Todo
+
+- [x] Add RED Python tests for a compact eval quality report with query, expected ids/types, matched rank, source path, confidence, and gap notes.
+- [x] Add generated Markdown output for the same eval report under `docs/memory/generated/` without making it a source of truth.
+- [x] Update `scripts/lancedb-sidecar.ps1` and memory docs so operators can find the JSON/Markdown reports before any hook/automation decision.
+- [x] Run Python sidecar tests, relevant Infrastructure tests, memory refresh-all, solution build, diff hygiene, and commit the verified slice if clean.
+
+## LanceDB Eval Report Results
+
+- Added compact eval case reporting with expected ids/types, forbidden statuses, matched rank, matched source path, matched confidence, ranked top results, and gap notes.
+- Added generated Markdown output at `docs/memory/generated/lancedb-eval-report.md`; the JSON eval report remains `docs/memory/generated/lancedb-sidecar-report.json`.
+- Updated `scripts/lancedb-sidecar.ps1` probe/output metadata and docs so the eval reports are explicit review evidence before any hook/automation decision.
+- Extracted eval case/report logic into `tools/MemorySemantic/lancedb_eval_report.py` so `lancedb_sidecar.py` remains focused on LanceDB orchestration and embedding I/O.
+- Verification passed: Python sidecar tests returned `ok`; `LanceDbSidecarSpikeTests|MemoryRefreshAllTests` passed `5/5`; `MemoryCliTests` passed `4/4`; `memory-refresh-all` completed with SQLite stale-check clean and LanceDB eval `9/9`; solution build completed with `0` warnings and `0` errors.

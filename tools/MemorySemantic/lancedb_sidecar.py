@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from lancedb_eval_report import EVAL_CASES, evaluate_cases, render_eval_markdown
+
 
 SCHEMA_VERSION = 1
 TABLE_NAME = "memory_documents"
@@ -21,64 +23,6 @@ CURRENT_STATUSES = ("current", "proposed")
 DEFAULT_EMBEDDING_PROVIDER = "fastembed"
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 TOKEN_HASH_MODEL = "local-token-hash"
-
-EVAL_CASES: list[dict[str, Any]] = [
-    {
-        "id": "current_ofi_formula",
-        "query": "find current actual OFI formula TC-DN-HOFI3",
-        "expected_ids": ["formula_version.tc-dn-hofi3.current"],
-        "max_rank": 1,
-    },
-    {
-        "id": "formula_owner",
-        "query": "who owns current TC-DN-HOFI3 formula version owner",
-        "expected_ids": ["formula_version.tc-dn-hofi3.current"],
-        "max_rank": 1,
-    },
-    {
-        "id": "funding_source_changed",
-        "query": "why funding-source changed funding context source decision",
-        "expected_ids": ["adr.0004-funding-source-context"],
-        "max_rank": 3,
-    },
-    {
-        "id": "binance_dto_boundary",
-        "query": "where is Binance DTO ownership boundary indicator engine",
-        "expected_ids": ["rule.binance-dto-boundary"],
-        "max_rank": 3,
-    },
-    {
-        "id": "rest_hot_path_ban",
-        "query": "is REST allowed in hot path subsecond feature calculation",
-        "expected_ids": ["rule.rest-hot-path-ban"],
-        "max_rank": 3,
-    },
-    {
-        "id": "live_replay_same_pipeline",
-        "query": "live replay same internal event pipeline indicator engine",
-        "expected_ids": ["rule.live-replay-same-pipeline"],
-        "max_rank": 3,
-    },
-    {
-        "id": "funding_slow_context",
-        "query": "funding is slow context not subsecond entry trigger",
-        "expected_ids": ["adr.0004-funding-source-context"],
-        "max_rank": 3,
-    },
-    {
-        "id": "exchange_adapter_impact",
-        "query": "modules touched by exchange adapter impact",
-        "expected_types": ["relation"],
-        "expected_source_contains": ["CryptoIndicatorApp.Infrastructure/Binance/"],
-        "max_rank": 5,
-    },
-    {
-        "id": "exclude_superseded_rule",
-        "query": "legacy superseded-only phrase",
-        "forbidden_statuses": ["superseded", "failed"],
-        "allow_empty": True,
-    },
-]
 
 
 def main() -> int:
@@ -129,6 +73,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--embedding-provider", choices=["fastembed", "token-hash"], default=DEFAULT_EMBEDDING_PROVIDER)
     parser.add_argument("--embedding-model", default=DEFAULT_EMBEDDING_MODEL)
+    parser.add_argument("--eval-markdown-output", default="")
     return parser.parse_args()
 
 
@@ -261,12 +206,16 @@ def eval_quality(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any
         {
             "command": "eval",
             "import_executed": False,
+            "eval_json_report_path": to_repo_path(args.project_root, args.output),
+            "eval_markdown_report_path": to_repo_path(args.project_root, str(resolve_eval_markdown_output(args))),
             **provider.metadata(),
             **eval_report,
         }
     )
     if not eval_report["passed"]:
         report["status"] = "failed"
+
+    write_text(str(resolve_eval_markdown_output(args)), render_eval_markdown(report))
     return report
 
 
@@ -310,6 +259,34 @@ def ensure_generated_store_path(project_root: Path, store_path: Path) -> Path:
         raise ValueError(f"LanceDB store must be a child path under {generated_root}, not the generated root itself.")
 
     return resolved_store
+
+
+def resolve_eval_markdown_output(args: argparse.Namespace) -> Path:
+    if args.eval_markdown_output.strip():
+        candidate = Path(args.eval_markdown_output)
+    else:
+        candidate = Path(args.output).with_name("lancedb-eval-report.md")
+
+    if not candidate.is_absolute():
+        candidate = Path(args.project_root) / candidate
+
+    return ensure_generated_report_path(Path(args.project_root), candidate)
+
+
+def ensure_generated_report_path(project_root: Path, report_path: Path) -> Path:
+    root = project_root.resolve()
+    generated_root = (root / "docs" / "memory" / "generated").resolve()
+    resolved_report = report_path.resolve()
+
+    try:
+        relative_report = resolved_report.relative_to(generated_root)
+    except ValueError as exc:
+        raise ValueError(f"Eval report must stay under {generated_root}: {resolved_report}") from exc
+
+    if not relative_report.parts or resolved_report == generated_root:
+        raise ValueError(f"Eval report must be a file under {generated_root}, not the generated root itself.")
+
+    return resolved_report
 
 
 def load_sqlite_records(project_root: Path, sqlite_path: Path, provider: "EmbeddingProvider") -> list[dict[str, Any]]:
@@ -490,58 +467,6 @@ def rerank_rows(rows: list[dict[str, Any]], query: str, limit: int) -> list[dict
     return ranked[:limit]
 
 
-def evaluate_cases(search_case: Callable[[dict[str, Any]], list[dict[str, Any]]]) -> dict[str, Any]:
-    evaluated_cases: list[dict[str, Any]] = []
-    for case in EVAL_CASES:
-        results = search_case(case)
-        passed, reason = evaluate_case(case, results)
-        evaluated_cases.append(
-            {
-                "id": case["id"],
-                "query": case["query"],
-                "passed": passed,
-                "reason": reason,
-                "top_results": results[:5],
-            }
-        )
-
-    passed_count = sum(1 for case in evaluated_cases if case["passed"])
-    failed_count = len(evaluated_cases) - passed_count
-    return {
-        "passed": failed_count == 0,
-        "passed_count": passed_count,
-        "failed_count": failed_count,
-        "cases": evaluated_cases,
-    }
-
-
-def evaluate_case(case: dict[str, Any], results: list[dict[str, Any]]) -> tuple[bool, str]:
-    forbidden_statuses = set(case.get("forbidden_statuses", []))
-    for row in results:
-        if row.get("status") in forbidden_statuses:
-            return False, f"forbidden status returned: {row.get('status')}"
-
-    expected_ids = set(case.get("expected_ids", []))
-    expected_types = set(case.get("expected_types", []))
-    expected_source_contains = case.get("expected_source_contains", [])
-    if case.get("allow_empty") and not expected_ids and not expected_types:
-        return True, "no forbidden statuses returned"
-
-    if case.get("allow_empty") and not results:
-        return True, "empty result allowed"
-    max_rank = int(case.get("max_rank", len(results)))
-
-    for index, row in enumerate(results[:max_rank], start=1):
-        if expected_ids and row.get("id") in expected_ids:
-            return True, f"expected id at rank {index}"
-        if expected_types and row.get("type") in expected_types:
-            source_path = str(row.get("source_path", ""))
-            if not expected_source_contains or any(fragment in source_path for fragment in expected_source_contains):
-                return True, f"expected type/source at rank {index}"
-
-    return False, "expected result not found within max_rank"
-
-
 def type_penalty(row_type: str) -> float:
     if row_type == "chunk":
         return 0.45
@@ -593,6 +518,7 @@ def project_search_row(row: dict[str, Any]) -> dict[str, Any]:
         "status": row.get("status"),
         "title": row.get("title"),
         "source_path": row.get("source_path"),
+        "confidence": row.get("confidence"),
         "distance": row.get("_distance"),
         "rerank_score": row.get("rerank_score"),
         "embedding_provider": row.get("embedding_provider"),
@@ -637,6 +563,12 @@ def write_json(path: str, payload: dict[str, Any]) -> None:
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def write_text(path: str, content: str) -> None:
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(content, encoding="utf-8")
 
 
 if __name__ == "__main__":
