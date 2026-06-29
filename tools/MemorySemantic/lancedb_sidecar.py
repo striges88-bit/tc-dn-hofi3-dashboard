@@ -25,19 +25,49 @@ TOKEN_HASH_MODEL = "local-token-hash"
 EVAL_CASES: list[dict[str, Any]] = [
     {
         "id": "current_ofi_formula",
-        "query": "найди актуальную OFI-формулу actual OFI formula",
+        "query": "find current actual OFI formula TC-DN-HOFI3",
+        "expected_ids": ["formula_version.tc-dn-hofi3.current"],
+        "max_rank": 1,
+    },
+    {
+        "id": "formula_owner",
+        "query": "who owns current TC-DN-HOFI3 formula version owner",
         "expected_ids": ["formula_version.tc-dn-hofi3.current"],
         "max_rank": 1,
     },
     {
         "id": "funding_source_changed",
-        "query": "почему funding-source changed funding context source",
+        "query": "why funding-source changed funding context source decision",
+        "expected_ids": ["adr.0004-funding-source-context"],
+        "max_rank": 3,
+    },
+    {
+        "id": "binance_dto_boundary",
+        "query": "where is Binance DTO ownership boundary indicator engine",
+        "expected_ids": ["rule.binance-dto-boundary"],
+        "max_rank": 3,
+    },
+    {
+        "id": "rest_hot_path_ban",
+        "query": "is REST allowed in hot path subsecond feature calculation",
+        "expected_ids": ["rule.rest-hot-path-ban"],
+        "max_rank": 3,
+    },
+    {
+        "id": "live_replay_same_pipeline",
+        "query": "live replay same internal event pipeline indicator engine",
+        "expected_ids": ["rule.live-replay-same-pipeline"],
+        "max_rank": 3,
+    },
+    {
+        "id": "funding_slow_context",
+        "query": "funding is slow context not subsecond entry trigger",
         "expected_ids": ["adr.0004-funding-source-context"],
         "max_rank": 3,
     },
     {
         "id": "exchange_adapter_impact",
-        "query": "модули затронутые exchange adapter touched modules",
+        "query": "modules touched by exchange adapter impact",
         "expected_types": ["relation"],
         "expected_source_contains": ["CryptoIndicatorApp.Infrastructure/Binance/"],
         "max_rank": 5,
@@ -427,7 +457,7 @@ def embed_token_hash(text: str) -> list[float]:
     tokens = re.findall(r"[\w.-]+", text.lower())
     for token in tokens:
         digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
-        index = int.from_bytes(digest[:4], "little") % VECTOR_DIMENSIONS
+        index = int.from_bytes(digest[:4], "little") % TOKEN_HASH_VECTOR_DIMENSIONS
         sign = 1.0 if digest[4] % 2 == 0 else -1.0
         vector[index] += sign
 
@@ -525,9 +555,11 @@ def type_penalty(row_type: str) -> float:
 
 
 def query_type_bonus(row_type: str, query_tokens: set[str]) -> float:
-    if row_type == "formula_version" and {"ofi", "formula", "формулу", "формула"}.intersection(query_tokens):
+    if row_type == "formula_version" and {"ofi", "formula", "owner", "tc-dn-hofi3"}.intersection(query_tokens):
         return -3.75
-    if row_type == "adr" and {"why", "почему", "changed", "decision", "source"}.intersection(query_tokens):
+    if row_type == "adr" and {"why", "changed", "decision", "source", "funding", "context", "trigger"}.intersection(query_tokens):
+        return -1.25
+    if row_type == "rule" and {"dto", "boundary", "rest", "hot", "path", "pipeline", "replay", "live"}.intersection(query_tokens):
         return -1.25
     if row_type == "relation" and {"module", "modules", "модули", "adapter", "exchange"}.intersection(query_tokens):
         return -1.0

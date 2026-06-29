@@ -10,6 +10,7 @@ The application runtime must not depend on these files or generated stores.
 - `generated-memory.schema.json`: schema for generated memory indexes.
 - `glossary.md`: stable project terms.
 - `entities.md`: domain and architecture entities that graph tools may later ingest.
+- `rules.md`: typed current/superseded project rules used by SQLite/LanceDB quality gates.
 - `project-map.md`: high-level module map.
 - `hindsight-spike.md`: confirmed upstream Hindsight surface and why it is now historical/failed for this MVP.
 - `lancedb-spike.md`: active local semantic sidecar rules and spike gates.

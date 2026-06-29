@@ -2,6 +2,7 @@ from pathlib import Path
 
 from lancedb_sidecar import (
     DEFAULT_EMBEDDING_MODEL,
+    EVAL_CASES,
     evaluate_cases,
     ensure_generated_store_path,
     make_embedding_provider,
@@ -18,6 +19,16 @@ def test_default_embedding_provider_is_local_fastembed_multilingual_onnx():
     assert fallback["embedding_dimensions"] == 64
 
     assert DEFAULT_EMBEDDING_MODEL == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+
+def test_token_hash_fallback_can_embed_text():
+    provider = make_embedding_provider("token-hash", "")
+
+    vector = provider.embed_one("actual OFI formula")
+
+    assert len(vector) == 64
+    assert any(value != 0 for value in vector)
+    assert round(sum(value * value for value in vector), 6) == 1.0
 
 
 def test_rerank_prefers_typed_formula_over_generic_chunk():
@@ -80,6 +91,19 @@ def test_rerank_prefers_formula_source_over_quality_gate_doc_chunk():
 
 
 def test_eval_cases_gate_expected_rank_and_sources():
+    expected_case_ids = {
+        "current_ofi_formula",
+        "formula_owner",
+        "funding_source_changed",
+        "binance_dto_boundary",
+        "rest_hot_path_ban",
+        "live_replay_same_pipeline",
+        "funding_slow_context",
+        "exchange_adapter_impact",
+        "exclude_superseded_rule",
+    }
+    assert {case["id"] for case in EVAL_CASES} == expected_case_ids
+
     results_by_case = {
         "current_ofi_formula": [
             {
@@ -89,7 +113,47 @@ def test_eval_cases_gate_expected_rank_and_sources():
                 "source_path": "docs/formulas.md",
             }
         ],
+        "formula_owner": [
+            {
+                "id": "formula_version.tc-dn-hofi3.current",
+                "type": "formula_version",
+                "status": "current",
+                "source_path": "docs/formulas.md",
+            }
+        ],
         "funding_source_changed": [
+            {
+                "id": "adr.0004-funding-source-context",
+                "type": "adr",
+                "status": "current",
+                "source_path": "docs/decisions/0004-funding-source-context.md",
+            }
+        ],
+        "binance_dto_boundary": [
+            {
+                "id": "rule.binance-dto-boundary",
+                "type": "rule",
+                "status": "current",
+                "source_path": "docs/memory/rules.md",
+            }
+        ],
+        "rest_hot_path_ban": [
+            {
+                "id": "rule.rest-hot-path-ban",
+                "type": "rule",
+                "status": "current",
+                "source_path": "docs/memory/rules.md",
+            }
+        ],
+        "live_replay_same_pipeline": [
+            {
+                "id": "rule.live-replay-same-pipeline",
+                "type": "rule",
+                "status": "current",
+                "source_path": "docs/memory/rules.md",
+            }
+        ],
+        "funding_slow_context": [
             {
                 "id": "adr.0004-funding-source-context",
                 "type": "adr",
@@ -111,7 +175,7 @@ def test_eval_cases_gate_expected_rank_and_sources():
     report = evaluate_cases(lambda case: results_by_case[case["id"]])
 
     assert report["passed"] is True
-    assert report["passed_count"] == 4
+    assert report["passed_count"] == 9
     assert report["failed_count"] == 0
 
 
@@ -176,6 +240,7 @@ def test_store_path_guard_allows_only_generated_child_paths():
 
 if __name__ == "__main__":
     test_default_embedding_provider_is_local_fastembed_multilingual_onnx()
+    test_token_hash_fallback_can_embed_text()
     test_rerank_prefers_typed_formula_over_generic_chunk()
     test_rerank_prefers_formula_source_over_quality_gate_doc_chunk()
     test_eval_cases_gate_expected_rank_and_sources()

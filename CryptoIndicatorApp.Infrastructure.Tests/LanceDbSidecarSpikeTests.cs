@@ -67,6 +67,7 @@ public sealed class LanceDbSidecarSpikeTests
         var contract = ReadText("docs/memory/contract.md");
         var readme = ReadText("docs/memory/README.md");
         var openQuestions = ReadText("docs/memory/open-questions.md");
+        var rules = ReadText("docs/memory/rules.md");
 
         Assert.Contains("Status: active production-candidate semantic quality layer", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("local Python embedded", spike, StringComparison.OrdinalIgnoreCase);
@@ -80,12 +81,22 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("FastEmbed", spike, StringComparison.Ordinal);
         Assert.Contains("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", spike, StringComparison.Ordinal);
         Assert.Contains("eval", spike, StringComparison.Ordinal);
+        Assert.Contains("eval` passed `9/9`", spike, StringComparison.Ordinal);
+        Assert.Contains("formula_owner", spike, StringComparison.Ordinal);
+        Assert.Contains("binance_dto_boundary", spike, StringComparison.Ordinal);
+        Assert.Contains("rest_hot_path_ban", spike, StringComparison.Ordinal);
+        Assert.Contains("live_replay_same_pipeline", spike, StringComparison.Ordinal);
+        Assert.Contains("funding_slow_context", spike, StringComparison.Ordinal);
 
         Assert.Contains("LanceDB is an active local semantic sidecar spike", contract, StringComparison.Ordinal);
         Assert.Contains("SQLite remains the canonical status store", contract, StringComparison.Ordinal);
         Assert.Contains("local FastEmbed/ONNX", contract, StringComparison.Ordinal);
         Assert.Contains("scripts/lancedb-sidecar.ps1", readme, StringComparison.Ordinal);
         Assert.Contains("LanceDB semantic quality gate", openQuestions, StringComparison.Ordinal);
+        Assert.Contains("rule.rest-hot-path-ban | current | data-pipeline", rules, StringComparison.Ordinal);
+        Assert.Contains("rule.binance-dto-boundary | current | architecture", rules, StringComparison.Ordinal);
+        Assert.Contains("rule.live-replay-same-pipeline | current | replay", rules, StringComparison.Ordinal);
+        Assert.Contains("rule.legacy-superseded | superseded", rules, StringComparison.Ordinal);
     }
 
     [Fact]

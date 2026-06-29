@@ -42,4 +42,5 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - For LanceDB sidecar work, read only canonical SQLite `search_documents` with valid source metadata; do not crawl the project directly, and do not enable hooks until cleanup/rebuild/search/explain are repeatable.
 - Do not trust raw vector distance as current-fact ranking. Sidecar retrieval needs metadata filters, freshness checks, and a typed/exact-token reranker so generic chunks do not outrank current ADR/formula records.
 - Semantic retrieval tests must use real source-backed ADR/rule/relation/formula records. If a required quality question has no current source, add or update the source first instead of tuning the model toward noisy chunks.
+- When expanding the LanceDB semantic quality gate, add typed/source-backed rules or ADRs before adding cases; do not let docs that describe the eval itself become the only matching source.
 - Pin local embedding package versions in wrapper scripts and record provider/model/package metadata in reports; unpinned semantic dependencies can silently change retrieval baselines.

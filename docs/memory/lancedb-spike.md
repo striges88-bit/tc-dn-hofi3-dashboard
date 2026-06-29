@@ -74,15 +74,26 @@ Update 2026-06-29:
 - Indexed rows record `embedding_provider=fastembed`, `embedding_model=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, `embedding_dimensions=384`, and `embedding_package_version=0.8.0`.
 - `search "actual OFI formula"` returned `formula_version.tc-dn-hofi3.current` first.
 - `explain "actual OFI formula"` returned `KNNVectorDistance`, `LanceRead`, and `TopK`; the ignored generated report records the exact per-run scan count.
-- `eval` passed `4/4`: current OFI formula, funding-source ADR, exchange adapter impact, and superseded-rule exclusion.
+- The first FastEmbed `eval` passed `4/4`: current OFI formula, funding-source ADR, exchange adapter impact, and superseded-rule exclusion. This was a smoke baseline, not enough evidence for durable trust.
 - The current OFI formula eval case caught a regression where a docs chunk describing the quality gate outranked the canonical `formula_version`; the reranker now applies query-aware typed bonuses so source-backed formula/ADR/relation records can beat self-referential memory docs.
+
+Expanded quality gate update 2026-06-29:
+
+- Added source-backed typed rules in `docs/memory/rules.md` so boundary/guardrail cases do not rely only on generic chunks.
+- Rebuild indexed the current/proposed SQLite records into LanceDB; the ignored generated report records the exact count.
+- `eval` passed `9/9`: current OFI formula, formula owner, funding-source ADR, Binance DTO boundary, REST hot-path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
 
 ## Semantic Quality Gate
 
 Required `eval` cases:
 
 - `current_ofi_formula`: return `formula_version.tc-dn-hofi3.current` at rank 1.
+- `formula_owner`: return `formula_version.tc-dn-hofi3.current` at rank 1 for owner lookup.
 - `funding_source_changed`: return `adr.0004-funding-source-context` within the accepted rank window.
+- `binance_dto_boundary`: return `rule.binance-dto-boundary` within the accepted rank window.
+- `rest_hot_path_ban`: return `rule.rest-hot-path-ban` within the accepted rank window.
+- `live_replay_same_pipeline`: return `rule.live-replay-same-pipeline` within the accepted rank window.
+- `funding_slow_context`: return `adr.0004-funding-source-context` within the accepted rank window.
 - `exchange_adapter_impact`: return a `relation` sourced from `CryptoIndicatorApp.Infrastructure/Binance/`.
 - `exclude_superseded_rule`: do not return `superseded` or `failed` facts for current retrieval.
 

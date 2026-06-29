@@ -876,3 +876,19 @@
 - `uv run --python 3.12 --with lancedb --with pyarrow --with fastembed==0.8.0 python tools\MemorySemantic\lancedb_sidecar_tests.py` returned `ok`.
 - `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` completed with `0` warnings and `0` errors.
 - `git diff --check` passed.
+
+## LanceDB Semantic Quality Gate Expansion Todo
+
+- [x] Add typed, human-authored memory rules for project guardrails that should not rely only on generic chunks.
+- [x] Expand LanceDB `eval` cases from smoke coverage to formula owner, Binance DTO boundary, REST hot-path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and stale/superseded exclusion.
+- [x] Add narrow Python tests for the expanded eval contract and fallback embedding behavior.
+- [x] Update memory docs and lessons with the stronger gate and its limits.
+- [x] Run Python sidecar tests, memory refresh/stale-check, LanceDB cleanup/rebuild/eval, relevant .NET tests/build, diff hygiene, and commit if the slice is clean.
+
+## LanceDB Semantic Quality Gate Expansion Results
+
+- Added `docs/memory/rules.md` with typed current rules for REST hot-path ban, Binance DTO boundary, live/replay shared pipeline, funding slow context, and a superseded legacy-rule fixture.
+- Expanded `tools/MemorySemantic/lancedb_sidecar.py` eval from `4` to `9` cases: OFI formula, formula owner, funding-source ADR, Binance DTO boundary, REST hot-path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
+- Fixed the token-hash fallback embedding dimension constant and added a Python test that actually embeds text through the fallback provider.
+- Updated docs and tests so the stronger gate is source-backed by `formula_version`, ADR, typed rules, and relation records instead of only generic chunks.
+- Verification passed: Python sidecar tests returned `ok`; `LanceDbSidecarSpikeTests` passed `3/3`; `MemoryCliTests` passed `4/4`; `memory-refresh-all` completed with SQLite stale-check clean and LanceDB eval `9/9`; solution build completed with `0` warnings and `0` errors.
