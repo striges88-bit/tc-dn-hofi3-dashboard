@@ -132,17 +132,19 @@ Use SQLite diagnostics only:
 
 ## Refresh Rules
 
-The MVP refresh mechanism is a manual refresh command. A git post-commit hook may be added later as a convenience wrapper, but it must not be the only update mechanism because Git/PATH availability is fragile on Windows.
+The MVP refresh mechanism is a manual refresh command. Do not add a git post-commit hook as a memory refresh path because Git/PATH availability is fragile on Windows and hidden refresh can index mixed worktree states.
 
 Use `scripts/memory-refresh-all.ps1` as the preferred manual full rebuild wrapper. It runs legacy JSON refresh, SQLite refresh, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order, then writes an ignored report under `docs/memory/generated/`.
 
 Use `scripts/memory-pre-push-check.ps1` as a manual evidence gate after `memory-refresh-all` and before push or PR review. It validates the generated refresh/eval reports, does not run a rebuild by default, does not install hooks, and keeps no post-commit memory automation in the MVP flow.
 
+`scripts/install-memory-pre-push-hook.ps1` is the only approved optional hook installer. It requires `-Confirm`, refuses unmanaged existing hooks, installs a local managed `pre-push` hook that calls only `scripts/memory-pre-push-check.ps1`, and does not run `memory-refresh-all` inside the hook. Disable the managed hook with `scripts/install-memory-pre-push-hook.ps1 -Disable -Confirm`.
+
 The manual refresh script and `tools/Memory` CLI may write ignored files under `docs/memory/generated/`, including `project-memory.sqlite`. They must not rewrite human-authored docs, app code, formulas, config, or tests.
 
 LanceDB sidecar refresh is manual during the spike. `memory-refresh-all` must not install hooks, enable Codex auto-retain, call Cloud services, crawl project files directly for LanceDB, or import raw JSONL recordings, generated exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps. Do not install a git post-commit hook, after-save hook, or background updater until local clean rebuild/delete/reindex behavior and the semantic quality gate are verified and documented with the generated JSON/Markdown eval reports.
 
-Do not add post-commit auto-refresh for project memory. If a Git helper is added later, prefer an explicit opt-in pre-push wrapper around `memory-pre-push-check`, not hidden refresh automation.
+Do not add post-commit auto-refresh for project memory. The only Git helper allowed in the current contract is the explicit opt-in pre-push wrapper around `memory-pre-push-check`, not hidden refresh automation.
 
 ## Tool Strategy
 

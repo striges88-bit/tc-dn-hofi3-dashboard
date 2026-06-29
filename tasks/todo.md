@@ -929,3 +929,27 @@
 - Real `scripts/memory-pre-push-check.ps1` passed with `passed_count=9`, `failed_count=0`, `runs_refresh_all=false`, `installs_hooks=false`, and `post_commit_auto_refresh_enabled=false`.
 - Verification passed so far: `ManualMemoryGateTests|MemoryRefreshAllTests|LanceDbSidecarSpikeTests` `7/7`, `MemoryCliTests` `4/4`, `tools/MemorySemantic/lancedb_sidecar_tests.py` `ok`, and `dotnet build CryptoIndicatorApp.sln --no-restore` completed with `0` warnings and `0` errors.
 - Diff hygiene passed with `git diff --check`; Git status contains only this manual memory gate slice.
+
+## Optional Memory Pre-Push Hook Todo
+
+- [x] Add RED tests for `scripts/install-memory-pre-push-hook.ps1` plan/install/disable behavior using a temp hook path, not `.git/hooks`.
+- [x] Require explicit `-Confirm` for any write; default and `-PlanOnly` must not install hooks or run rebuilds.
+- [x] Implement a managed pre-push hook that calls `scripts/memory-pre-push-check.ps1` only and refuses to overwrite unmanaged hooks.
+- [x] Add a disable path for the managed hook and document how to remove it.
+- [x] Add ADR/docs/lessons updates: optional local pre-push helper, no post-commit automation, no rebuild inside hook by default.
+- [x] Run real `memory-refresh-all`, then `memory-pre-push-check`; do not install the actual repository hook during verification.
+- [x] Run narrow tests, build, diff hygiene, review status, and commit the verified slice.
+
+## Optional Memory Pre-Push Hook Results
+
+- Added `scripts/install-memory-pre-push-hook.ps1` with explicit `-Confirm` for hook writes and `-Disable -Confirm` for removing only the managed hook.
+- The generated hook calls `scripts/memory-pre-push-check.ps1` only; it does not run `memory-refresh-all`, rebuild memory, add post-commit automation, call Cloud, or enable Codex auto-retain.
+- The generated shell hook is LF-only, so Git Bash does not see a CRLF shebang.
+- The installer refuses to overwrite an unmanaged existing `pre-push` hook.
+- Added ADR `docs/decisions/0006-optional-memory-pre-push-hook.md` and updated ADR 0005, memory contract, memory README, scripts README, and lessons.
+- RED verification failed first on missing installer/ADR as expected; GREEN `ManualMemoryGateTests` passed `6/6`.
+- Real `memory-refresh-all` completed with SQLite stale-check `issues: []` and LanceDB eval `9/9`.
+- Real `memory-pre-push-check` passed with `passed_count=9`, `failed_count=0`, `runs_refresh_all=false`, `installs_hooks=false`, and `post_commit_auto_refresh_enabled=false`.
+- Real installer `-PlanOnly` wrote an ignored report with `installs_hooks=false`; `.git/hooks/pre-push` remained absent.
+- Verification passed: Infrastructure memory tests `19/19`, Memory CLI tests `4/4`, Python sidecar tests `ok`, solution build completed with `0` warnings and `0` errors, and `git diff --check` passed.
+- Git status before final refresh contained only the optional-hook slice: `ManualMemoryGateTests`, ADR/docs/lessons/todo, and the new installer script.

@@ -38,6 +38,18 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-pre-push-
 
 The helper validates the generated refresh/eval reports and writes `docs/memory/generated/memory-pre-push-check-report.json`. It does not rebuild memory by default, install hooks, enable post-commit automation, or treat generated exports as source memory.
 
+Optionally install a local managed `pre-push` hook after reviewing the manual gate:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install-memory-pre-push-hook.ps1 -Confirm
+```
+
+The optional hook calls `scripts/memory-pre-push-check.ps1` only. It does not run `memory-refresh-all`, rebuild memory, install itself automatically, or add post-commit automation. Disable the managed hook with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install-memory-pre-push-hook.ps1 -Disable -Confirm
+```
+
 Refresh the local generated index:
 
 ```powershell

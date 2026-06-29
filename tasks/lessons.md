@@ -45,4 +45,5 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - When expanding the LanceDB semantic quality gate, add typed/source-backed rules or ADRs before adding cases; do not let docs that describe the eval itself become the only matching source.
 - Before enabling hooks or memory automation, require a compact generated eval report with query, expected ids/types, matched rank, source path, confidence, and gap notes; pass/fail counts alone are not enough evidence.
 - Use `memory-pre-push-check` as a manual evidence gate after `memory-refresh-all`; do not add post-commit memory refresh automation because it can index intermediate or mixed worktree states as fresh facts.
+- Optional pre-push memory hooks must be explicit opt-in (`install-memory-pre-push-hook.ps1 -Confirm`), disableable (`-Disable -Confirm`), managed-marker only, and must call `memory-pre-push-check` without running rebuilds.
 - Pin local embedding package versions in wrapper scripts and record provider/model/package metadata in reports; unpinned semantic dependencies can silently change retrieval baselines.

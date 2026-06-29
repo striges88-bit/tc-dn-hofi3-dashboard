@@ -123,10 +123,216 @@ public sealed class ManualMemoryGateTests
         Assert.Contains("memory-pre-push-check", lessons, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task InstallPrePushHookPlanDoesNotInstallHookOrRunRebuild()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "install-memory-pre-push-hook.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        using var temp = TemporaryDirectory.Create();
+        var hookPath = Path.Combine(temp.Path, "pre-push");
+        var reportPath = Path.Combine(temp.Path, "install-report.json");
+
+        var result = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(Root)} -HookPath {Quote(hookPath)} -OutputPath {Quote(reportPath)} -PlanOnly");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        Assert.False(File.Exists(hookPath));
+        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal(1, root.GetProperty("schema_version").GetInt32());
+        Assert.Equal("scripts/install-memory-pre-push-hook.ps1", root.GetProperty("generator").GetString());
+        Assert.Equal("plan-only", root.GetProperty("mode").GetString());
+        Assert.Equal("planned", root.GetProperty("status").GetString());
+        Assert.True(root.GetProperty("manual_only").GetBoolean());
+        Assert.True(root.GetProperty("requires_confirm").GetBoolean());
+        Assert.True(root.GetProperty("would_install_hook").GetBoolean());
+        Assert.True(root.GetProperty("hook_invokes_helper").GetBoolean());
+        Assert.Equal("scripts/memory-pre-push-check.ps1", root.GetProperty("helper_script").GetString());
+        Assert.False(root.GetProperty("installs_hooks").GetBoolean());
+        Assert.False(root.GetProperty("pre_push_hook_installed").GetBoolean());
+        AssertCommonHookSafetyFlags(root);
+    }
+
+    [Fact]
+    public async Task InstallPrePushHookConfirmWritesManagedHelperHookAndDisableRemovesIt()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "install-memory-pre-push-hook.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        using var temp = TemporaryDirectory.Create();
+        var hookPath = Path.Combine(temp.Path, "pre-push");
+        var installReportPath = Path.Combine(temp.Path, "install-report.json");
+
+        var install = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(Root)} -HookPath {Quote(hookPath)} -OutputPath {Quote(installReportPath)} -Confirm");
+
+        Assert.True(install.ExitCode == 0, install.ToString());
+        Assert.True(File.Exists(hookPath), $"Missing hook: {hookPath}");
+
+        var hook = File.ReadAllText(hookPath);
+        Assert.StartsWith("#!/bin/sh\n", hook, StringComparison.Ordinal);
+        Assert.DoesNotContain("\r\n", hook, StringComparison.Ordinal);
+        Assert.Contains("TC-DN-HOFI3 managed memory pre-push hook", hook, StringComparison.Ordinal);
+        Assert.Contains("memory-pre-push-check.ps1", hook, StringComparison.Ordinal);
+        Assert.DoesNotContain("memory-refresh-all", hook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("post-commit", hook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("recordings", hook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(".hindsight", hook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret", hook, StringComparison.OrdinalIgnoreCase);
+        var normalizedHook = hook.Replace('\\', '/');
+        Assert.DoesNotContain("bin/Debug", normalizedHook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("bin/Release", normalizedHook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/obj/", normalizedHook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("publish/", normalizedHook, StringComparison.OrdinalIgnoreCase);
+
+        using (var installReport = JsonDocument.Parse(File.ReadAllText(installReportPath)))
+        {
+            var root = installReport.RootElement;
+            Assert.Equal("install", root.GetProperty("mode").GetString());
+            Assert.Equal("installed", root.GetProperty("status").GetString());
+            Assert.True(root.GetProperty("installs_hooks").GetBoolean());
+            Assert.True(root.GetProperty("pre_push_hook_installed").GetBoolean());
+            Assert.True(root.GetProperty("hook_invokes_helper").GetBoolean());
+            Assert.False(root.GetProperty("hook_invokes_refresh_all").GetBoolean());
+            AssertCommonHookSafetyFlags(root);
+        }
+
+        var disableReportPath = Path.Combine(temp.Path, "disable-report.json");
+        var disable = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(Root)} -HookPath {Quote(hookPath)} -OutputPath {Quote(disableReportPath)} -Disable -Confirm");
+
+        Assert.True(disable.ExitCode == 0, disable.ToString());
+        Assert.False(File.Exists(hookPath));
+
+        using var disableReport = JsonDocument.Parse(File.ReadAllText(disableReportPath));
+        var disableRoot = disableReport.RootElement;
+        Assert.Equal("disable", disableRoot.GetProperty("mode").GetString());
+        Assert.Equal("disabled", disableRoot.GetProperty("status").GetString());
+        Assert.True(disableRoot.GetProperty("managed_hook_removed").GetBoolean());
+        Assert.False(disableRoot.GetProperty("installs_hooks").GetBoolean());
+        Assert.False(disableRoot.GetProperty("pre_push_hook_installed").GetBoolean());
+        AssertCommonHookSafetyFlags(disableRoot);
+    }
+
+    [Fact]
+    public async Task InstallPrePushHookConfirmRefusesUnmanagedExistingHook()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "install-memory-pre-push-hook.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        using var temp = TemporaryDirectory.Create();
+        var hookPath = Path.Combine(temp.Path, "pre-push");
+        var reportPath = Path.Combine(temp.Path, "install-report.json");
+        File.WriteAllText(hookPath, "#!/bin/sh\nexit 0\n");
+
+        var result = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(Root)} -HookPath {Quote(hookPath)} -OutputPath {Quote(reportPath)} -Confirm");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Equal("#!/bin/sh\nexit 0\n", File.ReadAllText(hookPath));
+        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal("failed", root.GetProperty("status").GetString());
+        Assert.Equal("unmanaged-hook-exists", root.GetProperty("failure_code").GetString());
+        Assert.False(root.GetProperty("installs_hooks").GetBoolean());
+        AssertCommonHookSafetyFlags(root);
+    }
+
+    [Fact]
+    public void OptionalMemoryHookDocsRequireExplicitConfirmAndDisable()
+    {
+        var adr = ReadText("docs/decisions/0006-optional-memory-pre-push-hook.md");
+        var contract = ReadText("docs/memory/contract.md");
+        var memoryReadme = ReadText("docs/memory/README.md");
+        var scriptsReadme = ReadText("scripts/README.md");
+        var lessons = ReadText("tasks/lessons.md");
+
+        Assert.Contains("optional", adr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("install-memory-pre-push-hook.ps1", adr, StringComparison.Ordinal);
+        Assert.Contains("-Confirm", adr, StringComparison.Ordinal);
+        Assert.Contains("-Disable", adr, StringComparison.Ordinal);
+        Assert.Contains("memory-pre-push-check.ps1", adr, StringComparison.Ordinal);
+        Assert.Contains("not run", adr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("post-commit", adr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not add", adr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("install-memory-pre-push-hook.ps1", contract, StringComparison.Ordinal);
+        Assert.Contains("-Confirm", contract, StringComparison.Ordinal);
+        Assert.Contains("-Disable", contract, StringComparison.Ordinal);
+        Assert.Contains("install-memory-pre-push-hook.ps1", memoryReadme, StringComparison.Ordinal);
+        Assert.Contains("install-memory-pre-push-hook.ps1", scriptsReadme, StringComparison.Ordinal);
+        Assert.Contains("optional pre-push", lessons, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string ReadText(string relativePath)
     {
         var path = Path.Combine(Root, relativePath.Replace('/', Path.DirectorySeparatorChar));
         return File.ReadAllText(path);
+    }
+
+    private static async Task<ProcessResult> RunPowerShellAsync(string scriptPath, string arguments)
+    {
+        var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        });
+
+        Assert.NotNull(process);
+        var outputTask = process!.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        try
+        {
+            await process.WaitForExitAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                process.Kill();
+            }
+            catch
+            {
+                // The assertion below is the useful failure; cleanup is best effort.
+            }
+
+            Assert.Fail($"{Path.GetFileName(scriptPath)} timed out.");
+        }
+
+        return new ProcessResult(process.ExitCode, await outputTask, await errorTask);
+    }
+
+    private static void AssertCommonHookSafetyFlags(JsonElement root)
+    {
+        Assert.False(root.GetProperty("runs_refresh_all").GetBoolean());
+        Assert.False(root.GetProperty("hook_invokes_refresh_all").GetBoolean());
+        Assert.False(root.GetProperty("post_commit_auto_refresh_enabled").GetBoolean());
+        Assert.False(root.GetProperty("commit_hook_installed").GetBoolean());
+        Assert.False(root.GetProperty("cloud_enabled").GetBoolean());
+        Assert.False(root.GetProperty("codex_auto_retain_enabled").GetBoolean());
+        Assert.False(root.GetProperty("touches_raw_jsonl").GetBoolean());
+        Assert.False(root.GetProperty("touches_hindsight_store").GetBoolean());
+        Assert.False(root.GetProperty("touches_secret_storage").GetBoolean());
+        Assert.False(root.GetProperty("uses_generated_exports_as_source").GetBoolean());
+        Assert.False(root.GetProperty("touches_build_artifacts").GetBoolean());
+    }
+
+    private static string Quote(string value)
+    {
+        return "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
     }
 
     private static string FindRepositoryRoot()
@@ -139,5 +345,38 @@ public sealed class ManualMemoryGateTests
         }
 
         return directory?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
+    }
+
+    private sealed record ProcessResult(int ExitCode, string Output, string Error)
+    {
+        public override string ToString()
+        {
+            return $"Exit {ExitCode}\nSTDOUT:\n{Output}\nSTDERR:\n{Error}";
+        }
+    }
+
+    private sealed class TemporaryDirectory : IDisposable
+    {
+        private TemporaryDirectory(string path)
+        {
+            Path = path;
+        }
+
+        public string Path { get; }
+
+        public static TemporaryDirectory Create()
+        {
+            var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "memory-hook-test-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(path);
+            return new TemporaryDirectory(path);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Path))
+            {
+                Directory.Delete(Path, recursive: true);
+            }
+        }
     }
 }
