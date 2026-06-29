@@ -536,7 +536,7 @@
 - Updated `AGENTS.md` with project-specific versions of those rules.
 - Replaced the stale `C:\Users\Steven Owl\.codex\skills\binance-indicator-dev\SKILL.md` fallback with `%USERPROFILE%\.codex\skills\binance-indicator-dev\SKILL.md`.
 - Verified the resulting `AGENTS.md` is 134 lines and does not contain imported Ubuntu WSL, CodeRabbit, JSDoc, Prisma, React, npm migration, or production-branch Docker deployment rules.
-- `$binance-indicator-dev` is still missing from `C:\Users\MECHREVO\.codex\skills\binance-indicator-dev\SKILL.md`; future sessions should state that and continue from project docs if the skill is unavailable.
+- Historical note, superseded by "Laptop Continuity And Skill Recovery Results": at this point `$binance-indicator-dev` was missing from `C:\Users\MECHREVO\.codex\skills\binance-indicator-dev\SKILL.md`; do not treat this as current skill status.
 
 ## Agent Memory Architecture Todo
 
@@ -562,7 +562,76 @@
 - Verification passed: `dotnet test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter MemoryContractTests` passed `5/5`.
 - Verification passed: `dotnet test CryptoIndicatorApp.sln --no-restore` passed `76/76`.
 - Build verification passed: `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` completed with 0 warnings and 0 errors.
-- `$binance-indicator-dev` is still unavailable at `%USERPROFILE%\.codex\skills\binance-indicator-dev\SKILL.md`; this work continued from `AGENTS.md` and project docs.
+- Historical note, superseded by "Laptop Continuity And Skill Recovery Results": at this point `$binance-indicator-dev` was unavailable at `%USERPROFILE%\.codex\skills\binance-indicator-dev\SKILL.md`; this is not the current skill status.
+
+## GBrain CLI/API Spike Todo
+
+- [x] Confirm upstream GBrain repository, install/runtime requirements, CLI entrypoint, and documented local setup command from current source.
+- [x] Check whether `gbrain` and its required runtime are available in the current Windows environment.
+- [x] Record the confirmed command/API surface and local availability in `docs/memory/`.
+- [x] Update memory open questions so GBrain is not mixed with still-unverified Graphify details.
+- [x] Run the narrow memory contract tests after documentation changes.
+- [x] Record spike results and remaining risks.
+
+## GBrain CLI/API Spike Results
+
+- Confirmed upstream `garrytan/gbrain` exists and documents `gbrain init --pglite` for local PGlite setup.
+- Confirmed package metadata: CLI entrypoint is `gbrain`, runtime requires Bun, and upstream documents standalone install via `bun install -g github:garrytan/gbrain`.
+- Confirmed upstream Codex MCP path: `codex mcp add gbrain -- gbrain serve`.
+- Local environment check found neither `gbrain` nor `bun` in PATH, so GBrain is verified upstream but not currently usable locally.
+- Added `docs/memory/gbrain-spike.md` and updated `docs/memory/contract.md`, `docs/memory/README.md`, and `docs/memory/open-questions.md`.
+- Added a MemoryContractTests guard so retrieval does not collapse "confirmed upstream" into "installed/current local tool".
+- Ran `scripts/memory-refresh.ps1`: generated ignored index with 6 nodes, 5 edges, and 141 indexed files.
+- Verification passed: `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter MemoryContractTests` passed `6/6`.
+- Remaining risks: local Windows install, `gbrain doctor`, runtime MCP tool inspection, import policy, and export/backup format are still unverified.
+
+## Hindsight Memory Candidate Todo
+
+- [x] Confirm upstream Hindsight repository and documented Codex/CLI/MCP surfaces from current sources.
+- [x] Add `docs/memory/hindsight-spike.md` with local availability, curated import policy, and auto-retain restriction.
+- [x] Mark GBrain as historical/secondary instead of the preferred external memory candidate.
+- [x] Update `docs/memory/contract.md`, `docs/memory/README.md`, and `docs/memory/open-questions.md`.
+- [x] Add/adjust `MemoryContractTests` so retrieval preserves Hindsight preferred status and GBrain historical status.
+- [x] Run `scripts/memory-refresh.ps1` and the narrow memory contract tests.
+- [x] Record spike results and remaining install-mode decision.
+
+## Hindsight Memory Candidate Results
+
+- Confirmed upstream `vectorize-io/hindsight` exists and is a Python project with `hindsight-api`, `hindsight-embed`, `hindsight-cli`, Codex integration, and MCP docs.
+- Confirmed package metadata: `hindsight-api` and `hindsight-embed` require Python `>=3.11`; `hindsight-cli` builds a Rust binary named `hindsight`.
+- Added `docs/memory/hindsight-spike.md` with upstream sources, local availability, MVP decision, curated import allowlist, auto-retain restriction, and remaining gaps.
+- Updated `docs/memory/gbrain-spike.md` so GBrain is historical/secondary, not the roadmap-preferred external memory candidate.
+- Updated `docs/memory/contract.md`, `docs/memory/README.md`, `docs/memory/open-questions.md`, `.gitignore`, and `tasks/lessons.md`.
+- Local environment check found no `hindsight`, `hindsight-api`, `uvx`, or Docker; `python --version` resolves only to the Windows Store alias, so local Hindsight installation remains a separate install spike.
+- Ran `scripts/memory-refresh.ps1`: generated ignored index with 6 nodes, 5 edges, and 142 indexed files.
+- Verification passed: `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter MemoryContractTests` passed `7/7`.
+- Remaining decision: choose Hindsight install mode first: Cloud, Docker, Python/uvx embedded daemon, or external PostgreSQL.
+
+## Hindsight Curated Import Todo
+
+- [x] Commit the current Hindsight/GBrain memory-roadmap layer before adding import tooling.
+- [x] Add a failing memory contract test for a curated Hindsight import manifest/script allowlist.
+- [x] Verify the failing test rejects missing curated import tooling for the expected reason.
+- [x] Add minimal curated import tooling that lists only approved source files.
+- [x] Ensure denylisted sources stay excluded: `recordings/*.jsonl`, `docs/memory/generated/`, secrets, build artifacts, and local proxy details.
+- [x] Update memory docs/open questions with the pre-install import rule and keep Codex auto-retain disabled.
+- [x] Run `scripts/memory-refresh.ps1`, narrow memory tests, and review uncommitted changes.
+- [x] Record results and remaining install-spike decision.
+
+## Hindsight Curated Import Results
+
+- Committed the prior Hindsight/GBrain roadmap layer as `3b30b2a docs: prefer hindsight memory candidate`.
+- Added `CryptoIndicatorApp.Infrastructure.Tests/HindsightCuratedImportTests.cs` with a red/green test for the curated import manifest script.
+- Red verification failed for the expected reason: missing `scripts/hindsight-curated-import.ps1`.
+- Added `scripts/hindsight-curated-import.ps1`; it writes only `docs/memory/generated/hindsight-curated-import-manifest.json` and does not install Hindsight, call Hindsight APIs, start daemons, or enable Codex hooks.
+- The import allowlist is `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`.
+- The denylist excludes raw JSONL recordings, generated memory exports, secrets, local proxy details, build artifacts, and unreviewed experiment dumps.
+- Updated `docs/memory/contract.md`, `docs/memory/README.md`, `docs/memory/hindsight-spike.md`, and `docs/memory/open-questions.md` so the current status is manifest-only pre-install tooling.
+- `scripts/hindsight-curated-import.ps1` generated `13` curated file entries with Codex auto-retain disabled.
+- `scripts/memory-refresh.ps1` generated the ignored index with `6` nodes, `5` edges, and `144` indexed files.
+- Verification passed: `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore` passed `26/26`.
+- Full solution build/test was not rerun for this docs/script/test-only memory slice.
+- Remaining install-spike decision: use Python/uvx embedded daemon first unless a later constraint requires Cloud, Docker, or external PostgreSQL.
 
 ## Laptop Continuity And Skill Recovery Todo
 
@@ -601,3 +670,345 @@
 - Fixed `scripts/memory-refresh.ps1` root detection because default parameter evaluation could see an empty `$PSScriptRoot` under `powershell.exe -File`; applied the same safer pattern to the new skill scripts.
 - Verification passed: `scripts/verify-project-skills.ps1 -CheckInstalled`, `quick_validate.py`, `scripts/memory-refresh.ps1`, `MemoryContractTests` `5/5`, full solution tests `76/76`, and solution build with `0` warnings and `0` errors.
 - Committed and pushed continuity tooling to `origin/main` in commit `111760d chore: add project continuity tooling`.
+
+## Hindsight Python/Uvx Install Spike Todo
+
+- [x] Confirm current upstream Python/uvx embedded daemon commands and note any doc inconsistencies before installing or retaining memory.
+- [x] Add a failing test for a safe install-spike report/script contract.
+- [x] Add a minimal install-spike script that probes prerequisites and writes only ignored generated output.
+- [x] Keep Codex auto-retain disabled and do not import curated files during the install spike.
+- [x] Run local prerequisite checks; only run network/install commands as an explicit spike step.
+- [x] Update memory docs/open questions with actual install status, blocked items, and next command.
+- [x] Run narrow memory/tooling tests and `scripts/memory-refresh.ps1`.
+- [x] Record install-spike results and remaining risk.
+
+## Hindsight Python/Uvx Install Spike Results
+
+- Added `CryptoIndicatorApp.Infrastructure.Tests/HindsightInstallSpikeTests.cs` with a red/green guard for a safe install-spike script and docs.
+- Red verification failed for the expected reason: missing `scripts/hindsight-install-spike.ps1` and `docs/memory/hindsight-install-spike.md`.
+- Added `scripts/hindsight-install-spike.ps1`; default mode only probes local tools and writes ignored `docs/memory/generated/hindsight-install-spike-report.json`.
+- Added `docs/memory/hindsight-install-spike.md` and updated `docs/memory/hindsight-spike.md`, `docs/memory/contract.md`, `docs/memory/open-questions.md`, and `docs/memory/README.md`.
+- Installed `uv` user-scoped through WinGet package `astral-sh.uv`; installed version is `uv 0.11.25`.
+- Current Codex PATH stayed stale after WinGet install, so the spike script now discovers `uv.exe` and `uvx.exe` under `%LOCALAPPDATA%\Microsoft\WinGet\Packages\astral-sh.uv_*`.
+- `uvx hindsight-embed --help` succeeded and downloaded managed `cpython-3.14.6-windows-x86_64-none` plus package dependencies.
+- Embedded CLI help confirms profile, daemon, UI/control, `memory retain`, `memory recall`, `memory reflect`, and `bank list` surfaces.
+- `hindsight-embed profile show -o json` reports default config under `%USERPROFILE%\.hindsight\embed` and port `8888`.
+- `hindsight-embed daemon status` reports daemon not running and exits with code `1`.
+- `hindsight-embed memory retain --help` and `hindsight-embed bank list --help` fail before help output with `LLM API key is required`; no `OPENAI_API_KEY`, `HINDSIGHT_API_TOKEN`, or `HINDSIGHT_API_LLM_API_KEY` was present in this Codex process.
+- Codex auto-retain remains disabled; curated import was not executed; daemon was not started; no `retain` or `retain-files` command was run.
+- Verification passed: `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore` passed `28/28`.
+- `scripts/memory-refresh.ps1` generated the ignored index with `6` nodes, `5` edges, and `147` indexed files.
+- `scripts/hindsight-install-spike.ps1 -ProbeUvxHelp` regenerated the ignored install-spike report after tests.
+- Remaining next step: approve secret-backed Hindsight env handling, then create an explicit project profile and test daemon/MCP endpoint behavior before any curated import.
+
+## Hindsight Profile And Daemon Smoke Todo
+
+- [x] Create a new OpenAI project API key through the secure encrypted flow without printing the plaintext key.
+- [x] Store the key only in ignored repo-local env storage under `.hindsight/`.
+- [x] Decide the project secret-backed env policy and document it without recording secret values.
+- [x] Create an explicit Hindsight project profile for `tc-dn-hofi3` using the ignored env file.
+- [x] Start/check the embedded daemon and confirm the actual local endpoint before any import.
+- [x] Probe the MCP endpoint/bank surface without retaining or importing project files.
+- [x] Update Hindsight docs/open questions with real profile, daemon, and MCP results.
+- [x] Run narrow memory tooling tests and refresh generated memory.
+- [x] Record results, blockers, and the next safe command.
+
+## Hindsight Profile And Daemon Smoke Results
+
+- Created OpenAI project API key `TC-DN-HOFI3 Hindsight` through encrypted setup and wrote it only to ignored `.hindsight/tc-dn-hofi3.env`; plaintext was not printed.
+- Secret policy: keep Hindsight/OpenAI secrets in ignored `.hindsight/` env files, load them only into process environment, and do not pass them through Hindsight `--env`, `profile set-env`, shell history, or committed config.
+- Created explicit Hindsight profile `tc-dn-hofi3` on port `9077`; Hindsight stores profile config at `%USERPROFILE%\.hindsight\profiles\tc-dn-hofi3.env`.
+- First daemon start opened a visible/hanging launcher and then hit Hindsight's 180s timeout while downloading/initializing heavy Python dependencies, local embeddings/reranker, embedded PostgreSQL, and migrations.
+- Stopped the visible launcher process tree; later hidden startup completed enough for the API process to become healthy.
+- Confirmed daemon status: `hindsight-embed -p tc-dn-hofi3 daemon status` reports `Daemon Running`.
+- Confirmed endpoints: `http://127.0.0.1:9077/health`, `/mcp/`, and `/metrics` return HTTP `200`; `/` returns HTTP `404`.
+- Hindsight log shows OpenAI verification fails with `billing_not_active`, so LLM-dependent retain/recall/reflect behavior is blocked until OpenAI account billing is active.
+- `hindsight-embed -p tc-dn-hofi3 bank list` with process env attempts to use/install the separate Rust `hindsight` CLI and failed locally with `[WinError 2]`; bank/import behavior remains unverified.
+- Curated import, `retain`, `retain-files`, and Codex auto-retain were not executed.
+- Updated `docs/memory/hindsight-install-spike.md`, `docs/memory/hindsight-spike.md`, `docs/memory/contract.md`, `docs/memory/open-questions.md`, and `MemoryContractTests` so old "daemon not running" facts are no longer current.
+- Verification passed: `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter "MemoryContractTests|HindsightInstallSpikeTests"` passed `9/9`.
+- `scripts/memory-refresh.ps1` regenerated the ignored memory index with `6` nodes, `5` edges, and `147` indexed files.
+- `git diff --check` passed.
+- Intended Hindsight daemon processes remain running for the approved project profile on port `9077`; no extra visible launcher process remained after cleanup.
+- Next safe command after fixing OpenAI billing is a non-import smoke such as `hindsight-embed -p tc-dn-hofi3 bank list` with process env loaded. Do not run curated import or retain until Rust CLI/import behavior and retention/export/delete policy are confirmed.
+
+## Git Commit Cadence Todo
+
+- [x] Record a durable rule that Codex should commit coherent verified work slices proactively.
+- [x] Prefer a project instruction over an automatic Git hook because hooks cannot safely decide semantic commit boundaries or exclude unrelated user changes.
+- [x] Keep the guardrail explicit: no auto-commit for secrets, raw recordings, generated memory exports, local machine state, unrelated user changes, unclear scope, or failed/incomplete verification.
+- [x] Re-run the narrow memory/Hindsight tests before committing the current slice.
+- [x] Review Git status/diff hygiene before staging.
+- [x] Commit the verified memory/Hindsight profile smoke and commit-cadence rule.
+
+## Git Commit Cadence Results
+
+- Added `AGENTS.md` Git commit cadence rules for proactive commits after coherent verified slices.
+- Added the same feedback-driven rule to `tasks/lessons.md`.
+- Did not add a Git auto-commit hook: that would be unsafe for secrets, generated outputs, and mixed worktrees.
+
+## SQLite FTS5 Canonical Memory Todo
+
+- [x] Create an isolated implementation branch for the SQLite memory slice.
+- [x] Add red tests for the SQLite canonical memory contract, schema, retrieval, explain logging, stale checks, and safety exclusions.
+- [x] Add a tooling-only memory CLI under `tools/` with `refresh`, `search`, `explain`, and `stale-check` commands.
+- [x] Build the SQLite schema with FTS5 tables and a local `query_log`; do not use PostgreSQL-only diagnostics.
+- [x] Update memory docs and ADRs so Hindsight is historical/failed, SQLite is canonical local memory, and LanceDB was deferred for that SQLite MVP slice.
+- [x] Ensure raw JSONL, generated exports, secrets, local proxy details, and build artifacts are not indexed.
+- [x] Run memory refresh, narrow memory/tooling tests, solution build, and stale-check verification.
+- [x] Run diff hygiene checks.
+- [x] Commit the verified slice.
+
+## SQLite FTS5 Canonical Memory Results
+
+- Started on branch `codex/sqlite-memory-store` from clean `main` with local commits ahead of `origin/main`.
+- Added red/green CLI tests in `tools/Memory.Tests/MemoryCliTests.cs`; the initial red run failed because `tools/Memory/CryptoIndicatorApp.Memory.csproj` did not exist.
+- Added `tools/Memory` console CLI with `refresh`, `search`, `explain`, and `stale-check`.
+- Added SQLite FTS5 schema with `files`, `symbols`, `chunks`, `rules`, `adr`, `formula_versions`, `metrics`, `experiments`, `events`, `relations`, `sources`, `todos`, `search_documents`, `search_documents_fts`, and `query_log`.
+- `tools/Memory.Tests` passed after implementation: `.\.dotnet\dotnet.exe test tools\Memory.Tests\CryptoIndicatorApp.Memory.Tests.csproj --no-restore --filter MemoryCliTests` passed `4/4`.
+- Updated docs: `docs/decisions/0003-sqlite-fts5-canonical-memory.md`, `docs/memory/lancedb-spike.md`, `contract.md`, `README.md`, `open-questions.md`, `hindsight-spike.md`, and `gbrain-spike.md`.
+- Added `Owner:` metadata to `docs/formulas.md` so the current `formula_version` is not stale.
+- Added `tasks/lessons.md` rule: SQLite memory diagnostics use `EXPLAIN QUERY PLAN` plus local `query_log`, not PostgreSQL-only diagnostics.
+- Added ranking coverage so typed records such as `formula_version` and ADRs rank above noisy generic chunks for current factual retrieval.
+- Split SQLite schema statements into `MemorySchema.cs`; `MemoryStore.cs` is back under the project source-file size guardrail.
+- Added `tools/Memory` and `tools/Memory.Tests` to `CryptoIndicatorApp.sln`; `.\.dotnet\dotnet.exe restore CryptoIndicatorApp.sln` passed.
+- Verification passed: `MemoryContractTests` `8/8`, `MemoryCliTests` `4/4`, full `.\.dotnet\dotnet.exe test CryptoIndicatorApp.sln --no-restore`, and `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` with 0 warnings and 0 errors.
+- Memory verification passed: `scripts/memory-refresh.ps1` indexed 159 files, SQLite `refresh`, `search`, `explain`, and `stale-check`; real `actual OFI formula` search now returns current `formula_version.tc-dn-hofi3.current` first.
+- Diff hygiene passed: `git diff --check` returned exit code 0; generated memory, `.hindsight/`, and raw recordings remained ignored.
+
+## LanceDB Semantic Sidecar Spike Todo
+
+- [x] Create a separate branch for the LanceDB semantic sidecar spike.
+- [x] Add red tests for local-only LanceDB sidecar guardrails, SQLite-only ingestion, generated-path safety, and no commit-hook auto-refresh.
+- [x] Add tooling-only wrapper/script for `probe`, `rebuild`, `search`, `explain`, and `cleanup` against SQLite-exported current/proposed records.
+- [x] Keep LanceDB below SQLite: no canonical status ownership, no direct project crawl, no raw JSONL/generated/secrets/local proxy/build artifact import.
+- [x] Verify clean rebuild/delete/reindex behavior using local embedded LanceDB through `uv`, without Cloud and without auto-update after commit.
+- [x] Update memory docs and lessons with actual LanceDB API/smoke results and remaining semantic-quality limits.
+- [x] Run narrow tests, memory refresh/stale-check, real sidecar smoke, diff hygiene, and commit the verified slice.
+
+## LanceDB Semantic Sidecar Spike Results
+
+- Created branch `codex/lancedb-semantic-sidecar` from the clean SQLite memory branch.
+- Added `LanceDbSidecarSpikeTests`; RED verification failed for the expected reasons: missing `scripts/lancedb-sidecar.ps1` and deferred LanceDB docs.
+- Added `scripts/lancedb-sidecar.ps1` and `tools/MemorySemantic/lancedb_sidecar.py`; the sidecar reads only SQLite `search_documents` current/proposed records with valid `source_path/source_hash`.
+- Added local deterministic token-hash vectors plus a typed/exact-token reranker after the first smoke showed raw vector distance ranked generic chunks above the current formula record.
+- Real local LanceDB smoke through `uv` succeeded: `cleanup` removed generated store, `rebuild` recreated `docs/memory/generated/lancedb` with `271` records, and `search`/`explain` returned `formula_version.tc-dn-hofi3.current` first for `actual OFI formula`.
+- LanceDB `explain` returned `explain_plan`/`analyze_plan` with `KNNVectorDistance`, `LanceRead`, and `TopK`.
+- SQLite refresh now reports `semantic_sidecar: lancedb-active-local-spike`; `stale-check` reports no issues after final refresh.
+- Remaining limitation: current embeddings are a no-Cloud mechanics smoke, not final semantic recall quality.
+- Compact handoff: full `.\.dotnet\dotnet.exe test CryptoIndicatorApp.sln --no-restore` passed after the LanceDB changes (`90/90` across projects). A parallel `build` run failed from transient file locks in `obj/` while tests were still using outputs, so rerun build alone next.
+- Post-compact verification passed: `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` completed with `0` warnings and `0` errors.
+- Fresh narrow tests passed: Infrastructure memory/Hindsight/LanceDB filters `13/13`, Memory CLI tests `4/4`, and `tools/MemorySemantic/lancedb_sidecar_tests.py` returned `ok`.
+- Fresh memory refresh/stale-check passed: legacy generated index has `162` indexed files, SQLite refresh reports `semantic_sidecar: lancedb-active-local-spike`, and SQLite `stale-check` reports no issues.
+- Fresh LanceDB smoke passed after cleanup/rebuild: local generated table has `271` records, `search` returns current `formula_version.tc-dn-hofi3.current` first for `actual OFI formula`, and `explain` includes `KNNVectorDistance`, `LanceRead`, and `TopK`.
+
+## LanceDB Semantic Quality Candidate Todo
+
+- [x] Add RED tests for a local FastEmbed/ONNX provider contract, provider metadata, and deterministic fallback isolation.
+- [x] Add RED tests for a LanceDB `eval` command that gates the required retrieval questions.
+- [x] Replace production sidecar embeddings with local FastEmbed/ONNX while keeping token-hash only as an explicit test/fallback mode.
+- [x] Store embedding provider/model/dimensions metadata in generated reports and indexed rows.
+- [x] Add `eval` to `tools/MemorySemantic/lancedb_sidecar.py` and `scripts/lancedb-sidecar.ps1`.
+- [x] Keep LanceDB below SQLite: import only current/proposed SQLite `search_documents` with valid `source_path/source_hash`.
+- [x] Update `docs/memory/*`, ADR, and lessons so the sidecar is a production-candidate semantic quality layer, not a final source of truth.
+- [x] Verify clean cleanup/rebuild/search/explain/eval behavior with local Python embedded dependencies, no Cloud, and no hooks.
+- [x] Run narrow Python tests, Infrastructure memory tests, Memory CLI tests, memory refresh/stale-check, build, diff hygiene, and commit.
+
+## LanceDB Semantic Quality Candidate Results
+
+- Added `docs/decisions/0004-funding-source-context.md` so the funding-source eval case has a real ADR source instead of relying on noisy chunks.
+- `scripts/lancedb-sidecar.ps1` now supports `eval`, `-EmbeddingProvider`, and `-EmbeddingModel`; default provider is local FastEmbed/ONNX through pinned `fastembed==0.8.0`.
+- `tools/MemorySemantic/lancedb_sidecar.py` now stores provider/model/dimensions/package metadata in generated rows and reports.
+- Token-hash remains available only as explicit `--embedding-provider token-hash` fallback/test mode.
+- `tools/Memory/ProjectMemoryIndexer.cs` now emits relation records for real `CryptoIndicatorApp.Infrastructure/Binance/*` adapter files so exchange-adapter impact retrieval is source-backed.
+- Real FastEmbed rebuild indexed the current/proposed SQLite record set with `384`-dimensional vectors; exact per-run counts stay in ignored generated reports because docs/task edits can legitimately shift chunk counts.
+- Real LanceDB `eval` passed `4/4`: current OFI formula, funding-source ADR, exchange adapter impact, and superseded-rule exclusion.
+- Added a rerank regression test so a self-referential `docs/memory/lancedb-spike.md` quality-gate chunk cannot outrank the canonical `formula_version` for the OFI formula query.
+- FastEmbed `0.8.0` warns that `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` now uses mean pooling instead of older CLS behavior; the wrapper pins this behavior, and changing it later requires a fresh eval baseline.
+- Compact handoff: stop here before final verification/commit. Freshly verified after the latest rerank change: Python sidecar tests returned `ok`; LanceDB `search "actual OFI formula"` returned `formula_version.tc-dn-hofi3.current` first; LanceDB `eval` passed `4/4`; SQLite `stale-check` returned no issues before the final rerank-only change. Next commands: run `scripts/lancedb-sidecar.ps1 -Command explain -Query "actual OFI formula"`, rerun SQLite `stale-check`, run Infrastructure memory tests, Memory CLI tests, solution build, `git diff --check`, review `git status`, then commit if all pass.
+- Post-compact `stale-check` first failed only on `tasks/todo.md` `source_hash_mismatch`, because this handoff text changed after the previous memory refresh; refresh/rebuild must run after final plan edits.
+- Post-compact verification passed on the final slice: Python sidecar tests returned `ok`; Infrastructure memory/LanceDB tests passed `11/11`; Memory CLI tests passed `4/4`; solution build completed with `0` warnings and `0` errors; LanceDB `eval` passed `4/4`; SQLite `stale-check` returned no issues after the canonical CLI `refresh`.
+- The final `explain` run for `actual OFI formula` returned `formula_version.tc-dn-hofi3.current` first and included `KNNVectorDistance`, `LanceRead`, and `TopK` in the LanceDB plan.
+
+## Memory Refresh-All Wrapper Todo
+
+- [x] Add RED tests for a tooling-only `scripts/memory-refresh-all.ps1` wrapper contract.
+- [x] Isolate and fix the current `Invoke-RefreshStep` child-process runner failure with a one-step legacy refresh repro before running the full wrapper.
+- [x] Ensure the wrapper runs the existing sequence in order: legacy JSON refresh, SQLite refresh, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, LanceDB eval.
+- [x] Keep the wrapper outside the WPF runtime and avoid hooks, Codex auto-retain, direct project crawls, Cloud, raw JSONL, generated exports, secrets, local proxy details, and build artifacts.
+- [x] Write a generated JSON report with step timings, exit codes, and commands without leaking secrets.
+- [x] Update memory docs and lessons so operators use `memory-refresh-all` for full rebuilds instead of mixing partial refresh commands.
+- [x] Run narrow tests, real wrapper smoke, SQLite stale-check, LanceDB eval, build, and diff hygiene.
+- [x] Prepare the verified memory-refresh-all wrapper slice for commit.
+
+## Memory Refresh-All Wrapper Handoff
+
+- Added `CryptoIndicatorApp.Infrastructure.Tests/MemoryRefreshAllTests.cs`; initial RED failed because `scripts/memory-refresh-all.ps1` and docs did not exist.
+- Added `scripts/memory-refresh-all.ps1` with `-PlanOnly`, expected step order, no Cloud/hooks/auto-retain/direct crawl flags, and generated report path `docs/memory/generated/memory-refresh-all-report.json`.
+- Updated `docs/memory/README.md`, `docs/memory/contract.md`, `docs/memory/lancedb-spike.md`, `scripts/README.md`, and `tasks/lessons.md` to prefer `memory-refresh-all` for full manual rebuilds.
+- Narrow plan contract passes: `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter MemoryRefreshAllTests` passed `2/2`.
+- Real full wrapper smoke is not passing yet. First attempt deadlocked on child stdout because the wrapper waited before reading redirected output; temp-file workaround avoided the deadlock but lost `ExitCode` with Windows PowerShell `Start-Process -RedirectStandardOutput`.
+- Current implementation uses `System.Diagnostics.Process` plus async output handlers, but `powershell.exe -File scripts\memory-refresh-all.ps1` exits `1` before writing a full report. A minimal inline reproduction with the same async handler pattern exited `2` with no output, so continue systematic debugging before running the heavy full refresh again.
+- No active `memory-refresh-all` child process remains at handoff.
+- Next exact step after `/compact`: isolate `Invoke-RefreshStep` in a small temporary script file or add temporary diagnostics inside `scripts/memory-refresh-all.ps1` around `Process.Start`, `BeginOutputReadLine`, and `WaitForExit`; verify a single `legacy-json-refresh` step returns exit code `0`, then rerun the full wrapper.
+
+## Memory Refresh-All Wrapper Debug Plan
+
+- [x] Verify `scripts/memory-refresh.ps1` still succeeds when run directly.
+- [x] Reproduce the failure with a one-step script-level runner repro.
+- [x] Identify whether the failure occurs at `Process.Start`, output-read registration, wait/exit-code capture, or strict-mode variable scoping.
+- [x] Patch `scripts/memory-refresh-all.ps1` only after the failing boundary is known.
+- [x] Re-run one-step legacy refresh through the wrapper runner, then the full wrapper.
+
+## Memory Refresh-All Wrapper Debug Results
+
+- Direct `scripts/memory-refresh.ps1` succeeded, so the legacy refresh script was not the failing component.
+- A temporary one-step script-level repro showed `Process.Start`, `BeginOutputReadLine`, `BeginErrorReadLine`, and timed `WaitForExit` completed, then the parent PowerShell process exited before `ExitCode` was read.
+- The same repro using `StandardOutput.ReadToEndAsync()` and `StandardError.ReadToEndAsync()` returned exit code `0`, so the root cause was the PowerShell 5.1 `DataReceivedEventHandler` output path, not the child command.
+- `scripts/memory-refresh-all.ps1` now uses task-based async reads and the full local sequence completed successfully.
+
+## Memory Refresh-All Wrapper Verification Results
+
+- `scripts/memory-refresh-all.ps1` completed the full local sequence: legacy JSON refresh, SQLite refresh, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB eval.
+- `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter MemoryRefreshAllTests` passed `2/2`.
+- `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter "MemoryRefreshAllTests|LanceDbSidecarSpikeTests|MemoryContractTests|HindsightInstallSpikeTests|HindsightCuratedImportTests"` passed `17/17`.
+- `.\.dotnet\dotnet.exe test tools\Memory.Tests\CryptoIndicatorApp.Memory.Tests.csproj --no-restore --filter MemoryCliTests` passed `4/4`.
+- `uv run --python 3.12 --with lancedb --with pyarrow --with fastembed==0.8.0 python tools\MemorySemantic\lancedb_sidecar_tests.py` returned `ok`.
+- `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` completed with `0` warnings and `0` errors.
+- `git diff --check` passed.
+
+## LanceDB Semantic Quality Gate Expansion Todo
+
+- [x] Add typed, human-authored memory rules for project guardrails that should not rely only on generic chunks.
+- [x] Expand LanceDB `eval` cases from smoke coverage to formula owner, Binance DTO boundary, REST hot-path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and stale/superseded exclusion.
+- [x] Add narrow Python tests for the expanded eval contract and fallback embedding behavior.
+- [x] Update memory docs and lessons with the stronger gate and its limits.
+- [x] Run Python sidecar tests, memory refresh/stale-check, LanceDB cleanup/rebuild/eval, relevant .NET tests/build, diff hygiene, and commit if the slice is clean.
+
+## LanceDB Semantic Quality Gate Expansion Results
+
+- Added `docs/memory/rules.md` with typed current rules for REST hot-path ban, Binance DTO boundary, live/replay shared pipeline, funding slow context, and a superseded legacy-rule fixture.
+- Expanded `tools/MemorySemantic/lancedb_sidecar.py` eval from `4` to `9` cases: OFI formula, formula owner, funding-source ADR, Binance DTO boundary, REST hot-path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
+- Fixed the token-hash fallback embedding dimension constant and added a Python test that actually embeds text through the fallback provider.
+- Updated docs and tests so the stronger gate is source-backed by `formula_version`, ADR, typed rules, and relation records instead of only generic chunks.
+- Verification passed: Python sidecar tests returned `ok`; `LanceDbSidecarSpikeTests` passed `3/3`; `MemoryCliTests` passed `4/4`; `memory-refresh-all` completed with SQLite stale-check clean and LanceDB eval `9/9`; solution build completed with `0` warnings and `0` errors.
+
+## LanceDB Eval Report Todo
+
+- [x] Add RED Python tests for a compact eval quality report with query, expected ids/types, matched rank, source path, confidence, and gap notes.
+- [x] Add generated Markdown output for the same eval report under `docs/memory/generated/` without making it a source of truth.
+- [x] Update `scripts/lancedb-sidecar.ps1` and memory docs so operators can find the JSON/Markdown reports before any hook/automation decision.
+- [x] Run Python sidecar tests, relevant Infrastructure tests, memory refresh-all, solution build, diff hygiene, and commit the verified slice if clean.
+
+## LanceDB Eval Report Results
+
+- Added compact eval case reporting with expected ids/types, forbidden statuses, matched rank, matched source path, matched confidence, ranked top results, and gap notes.
+- Added generated Markdown output at `docs/memory/generated/lancedb-eval-report.md`; the JSON eval report remains `docs/memory/generated/lancedb-sidecar-report.json`.
+- Updated `scripts/lancedb-sidecar.ps1` probe/output metadata and docs so the eval reports are explicit review evidence before any hook/automation decision.
+- Extracted eval case/report logic into `tools/MemorySemantic/lancedb_eval_report.py` so `lancedb_sidecar.py` remains focused on LanceDB orchestration and embedding I/O.
+- Verification passed: Python sidecar tests returned `ok`; `LanceDbSidecarSpikeTests|MemoryRefreshAllTests` passed `5/5`; `MemoryCliTests` passed `4/4`; `memory-refresh-all` completed with SQLite stale-check clean and LanceDB eval `9/9`; solution build completed with `0` warnings and `0` errors.
+
+## Manual Memory Gate Todo
+
+- [x] Add an ADR for the manual memory gate strategy: manual `memory-refresh-all` first, optional manual pre-push helper next, no post-commit automation.
+- [x] Add RED tests for `scripts/memory-pre-push-check.ps1 -PlanOnly`.
+- [x] Verify the helper plan does not install hooks, call Cloud, enable Codex auto-retain, touch raw JSONL, `.hindsight/`, secrets, generated exports as sources, build artifacts, or post-commit automation.
+- [x] Implement the minimal helper as a manual command that validates refresh/eval evidence without becoming a hook.
+- [x] Update memory docs and `tasks/lessons.md`.
+- [x] Run real `memory-refresh-all`, then the helper.
+- [x] Run narrow tests and build.
+- [x] Run diff hygiene, review Git status, and prepare the verified commit boundary.
+
+## Manual Memory Gate Results
+
+- Added ADR `docs/decisions/0005-manual-memory-gate.md`: manual `memory-refresh-all`, manual `memory-pre-push-check`, no post-commit refresh automation, no automatic hook installation.
+- Added `scripts/memory-pre-push-check.ps1` with `-PlanOnly`; the full mode validates existing refresh/eval evidence instead of rebuilding memory or installing hooks.
+- Added `ManualMemoryGateTests` covering plan-only guardrails, docs, ADR, no Cloud, no Codex auto-retain, no hooks, no raw JSONL, no `.hindsight/`, no sensitive storage, no generated exports as source, and no build artifacts.
+- Updated `docs/memory/contract.md`, `docs/memory/README.md`, `scripts/README.md`, and `tasks/lessons.md`.
+- Real `scripts/memory-refresh-all.ps1` completed: legacy JSON refresh, SQLite refresh, SQLite stale-check with `issues: []`, LanceDB cleanup/rebuild, and LanceDB eval `9/9`.
+- Real `scripts/memory-pre-push-check.ps1` passed with `passed_count=9`, `failed_count=0`, `runs_refresh_all=false`, `installs_hooks=false`, and `post_commit_auto_refresh_enabled=false`.
+- Verification passed so far: `ManualMemoryGateTests|MemoryRefreshAllTests|LanceDbSidecarSpikeTests` `7/7`, `MemoryCliTests` `4/4`, `tools/MemorySemantic/lancedb_sidecar_tests.py` `ok`, and `dotnet build CryptoIndicatorApp.sln --no-restore` completed with `0` warnings and `0` errors.
+- Diff hygiene passed with `git diff --check`; Git status contains only this manual memory gate slice.
+
+## Optional Memory Pre-Push Hook Todo
+
+- [x] Add RED tests for `scripts/install-memory-pre-push-hook.ps1` plan/install/disable behavior using a temp hook path, not `.git/hooks`.
+- [x] Require explicit `-Confirm` for any write; default and `-PlanOnly` must not install hooks or run rebuilds.
+- [x] Implement a managed pre-push hook that calls `scripts/memory-pre-push-check.ps1` only and refuses to overwrite unmanaged hooks.
+- [x] Add a disable path for the managed hook and document how to remove it.
+- [x] Add ADR/docs/lessons updates: optional local pre-push helper, no post-commit automation, no rebuild inside hook by default.
+- [x] Run real `memory-refresh-all`, then `memory-pre-push-check`; do not install the actual repository hook during verification.
+- [x] Run narrow tests, build, diff hygiene, review status, and commit the verified slice.
+
+## Optional Memory Pre-Push Hook Results
+
+- Added `scripts/install-memory-pre-push-hook.ps1` with explicit `-Confirm` for hook writes and `-Disable -Confirm` for removing only the managed hook.
+- The generated hook calls `scripts/memory-pre-push-check.ps1` only; it does not run `memory-refresh-all`, rebuild memory, add post-commit automation, call Cloud, or enable Codex auto-retain.
+- The generated shell hook is LF-only, so Git Bash does not see a CRLF shebang.
+- The installer refuses to overwrite an unmanaged existing `pre-push` hook.
+- Added ADR `docs/decisions/0006-optional-memory-pre-push-hook.md` and updated ADR 0005, memory contract, memory README, scripts README, and lessons.
+- RED verification failed first on missing installer/ADR as expected; GREEN `ManualMemoryGateTests` passed `6/6`.
+- Real `memory-refresh-all` completed with SQLite stale-check `issues: []` and LanceDB eval `9/9`.
+- Real `memory-pre-push-check` passed with `passed_count=9`, `failed_count=0`, `runs_refresh_all=false`, `installs_hooks=false`, and `post_commit_auto_refresh_enabled=false`.
+- Real installer `-PlanOnly` wrote an ignored report with `installs_hooks=false`; `.git/hooks/pre-push` remained absent.
+- Verification passed: Infrastructure memory tests `19/19`, Memory CLI tests `4/4`, Python sidecar tests `ok`, solution build completed with `0` warnings and `0` errors, and `git diff --check` passed.
+- Git status before final refresh contained only the optional-hook slice: `ManualMemoryGateTests`, ADR/docs/lessons/todo, and the new installer script.
+
+## Memory Reminder Trigger Rules Todo
+
+- [x] Add short Codex reminder triggers to `AGENTS.md` for push/PR, ADR/formula decisions, `/compact`, and failed experiments/regressions.
+- [x] Add a matching "Когда Codex должен напоминать" section to the external harness memory-management note.
+- [x] Verify the rule text forbids Codex auto-retain hooks and post-commit hooks for now.
+- [x] Run memory refresh/check evidence, diff hygiene, and commit the repo instruction slice if clean.
+
+## Memory Reminder Trigger Rules Results
+
+- Added `AGENTS.md` reminder triggers for explicit `commit`, `push`, PR, `/compact`, ADR, formula, experiment, and regression moments.
+- The triggers only remind which command to run; they do not add Codex auto-retain hooks, post-commit hooks, after-save hooks, or background memory refresh.
+- Updated `C:\Users\MECHREVO\Desktop\harness management\memory management.md` with a matching "Когда Codex должен напоминать" section.
+- `scripts/memory-refresh-all.ps1` completed with SQLite stale-check `issues: []` and LanceDB eval passing.
+- `scripts/memory-pre-push-check.ps1` passed with LanceDB eval `9/9`, `failed_count=0`, Cloud/Codex auto-retain/post-commit refresh disabled.
+- `git diff --check` passed.
+
+## Commit-Addressed Memory Refresh Todo
+
+- [x] Add ADR for commit-addressed memory refresh: Git tree/commit is the refresh source, not the live working directory.
+- [x] Add RED CLI tests for `memory refresh-from-commit --commit HEAD`, commit metadata, and `memory status`.
+- [x] Add SQLite metadata fields: `commit_sha`, `tree_sha`, `source_blob_sha`, and `indexed_at`.
+- [x] Implement `refresh-from-commit` so it indexes files from the requested Git commit tree and ignores uncommitted working-tree changes.
+- [x] Implement `memory status` showing `head`, `indexed_commit`, and `needs_refresh`.
+- [x] Add marker-only post-commit hook installer with `-Confirm`, `-Disable`, timeout/lock/report guardrails.
+- [x] Update docs/contracts/scripts/lessons with curated retain as a deferred stage behind redaction/delete/export policy.
+- [x] Run narrow tests, memory refresh/check evidence, build, diff hygiene, and commit the verified slice.
+
+## Commit-Addressed Memory Refresh Compact Handoff
+
+- Implemented and verified the core `tools/Memory` path: `refresh-from-commit --commit HEAD`, `status`, `commit_sha`, `tree_sha`, `source_blob_sha`, `indexed_at`, marker clearing, and working-tree-dirty reporting.
+- Added `GitCommitMemoryIndexer.cs` and `MemoryRefreshMarker.cs`; commit refresh reads Git blob content from the requested commit tree and does not use the live working directory as the source.
+- Added `scripts/memory-mark-needs-refresh.ps1` and `scripts/install-memory-post-commit-marker-hook.ps1`, plus hook guardrail tests in `ManualMemoryGateTests`.
+- Added ADR `docs/decisions/0007-commit-addressed-memory-refresh.md` and updated `AGENTS.md`, memory contract/README, scripts README, lessons, and LanceDB sidecar metadata handling.
+- `scripts/memory-refresh-all.ps1` now runs SQLite `refresh-from-commit --commit HEAD`; LanceDB source validation now checks Git blob metadata for commit-indexed rows instead of the dirty working tree.
+- Verification passed: `ManualMemoryGateTests|MemoryRefreshAllTests` passed `10/10`; expanded Infrastructure memory tests passed `25/25`; `MemoryCliTests` passed `6/6`; Python LanceDB sidecar tests returned `ok`; solution build completed with `0` warnings and `0` errors; `git diff --check` passed.
+- Post-commit memory evidence passed: `memory-refresh-all` completed with SQLite stale-check `issues: []`, LanceDB rebuild indexed commit metadata, LanceDB eval passed `9/9`, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+
+## Minimal GitHub Actions CI Todo
+
+- [x] Add a Windows GitHub Actions workflow for minimal .NET CI.
+- [x] Run `dotnet restore` once, then `dotnet build CryptoIndicatorApp.sln --no-restore`.
+- [x] Run relevant deterministic .NET tests, including `tools/Memory.Tests`, without LanceDB/FastEmbed.
+- [x] Verify locally with the project SDK and diff hygiene.
+- [ ] Commit, refresh memory from committed `HEAD`, run the manual pre-push gate, and push.
+- [ ] Check GitHub PR checks; if green, mark the PR ready for review and then merge only after review/merge conditions are clear.
+- [x] Fix first GitHub Actions failure caused by PowerShell script hash portability.
+- [x] Update CI actions to Node.js 24-compatible major versions.
+
+## Minimal GitHub Actions CI Results
+
+- Added `.github/workflows/ci.yml` with a Windows runner because the solution includes WPF/`net8.0-windows`.
+- The workflow runs `dotnet restore CryptoIndicatorApp.sln` once, then `dotnet build CryptoIndicatorApp.sln --configuration Release --no-restore`.
+- The workflow runs solution tests and a separate explicit `tools/Memory.Tests` step; it does not run Python, LanceDB, FastEmbed, Cloud, hooks, or memory rebuilds.
+- Local verification passed: restore completed, Release build completed with `0` warnings and `0` errors, solution tests passed `102/102`, Memory CLI tests passed `6/6`, and `git diff --check` passed.
+- First GitHub Actions run failed in Infrastructure tests because `scripts/memory-refresh.ps1` and `scripts/hindsight-curated-import.ps1` depended on `Get-FileHash`, which was not available in the runner's `powershell.exe` process.
+- The same run also emitted a GitHub Actions warning that `actions/checkout@v4` and `actions/setup-dotnet@v4` target deprecated Node.js 20.
+- Replaced script hashing with portable .NET `SHA256`, removed duplicate `codex/**` push CI trigger, and updated CI actions to `actions/checkout@v7` and `actions/setup-dotnet@v5`.
+- Local re-verification after the CI fix passed: failed Infrastructure subset `10/10`, restore, Release build with `0` warnings/errors, solution tests `102/102`, and Memory CLI tests `6/6`.

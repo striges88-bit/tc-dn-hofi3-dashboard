@@ -17,6 +17,8 @@ publish/
 .tools/
 .nuget/
 .superpowers/
+__pycache__/
+*.py[cod]
 *.nupkg
 
 # Runtime logs and local data
@@ -29,9 +31,15 @@ recordings/*.jsonl
 
 # Generated future memory exports stay out until their schema is approved.
 docs/memory/generated/
+project-memory.sqlite
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 *.gbrain
+*.hindsight
 *.graphify.json
 .gbrain/
+.hindsight/
 .graphify/
 .mem0/
 .graphiti/

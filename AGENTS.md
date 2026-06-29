@@ -14,6 +14,24 @@
 
 Project-specific rules in this file override generic imported or global instructions when they conflict.
 
+## Git Commit Cadence
+
+- After a coherent, verified work slice is complete, commit it proactively instead of letting reviewed changes accumulate.
+- Commit only changes that are in scope for the current task and have passed the narrowest meaningful verification.
+- Do not auto-commit secrets, raw recordings, generated memory exports, local machine state, or unrelated user changes.
+- If the worktree is mixed, verification failed, or the commit boundary is unclear, stop at a clean point, record status in `tasks/todo.md`, and ask before committing.
+
+## Memory Management Reminder Triggers
+
+These are reminder rules only. Do not add Codex auto-retain hooks, git post-commit refresh hooks, after-save hooks, or background memory refresh until a separate ADR approves retention, deletion, export, and stale-fact controls. A marker-only post-commit hook is allowed only when explicitly installed by the user.
+
+- Before `push` or PR creation, remind the user to run `.\.dotnet\dotnet.exe run --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- status --project-root . --json`; if `needs_refresh=true`, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`, then run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-pre-push-check.ps1`.
+- Around commits that update ADRs, formulas, experiments, regressions, lessons, or memory rules, remind the user that `memory-refresh-all` indexes `HEAD`: commit the durable source first, then run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
+- After an architectural decision or formula decision, remind the user to update the human-authored source (`docs/decisions/*`, `TC-DN-HOFI3.md`, `docs/formulas.md`, or `docs/memory/*`), commit it, and then run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
+- Before `/compact`, remind the user to stop at a clean handoff point, update `tasks/todo.md`, run `memory status`, and run `memory-refresh-all` only when the source changes to index are already committed; if the work is mid-slice, record the next command instead of forcing refresh.
+- After a failed experiment or regression, remind the user to update `tasks/lessons.md` or an experiment summary, then run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
+- Keep these reminders limited to explicit `commit`, `push`, PR, `/compact`, ADR, formula, experiment, and regression moments.
+
 ## Project Scope
 
 This project is a Windows analytics application for the TC-DN-HOFI3 Binance USDS-M Futures indicator.
