@@ -63,7 +63,18 @@ public sealed class MemoryRefreshAllTests
         Assert.False(root.GetProperty("codex_auto_retain_enabled").GetBoolean());
         Assert.False(root.GetProperty("auto_commit_refresh_enabled").GetBoolean());
         Assert.False(root.GetProperty("commit_hook_installed").GetBoolean());
+        Assert.False(root.GetProperty("installs_hooks").GetBoolean());
         Assert.False(root.GetProperty("direct_project_crawl_enabled").GetBoolean());
+        Assert.False(root.GetProperty("imports_raw_jsonl").GetBoolean());
+        Assert.False(root.GetProperty("imports_generated_exports").GetBoolean());
+        Assert.False(root.GetProperty("uses_generated_exports_as_source").GetBoolean());
+        Assert.False(root.GetProperty("imports_secrets").GetBoolean());
+        Assert.False(root.GetProperty("imports_local_proxy_details").GetBoolean());
+        Assert.False(root.GetProperty("imports_build_artifacts").GetBoolean());
+        Assert.False(root.GetProperty("touches_raw_jsonl").GetBoolean());
+        Assert.False(root.GetProperty("touches_hindsight_store").GetBoolean());
+        Assert.False(root.GetProperty("touches_secret_storage").GetBoolean());
+        Assert.False(root.GetProperty("touches_build_artifacts").GetBoolean());
 
         var steps = root.GetProperty("steps").EnumerateArray().ToArray();
         Assert.Equal(
@@ -83,9 +94,14 @@ public sealed class MemoryRefreshAllTests
             Assert.Equal("planned", step.GetProperty("status").GetString());
             Assert.False(step.GetProperty("uses_cloud").GetBoolean());
             Assert.False(step.GetProperty("uses_hook").GetBoolean());
-            Assert.DoesNotContain("recordings", step.GetProperty("command").GetString(), StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain(".hindsight", step.GetProperty("command").GetString(), StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("secret", step.GetProperty("command").GetString(), StringComparison.OrdinalIgnoreCase);
+            var command = step.GetProperty("command").GetString()!.Replace('\\', '/');
+            Assert.DoesNotContain("recordings/", command, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(".hindsight/", command, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("docs/memory/generated/", command, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("secret", command, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("/bin/", command, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("/obj/", command, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("publish/", command, StringComparison.OrdinalIgnoreCase);
         });
     }
 

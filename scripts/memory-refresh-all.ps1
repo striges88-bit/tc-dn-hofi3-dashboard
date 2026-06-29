@@ -314,12 +314,18 @@ $report = [ordered]@{
     codex_auto_retain_enabled = $false
     auto_commit_refresh_enabled = $false
     commit_hook_installed = $false
+    installs_hooks = $false
     direct_project_crawl_enabled = $false
     imports_raw_jsonl = $false
     imports_generated_exports = $false
+    uses_generated_exports_as_source = $false
     imports_secrets = $false
     imports_local_proxy_details = $false
     imports_build_artifacts = $false
+    touches_raw_jsonl = $false
+    touches_hindsight_store = $false
+    touches_secret_storage = $false
+    touches_build_artifacts = $false
     steps = @($results)
 }
 
