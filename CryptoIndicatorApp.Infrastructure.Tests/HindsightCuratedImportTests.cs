@@ -23,6 +23,7 @@ public sealed class HindsightCuratedImportTests
             "docs/memory/*.md",
             "docs/decisions/*.md",
             "docs/formulas.md",
+            "TC-DN-HOFI3.md",
             "AGENTS.md",
             "tasks/lessons.md");
 
@@ -30,12 +31,17 @@ public sealed class HindsightCuratedImportTests
             root.GetProperty("denied_patterns"),
             "recordings/*.jsonl",
             "docs/memory/generated/",
-            "secrets",
-            "build artifacts",
-            "local proxy details");
+            ".hindsight/",
+            "secrets/",
+            "bin/",
+            "obj/",
+            "publish/",
+            "local proxy details",
+            "raw experiment dumps");
 
         var files = GetManifestPaths(root).ToArray();
         Assert.Contains("AGENTS.md", files);
+        Assert.Contains("TC-DN-HOFI3.md", files);
         Assert.Contains("docs/formulas.md", files);
         Assert.Contains("tasks/lessons.md", files);
         Assert.Contains("docs/memory/contract.md", files);
@@ -51,6 +57,7 @@ public sealed class HindsightCuratedImportTests
         using var fixture = TemporaryProjectFixture.Create();
         fixture.Write("CryptoIndicatorApp.sln", string.Empty);
         fixture.Write("AGENTS.md", "# Agents\n");
+        fixture.Write("TC-DN-HOFI3.md", "# Formula Source\n");
         fixture.Write("docs/formulas.md", "# Formulas\n");
         fixture.Write("tasks/lessons.md", "# Lessons\n");
         fixture.Write("docs/decisions/0002-agent-memory-contract.md", "# ADR\n");
@@ -60,15 +67,20 @@ public sealed class HindsightCuratedImportTests
         fixture.Write("recordings/live.jsonl", "{}\n");
         fixture.Write("docs/memory/generated/project-memory-index.md", "# Generated\n");
         fixture.Write("docs/memory/secret-import-note.md", "# Secret\n");
+        fixture.Write("docs/memory/raw-experiment-dump.md", "# Raw experiment dump\n");
         fixture.Write("docs/memory/local-proxy-details.md", "# Proxy\n");
+        fixture.Write(".hindsight/bank.md", "# Hindsight store\n");
+        fixture.Write("secrets/openai-token.md", "# Token\n");
         fixture.Write("bin/Debug/net8.0/build-output.md", "# Build\n");
         fixture.Write("obj/project.assets.md", "# Build\n");
+        fixture.Write("publish/desktop/report.md", "# Publish\n");
 
         var manifestPath = RunCuratedImportScript(fixture.Root);
         using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
         var files = GetManifestPaths(manifest.RootElement).ToArray();
 
         Assert.Contains("AGENTS.md", files);
+        Assert.Contains("TC-DN-HOFI3.md", files);
         Assert.Contains("docs/formulas.md", files);
         Assert.Contains("tasks/lessons.md", files);
         Assert.Contains("docs/decisions/0002-agent-memory-contract.md", files);
@@ -78,9 +90,13 @@ public sealed class HindsightCuratedImportTests
         Assert.DoesNotContain("recordings/live.jsonl", files);
         Assert.DoesNotContain("docs/memory/generated/project-memory-index.md", files);
         Assert.DoesNotContain("docs/memory/secret-import-note.md", files);
+        Assert.DoesNotContain("docs/memory/raw-experiment-dump.md", files);
         Assert.DoesNotContain("docs/memory/local-proxy-details.md", files);
+        Assert.DoesNotContain(".hindsight/bank.md", files);
+        Assert.DoesNotContain("secrets/openai-token.md", files);
         Assert.DoesNotContain("bin/Debug/net8.0/build-output.md", files);
         Assert.DoesNotContain("obj/project.assets.md", files);
+        Assert.DoesNotContain("publish/desktop/report.md", files);
         AssertNoDeniedPaths(files);
     }
 
@@ -120,7 +136,7 @@ public sealed class HindsightCuratedImportTests
 
     private static void AssertAllowedImportPath(string path)
     {
-        var allowed = path is "AGENTS.md" or "docs/formulas.md" or "tasks/lessons.md"
+        var allowed = path is "AGENTS.md" or "TC-DN-HOFI3.md" or "docs/formulas.md" or "tasks/lessons.md"
             || IsDirectChildMarkdown(path, "docs/memory/")
             || IsDirectChildMarkdown(path, "docs/decisions/");
 
@@ -133,10 +149,14 @@ public sealed class HindsightCuratedImportTests
         {
             Assert.False(path.StartsWith("recordings/", StringComparison.OrdinalIgnoreCase), path);
             Assert.False(path.StartsWith("docs/memory/generated/", StringComparison.OrdinalIgnoreCase), path);
+            Assert.False(path.StartsWith(".hindsight/", StringComparison.OrdinalIgnoreCase), path);
+            Assert.False(path.StartsWith("secrets/", StringComparison.OrdinalIgnoreCase), path);
             Assert.False(path.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase), path);
             Assert.False(path.Contains("secret", StringComparison.OrdinalIgnoreCase), path);
             Assert.False(path.Contains("local-proxy", StringComparison.OrdinalIgnoreCase), path);
             Assert.False(path.Contains("shadowsocks", StringComparison.OrdinalIgnoreCase), path);
+            Assert.False(path.Contains("raw-experiment", StringComparison.OrdinalIgnoreCase), path);
+            Assert.False(path.Contains("raw_experiment", StringComparison.OrdinalIgnoreCase), path);
             Assert.DoesNotContain(path.Split('/'), segment => segment.Equals("bin", StringComparison.OrdinalIgnoreCase));
             Assert.DoesNotContain(path.Split('/'), segment => segment.Equals("obj", StringComparison.OrdinalIgnoreCase));
             Assert.DoesNotContain(path.Split('/'), segment => segment.Equals("publish", StringComparison.OrdinalIgnoreCase));

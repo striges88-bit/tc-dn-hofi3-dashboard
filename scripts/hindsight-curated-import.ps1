@@ -29,6 +29,7 @@ $allowedPatterns = @(
     'docs/memory/*.md',
     'docs/decisions/*.md',
     'docs/formulas.md',
+    'TC-DN-HOFI3.md',
     'AGENTS.md',
     'tasks/lessons.md'
 )
@@ -36,9 +37,13 @@ $allowedPatterns = @(
 $deniedPatterns = @(
     'recordings/*.jsonl',
     'docs/memory/generated/',
-    'secrets',
-    'build artifacts',
-    'local proxy details'
+    '.hindsight/',
+    'secrets/',
+    'bin/',
+    'obj/',
+    'publish/',
+    'local proxy details',
+    'raw experiment dumps'
 )
 
 function Get-RelativeProjectPath {
@@ -118,6 +123,10 @@ function Test-DeniedImportPath {
         $lower.Contains('local_proxy') -or
         $lower.Contains('proxy-local') -or
         $lower.Contains('proxy_local') -or
+        $lower.Contains('raw-experiment') -or
+        $lower.Contains('raw_experiment') -or
+        $lower.Contains('experiment-dump') -or
+        $lower.Contains('experiment_dump') -or
         $lower.Contains('shadowsocks') -or
         $lower.Contains('ss-local')) {
         return $true
@@ -152,7 +161,7 @@ function Add-ImportFile {
 $files = [System.Collections.Generic.List[object]]::new()
 $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
-foreach ($relativePath in @('AGENTS.md', 'docs/formulas.md', 'tasks/lessons.md')) {
+foreach ($relativePath in @('AGENTS.md', 'TC-DN-HOFI3.md', 'docs/formulas.md', 'tasks/lessons.md')) {
     $path = Join-Path $root $relativePath
     if (-not (Test-Path $path -PathType Leaf)) {
         throw "Required import source is missing: $relativePath"

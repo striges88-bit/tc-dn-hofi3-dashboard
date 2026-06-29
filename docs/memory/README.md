@@ -11,6 +11,7 @@ The application runtime must not depend on these files or generated stores.
 - `glossary.md`: stable project terms.
 - `entities.md`: domain and architecture entities that graph tools may later ingest.
 - `rules.md`: typed current/superseded project rules used by SQLite/LanceDB quality gates.
+- `retain-policy.md`: curated retain lifecycle gates, including redaction, delete/export policy, allowlist, and denylist.
 - `project-map.md`: high-level module map.
 - `hindsight-spike.md`: confirmed upstream Hindsight surface and why it is now historical/failed for this MVP.
 - `lancedb-spike.md`: active local semantic sidecar rules and spike gates.
@@ -130,6 +131,14 @@ Generate the pre-install Hindsight curated import manifest without calling Hinds
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\hindsight-curated-import.ps1
 ```
+
+Review curated retain policy before any external retain or Codex auto-retain:
+
+```text
+docs/memory/retain-policy.md
+```
+
+External retain and Codex auto-retain stay disabled until redaction before retain, delete/export policy, allowlist, denylist, and dry-run reports are tested. The post-commit marker hook remains marker-only and does not run rebuild, retain, Cloud, or `memory-refresh-all`.
 
 Generate the safe Hindsight install-spike report without installing packages or starting daemons:
 

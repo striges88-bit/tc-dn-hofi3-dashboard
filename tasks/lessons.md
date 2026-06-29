@@ -51,3 +51,4 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - Pin local embedding package versions in wrapper scripts and record provider/model/package metadata in reports; unpinned semantic dependencies can silently change retrieval baselines.
 - For CI-executed PowerShell scripts, avoid relying on optional cmdlets such as `Get-FileHash`; use portable .NET APIs for required hashing so Windows runner environments cannot fail on missing modules.
 - Avoid triggering the same PR CI twice through both `push` on feature branches and `pull_request`; use PR checks plus protected-branch/main checks unless duplicate runs are intentionally needed.
+- When expanding memory lifecycle policy, preserve existing guardrail phrases that tests and retrieval rely on, such as "auto-retain must remain disabled during MVP"; add stricter wording without removing old safety anchors.

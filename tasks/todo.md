@@ -1012,3 +1012,22 @@
 - The same run also emitted a GitHub Actions warning that `actions/checkout@v4` and `actions/setup-dotnet@v4` target deprecated Node.js 20.
 - Replaced script hashing with portable .NET `SHA256`, removed duplicate `codex/**` push CI trigger, and updated CI actions to `actions/checkout@v7` and `actions/setup-dotnet@v5`.
 - Local re-verification after the CI fix passed: failed Infrastructure subset `10/10`, restore, Release build with `0` warnings/errors, solution tests `102/102`, and Memory CLI tests `6/6`.
+
+## Curated Retain Policy Todo
+
+- [x] Create branch `codex/curated-retain-policy` from updated `main`.
+- [x] Add RED tests for curated retain allowlist, denylist, lifecycle policy, and post-commit marker-only guardrails.
+- [x] Add ADR `docs/decisions/0008-curated-retain-and-memory-lifecycle-policy.md`.
+- [x] Add `docs/memory/retain-policy.md` with redaction, delete, export, allowlist, denylist, and enablement gates.
+- [x] Update `docs/memory/contract.md`, `docs/memory/README.md`, and `docs/memory/open-questions.md`.
+- [x] Update curated import manifest tooling only as needed; do not enable external retain or Codex auto-retain.
+- [ ] Run narrow tests, memory refresh/check evidence, build/diff hygiene, commit, push, and open a PR.
+
+## Curated Retain Policy Results
+
+- Added RED tests in `CuratedRetainPolicyTests` and expanded `HindsightCuratedImportTests`; initial failure was expected because ADR `0008`, `retain-policy.md`, and `TC-DN-HOFI3.md` allowlist support were missing.
+- Added ADR `docs/decisions/0008-curated-retain-and-memory-lifecycle-policy.md` and `docs/memory/retain-policy.md`.
+- Updated memory contract, README, open questions, and curated manifest generation to include `TC-DN-HOFI3.md` and the stricter denylist.
+- Real retain/import, external memory writes, Codex auto-retain, Cloud, and post-commit rebuild remain disabled.
+- Narrow GREEN verification passed: `CuratedRetainPolicyTests|HindsightCuratedImportTests` `4/4`.
+- Expanded memory guardrail verification passed: `CuratedRetainPolicyTests|HindsightCuratedImportTests|MemoryContractTests|ManualMemoryGateTests` `20/20`.

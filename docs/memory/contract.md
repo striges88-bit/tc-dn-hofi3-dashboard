@@ -22,6 +22,35 @@ Generated memory must never override current code, tests, ADRs, formula docs, or
 - Experiments: live/replay/JSONL observations stay as separate experiment summaries with links to recordings or reports. Raw JSONL and bulk runtime observations do not belong in the project memory graph.
 - Local stores: SQLite FTS5 is the canonical local generated memory store. LanceDB is an active local semantic sidecar and production-candidate semantic quality layer below SQLite. Hindsight and GBrain are historical/secondary spikes, not sources of truth.
 
+## Curated Retain Policy
+
+`docs/memory/retain-policy.md` controls any future external retain, Hindsight retain, or Codex auto-retain. Retained memory is a cache below the repository source of truth and must not override code, tests, ADRs, formulas, or SQLite status.
+
+Curated retain is disabled until redaction before retain, export policy, and delete policy are implemented and tested. Codex auto-retain remains disabled during MVP.
+
+The approved curated retain allowlist is:
+
+- `AGENTS.md`
+- `docs/decisions/*.md`
+- `docs/formulas.md`
+- `TC-DN-HOFI3.md`
+- `docs/memory/*.md`
+- `tasks/lessons.md`
+
+The denylist must stay excluded from all retain/import flows:
+
+- `recordings/*.jsonl`
+- `docs/memory/generated/`
+- `.hindsight/`
+- secrets
+- `bin/`
+- `obj/`
+- `publish/`
+- local proxy details
+- raw experiment dumps
+
+The allowlist is not permission to retain automatically. Each retained item still needs a source path, source hash, redaction status, review status, and export/delete coverage.
+
 ## Node Schema
 
 Allowed node types:
@@ -163,8 +192,8 @@ Do not add post-commit auto-refresh for project memory. The allowed Git helpers 
 - LanceDB `eval` must write compact generated JSON/Markdown reports with query, expected ids/types, matched rank, source path, confidence, and gap notes. These reports are review evidence only; they do not override SQLite status, ADRs, formulas, or source code.
 - Hindsight is a historical/failed spike. Its upstream Codex, CLI, MCP, and embedded-daemon surfaces are confirmed in `docs/memory/hindsight-spike.md`, but billing/auth, Rust CLI forwarding, retain/import, and operational complexity blocked MVP use.
 - Hindsight must stay below SQLite and generated indexes in source priority and must not become a WPF/.NET runtime dependency.
-- Codex auto-retain must stay disabled during MVP. Use `scripts/hindsight-curated-import.ps1` to generate a pre-install manifest for curated import sources: `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`.
-- Do not import raw JSONL recordings, generated memory exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps into Hindsight.
+- Codex auto-retain must stay disabled during MVP. Use `scripts/hindsight-curated-import.ps1` to generate a pre-install manifest for curated import sources: `AGENTS.md`, `docs/decisions/*.md`, `docs/formulas.md`, `TC-DN-HOFI3.md`, `docs/memory/*.md`, and `tasks/lessons.md`.
+- Do not import raw JSONL recordings, generated memory exports, `.hindsight/`, secrets, local proxy details, build artifacts, or raw experiment dumps into Hindsight or any external retained memory.
 - Python/uvx embedded daemon is the selected first Hindsight install-spike path. Track it through `docs/memory/hindsight-install-spike.md` and `scripts/hindsight-install-spike.ps1`; the install-spike report is generated under ignored `docs/memory/generated/`.
 - Store Hindsight LLM secrets only in ignored `.hindsight/` env files and load them into process environment. Do not pass secret values through Hindsight profile `--env`, `profile set-env`, shell history, or committed config.
 - Do not run Hindsight `retain`, `retain-files`, curated import, or Codex hook configuration until LLM billing/auth, Rust CLI versus embedded import surface, retention, export, and delete policy are confirmed.
