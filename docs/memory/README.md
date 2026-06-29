@@ -30,6 +30,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-a
 
 This runs legacy JSON refresh, SQLite refresh, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order. It writes an ignored wrapper report to `docs/memory/generated/memory-refresh-all-report.json`; the LanceDB eval step also writes `docs/memory/generated/lancedb-sidecar-report.json` and `docs/memory/generated/lancedb-eval-report.md`. It does not install hooks, enable Codex auto-retain, use Cloud, crawl project files directly for LanceDB, or import raw JSONL/generated exports/secrets/local proxy details/build artifacts.
 
+Run the manual pre-push evidence gate after `memory-refresh-all`:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-pre-push-check.ps1
+```
+
+The helper validates the generated refresh/eval reports and writes `docs/memory/generated/memory-pre-push-check-report.json`. It does not rebuild memory by default, install hooks, enable post-commit automation, or treat generated exports as source memory.
+
 Refresh the local generated index:
 
 ```powershell

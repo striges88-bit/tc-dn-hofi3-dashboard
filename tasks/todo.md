@@ -907,3 +907,25 @@
 - Updated `scripts/lancedb-sidecar.ps1` probe/output metadata and docs so the eval reports are explicit review evidence before any hook/automation decision.
 - Extracted eval case/report logic into `tools/MemorySemantic/lancedb_eval_report.py` so `lancedb_sidecar.py` remains focused on LanceDB orchestration and embedding I/O.
 - Verification passed: Python sidecar tests returned `ok`; `LanceDbSidecarSpikeTests|MemoryRefreshAllTests` passed `5/5`; `MemoryCliTests` passed `4/4`; `memory-refresh-all` completed with SQLite stale-check clean and LanceDB eval `9/9`; solution build completed with `0` warnings and `0` errors.
+
+## Manual Memory Gate Todo
+
+- [x] Add an ADR for the manual memory gate strategy: manual `memory-refresh-all` first, optional manual pre-push helper next, no post-commit automation.
+- [x] Add RED tests for `scripts/memory-pre-push-check.ps1 -PlanOnly`.
+- [x] Verify the helper plan does not install hooks, call Cloud, enable Codex auto-retain, touch raw JSONL, `.hindsight/`, secrets, generated exports as sources, build artifacts, or post-commit automation.
+- [x] Implement the minimal helper as a manual command that validates refresh/eval evidence without becoming a hook.
+- [x] Update memory docs and `tasks/lessons.md`.
+- [x] Run real `memory-refresh-all`, then the helper.
+- [x] Run narrow tests and build.
+- [x] Run diff hygiene, review Git status, and prepare the verified commit boundary.
+
+## Manual Memory Gate Results
+
+- Added ADR `docs/decisions/0005-manual-memory-gate.md`: manual `memory-refresh-all`, manual `memory-pre-push-check`, no post-commit refresh automation, no automatic hook installation.
+- Added `scripts/memory-pre-push-check.ps1` with `-PlanOnly`; the full mode validates existing refresh/eval evidence instead of rebuilding memory or installing hooks.
+- Added `ManualMemoryGateTests` covering plan-only guardrails, docs, ADR, no Cloud, no Codex auto-retain, no hooks, no raw JSONL, no `.hindsight/`, no sensitive storage, no generated exports as source, and no build artifacts.
+- Updated `docs/memory/contract.md`, `docs/memory/README.md`, `scripts/README.md`, and `tasks/lessons.md`.
+- Real `scripts/memory-refresh-all.ps1` completed: legacy JSON refresh, SQLite refresh, SQLite stale-check with `issues: []`, LanceDB cleanup/rebuild, and LanceDB eval `9/9`.
+- Real `scripts/memory-pre-push-check.ps1` passed with `passed_count=9`, `failed_count=0`, `runs_refresh_all=false`, `installs_hooks=false`, and `post_commit_auto_refresh_enabled=false`.
+- Verification passed so far: `ManualMemoryGateTests|MemoryRefreshAllTests|LanceDbSidecarSpikeTests` `7/7`, `MemoryCliTests` `4/4`, `tools/MemorySemantic/lancedb_sidecar_tests.py` `ok`, and `dotnet build CryptoIndicatorApp.sln --no-restore` completed with `0` warnings and `0` errors.
+- Diff hygiene passed with `git diff --check`; Git status contains only this manual memory gate slice.
