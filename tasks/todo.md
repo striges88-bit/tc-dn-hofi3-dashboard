@@ -1146,4 +1146,4 @@
 - `memory status` before compact handoff: `needs_refresh=false`, `marker_exists=false`, `indexed_commit=d330bfa98dbf2ac879228e7fc2cce4e4bc6dbb2d`, `working_tree_dirty=true`.
 - Compact handoff was resumed; build, diff hygiene, source commit, and post-commit memory gate were completed.
 - `memory-refresh-all` was intentionally run only after committing the slice because refresh indexes committed `HEAD`, not the dirty working tree.
-- Post-commit memory gate passed on commit `d8743a3`: `scripts\memory-refresh-all.ps1` completed, `memory status` reported `needs_refresh=false`, and `scripts\memory-pre-push-check.ps1` reported `status=passed` with LanceDB eval `9/9`.
+- Post-commit memory gate passed after the final source commit: `scripts\memory-refresh-all.ps1` completed, `memory status` reported `needs_refresh=false`, and `scripts\memory-pre-push-check.ps1` reported `status=passed` with LanceDB eval `9/9`.
