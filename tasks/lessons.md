@@ -53,3 +53,4 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - Keep repository maintenance scripts compatible with Windows PowerShell 5.1 unless a script explicitly declares `pwsh`; PS7 can be used locally, but tests should catch 5.1 binding quirks such as empty string and empty collection parameters.
 - Avoid triggering the same PR CI twice through both `push` on feature branches and `pull_request`; use PR checks plus protected-branch/main checks unless duplicate runs are intentionally needed.
 - When expanding memory lifecycle policy, preserve existing guardrail phrases that tests and retrieval rely on, such as "auto-retain must remain disabled during MVP"; add stricter wording without removing old safety anchors.
+- Curated retain export dry-runs must not include source text before redaction is implemented; export metadata and hash freshness only, otherwise the safety tooling can become a new leak surface.

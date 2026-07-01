@@ -53,6 +53,8 @@ The allowlist is not permission to retain automatically. Each retained item stil
 
 Use `scripts/curated-retain-dry-run.ps1` for the first provider-neutral retain preflight. It enumerates only the approved allowlist, excludes the denylist, scans for redaction risks, and writes ignored JSON/Markdown reports under `docs/memory/generated/`. Findings must include severity, type/severity summary counts, de-duplication, and `policy_reference` markers so policy text is not confused with leaked data. It must not call Hindsight, Cloud services, Codex retain, hooks, `memory-refresh-all`, or memory rebuild commands.
 
+Use `scripts/curated-retain-export-dry-run.ps1` and `scripts/curated-retain-delete-dry-run.ps1` for provider-neutral lifecycle proof before any external/Codex retain path is enabled. They read generated dry-run metadata, validate allowlist/denylist and source hashes, and write ignored JSON/Markdown reports only. They must not include source text before redaction, delete files or provider data, call Cloud or retain APIs, install hooks, run `memory-refresh-all`, or rebuild memory. Missing, stale, denylisted, or redaction-review reports keep external retain and Codex auto-retain disabled.
+
 ## Node Schema
 
 Allowed node types:
