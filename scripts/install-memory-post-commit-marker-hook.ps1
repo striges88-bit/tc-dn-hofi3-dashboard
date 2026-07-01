@@ -151,6 +151,12 @@ function New-Report {
         hook_type = 'post-commit'
         project_root = Convert-ToRepoPath -Root $root -Path $root
         hook_path = Convert-ToRepoPath -Root $root -Path $hookFilePath
+        default_hook_path = Convert-ToRepoPath -Root $root -Path $defaultHookPath
+        targets_default_repo_hook = $targetsDefaultRepoHook
+        custom_hook_path = -not $targetsDefaultRepoHook
+        writes_default_repo_hook = $InstallsHooks -and $targetsDefaultRepoHook
+        removes_default_repo_hook = $ManagedHookRemoved -and $targetsDefaultRepoHook
+        actual_repo_hook_touched = ($InstallsHooks -or $ManagedHookRemoved) -and $targetsDefaultRepoHook
         report_path = Convert-ToRepoPath -Root $root -Path $reportPath
         marker_script = 'scripts/memory-mark-needs-refresh.ps1'
         marker_script_exists = Test-Path -LiteralPath $markerScriptPath
@@ -191,6 +197,10 @@ if (-not (Test-Path -LiteralPath (Join-Path $root 'CryptoIndicatorApp.sln'))) {
 
 $defaultHookPath = Join-Path $root '.git\hooks\post-commit'
 $hookFilePath = Resolve-RootedOrRelativePath -Root $root -Path $HookPath -DefaultPath $defaultHookPath
+$targetsDefaultRepoHook = [string]::Equals(
+    [System.IO.Path]::GetFullPath($hookFilePath),
+    [System.IO.Path]::GetFullPath($defaultHookPath),
+    [System.StringComparison]::OrdinalIgnoreCase)
 $reportPath = Resolve-RootedOrRelativePath `
     -Root $root `
     -Path $OutputPath `
