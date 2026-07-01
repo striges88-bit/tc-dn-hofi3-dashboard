@@ -1069,8 +1069,8 @@
   - [x] Implement report-only export/delete dry-run scripts under `docs/memory/generated/`.
   - [x] Update retain lifecycle docs and script operator docs.
   - [x] Run narrow tests, real dry-runs, full build, and diff hygiene.
-- [ ] Slice 3: validate optional post-commit marker local install behavior without enabling rebuild or retain hooks.
-- [ ] Slice 4: make the FastEmbed/LanceDB warning an explicit semantic baseline decision backed by eval.
+- [x] Slice 3: validate optional post-commit marker local install behavior without enabling rebuild or retain hooks.
+- [x] Slice 4: make the FastEmbed/LanceDB warning an explicit semantic baseline decision backed by eval.
 - [ ] Slice 5: add a simple operator UX helper for routine memory checks.
 - [ ] For each slice: use RED/GREEN tests, run narrow verification, build when shared scripts/docs are touched, commit the verified slice, refresh memory from committed `HEAD`, and run the manual pre-push gate before PR/push.
 
@@ -1101,3 +1101,19 @@
 - Updated memory and scripts docs so validation uses temporary/custom hook paths and real hook installation remains explicit opt-in.
 - Verification before commit passed: `ManualMemoryGateTests` `11/11`; `ManualMemoryGateTests|CuratedRetainPolicyTests|MemoryRefreshAllTests` `19/19`; `tools/Memory.Tests` `6/6`; solution build completed with `0` warnings and `0` errors; `git diff --check` passed.
 - `Test-Path .git/hooks/post-commit` returned `False`; the real repository post-commit hook was not installed.
+
+## Memory Polish Slice 4 Todo
+
+- [x] Create branch `codex/memory-semantic-baseline` from clean `main`.
+- [x] Add RED tests for FastEmbed package/model/pooling baseline metadata in LanceDB reports.
+- [x] Add explicit `embedding_pooling_baseline` and eval-gate metadata to Python and PowerShell reports.
+- [x] Update LanceDB memory docs/contract so the mean-pooling warning is an accepted baseline only while eval remains `9/9`.
+- [x] Run Python sidecar tests, LanceDB rebuild/eval, relevant .NET tests, solution build, and diff hygiene.
+
+## Memory Polish Slice 4 Results
+
+- Accepted the current FastEmbed `0.8.0` mean-pooling behavior as the documented LanceDB semantic baseline only while eval remains `9/9`; no model/package downgrade was added.
+- Added `embedding_package_pin`, `embedding_pooling_baseline`, `embedding_baseline_status`, `embedding_baseline_eval_gate`, and baseline change-policy metadata to Python and PowerShell reports.
+- The generated LanceDB Markdown eval report now includes an "Embedding baseline" section before retrieval cases.
+- Updated `docs/memory/lancedb-spike.md`, `docs/memory/contract.md`, and `docs/memory/README.md` so the warning is not treated as hidden noise.
+- Verification passed: Python sidecar tests returned `ok`; LanceDB cleanup/rebuild/eval completed with FastEmbed warning visible and eval `9/9`; `LanceDbSidecarSpikeTests|MemoryRefreshAllTests|ManualMemoryGateTests|CuratedRetainPolicyTests` passed `22/22`; `tools/Memory.Tests` passed `6/6`; solution build completed with `0` warnings and `0` errors; `git diff --check` passed.

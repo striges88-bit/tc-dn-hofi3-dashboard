@@ -122,7 +122,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command eval
 ```
 
-The LanceDB candidate uses local FastEmbed/ONNX embeddings by default with model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` through pinned `fastembed==0.8.0`, plus typed/exact-token reranking and an explicit `eval` gate. The old token-hash provider is fallback/test-only.
+The LanceDB candidate uses local FastEmbed/ONNX embeddings by default with model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` through pinned `fastembed==0.8.0`, plus typed/exact-token reranking and an explicit `eval` gate. The accepted semantic baseline records `embedding_pooling_baseline=mean-pooling` and is current only while LanceDB `eval` passes `9/9`. The old token-hash provider is fallback/test-only.
 
 The generated eval reports are evidence artifacts for hook/automation review. They include query, expected ids/types, matched rank, source path, confidence, and gap notes, but they are not a source of truth.
 

@@ -2,6 +2,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import lancedb_sidecar
 from lancedb_sidecar import (
     DEFAULT_EMBEDDING_MODEL,
     EVAL_CASES,
@@ -22,8 +23,24 @@ def test_default_embedding_provider_is_local_fastembed_multilingual_onnx():
     assert fallback["embedding_provider"] == "token-hash"
     assert fallback["embedding_model"] == "local-token-hash"
     assert fallback["embedding_dimensions"] == 64
+    assert fallback["embedding_pooling_baseline"] == "not-applicable"
 
     assert DEFAULT_EMBEDDING_MODEL == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+
+def test_fastembed_baseline_metadata_is_explicit_and_eval_gated():
+    baseline = lancedb_sidecar.build_embedding_baseline_metadata(
+        "fastembed",
+        DEFAULT_EMBEDDING_MODEL,
+        "0.8.0",
+    )
+
+    assert baseline["embedding_package_version"] == "0.8.0"
+    assert baseline["embedding_package_pin"] == "fastembed==0.8.0"
+    assert baseline["embedding_pooling_baseline"] == "mean-pooling"
+    assert baseline["embedding_baseline_status"] == "accepted-if-eval-passes"
+    assert baseline["embedding_baseline_eval_gate"] == "lancedb-eval-9-of-9"
+    assert "rerun cleanup/rebuild/eval" in baseline["embedding_baseline_change_policy"]
 
 
 def test_token_hash_fallback_can_embed_text():
@@ -267,6 +284,12 @@ def test_eval_markdown_report_contains_compact_operator_table():
         "passed": True,
         "passed_count": 1,
         "failed_count": 0,
+        "embedding_provider": "fastembed",
+        "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "embedding_package_version": "0.8.0",
+        "embedding_package_pin": "fastembed==0.8.0",
+        "embedding_pooling_baseline": "mean-pooling",
+        "embedding_baseline_eval_gate": "lancedb-eval-9-of-9",
         "cases": [
             {
                 "id": "current_ofi_formula",
@@ -291,6 +314,10 @@ def test_eval_markdown_report_contains_compact_operator_table():
     assert "formula_version.tc-dn-hofi3.current" in markdown
     assert "docs/formulas.md" in markdown
     assert "0.98" in markdown
+    assert "Embedding baseline" in markdown
+    assert "fastembed" in markdown
+    assert "mean-pooling" in markdown
+    assert "lancedb-eval-9-of-9" in markdown
 
 
 def test_eval_cases_fail_when_superseded_rule_is_returned():
@@ -354,6 +381,7 @@ def test_store_path_guard_allows_only_generated_child_paths():
 
 if __name__ == "__main__":
     test_default_embedding_provider_is_local_fastembed_multilingual_onnx()
+    test_fastembed_baseline_metadata_is_explicit_and_eval_gated()
     test_token_hash_fallback_can_embed_text()
     test_commit_source_match_uses_git_blob_instead_of_dirty_worktree()
     test_rerank_prefers_typed_formula_over_generic_chunk()

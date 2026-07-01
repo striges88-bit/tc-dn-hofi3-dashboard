@@ -60,6 +60,10 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("eval", commands);
         Assert.Equal("fastembed", root.GetProperty("embedding_provider").GetString());
         Assert.Equal("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", root.GetProperty("embedding_model").GetString());
+        Assert.Equal("fastembed==0.8.0", root.GetProperty("embedding_package_pin").GetString());
+        Assert.Equal("mean-pooling", root.GetProperty("embedding_pooling_baseline").GetString());
+        Assert.Equal("accepted-if-eval-passes", root.GetProperty("embedding_baseline_status").GetString());
+        Assert.Equal("lancedb-eval-9-of-9", root.GetProperty("embedding_baseline_eval_gate").GetString());
     }
 
     [Fact]
@@ -82,6 +86,9 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("production-candidate semantic quality layer", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("FastEmbed", spike, StringComparison.Ordinal);
         Assert.Contains("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", spike, StringComparison.Ordinal);
+        Assert.Contains("embedding_pooling_baseline", spike, StringComparison.Ordinal);
+        Assert.Contains("mean-pooling", spike, StringComparison.Ordinal);
+        Assert.Contains("lancedb-eval-9-of-9", spike, StringComparison.Ordinal);
         Assert.Contains("eval", spike, StringComparison.Ordinal);
         Assert.Contains("eval` passed `9/9`", spike, StringComparison.Ordinal);
         Assert.Contains("lancedb-eval-report.md", spike, StringComparison.Ordinal);
@@ -98,6 +105,8 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("LanceDB is an active local semantic sidecar spike", contract, StringComparison.Ordinal);
         Assert.Contains("SQLite remains the canonical status store", contract, StringComparison.Ordinal);
         Assert.Contains("local FastEmbed/ONNX", contract, StringComparison.Ordinal);
+        Assert.Contains("embedding_pooling_baseline", contract, StringComparison.Ordinal);
+        Assert.Contains("rerun cleanup/rebuild/eval", contract, StringComparison.Ordinal);
         Assert.Contains("scripts/lancedb-sidecar.ps1", readme, StringComparison.Ordinal);
         Assert.Contains("lancedb-eval-report.md", readme, StringComparison.Ordinal);
         Assert.Contains("LanceDB semantic quality gate", openQuestions, StringComparison.Ordinal);

@@ -117,6 +117,16 @@ $evalMarkdownOutput = Resolve-RootedOrRelativePath -Root $root -Path $EvalMarkdo
 $scriptPath = Join-Path $root 'tools\MemorySemantic\lancedb_sidecar.py'
 $uvPath = Find-Executable -Name 'uv.exe'
 $supportedCommands = @('probe', 'rebuild', 'search', 'explain', 'eval', 'cleanup')
+$fastEmbedPackagePin = 'fastembed==0.8.0'
+$embeddingPackagePin = if ($EmbeddingProvider -eq 'token-hash') { 'builtin' } else { $fastEmbedPackagePin }
+$embeddingPoolingBaseline = if ($EmbeddingProvider -eq 'token-hash') { 'not-applicable' } else { 'mean-pooling' }
+$embeddingBaselineStatus = if ($EmbeddingProvider -eq 'token-hash') { 'fallback-test-only' } else { 'accepted-if-eval-passes' }
+$embeddingBaselineEvalGate = if ($EmbeddingProvider -eq 'token-hash') { 'not-semantic-quality-evidence' } else { 'lancedb-eval-9-of-9' }
+$embeddingBaselineChangePolicy = if ($EmbeddingProvider -eq 'token-hash') {
+    'do not use token-hash as semantic quality evidence'
+} else {
+    'rerun cleanup/rebuild/eval and update docs before changing package, model, or pooling'
+}
 
 if ($Command -eq 'probe') {
     Write-JsonReport -Path $output -Payload @{
@@ -138,6 +148,11 @@ if ($Command -eq 'probe') {
         supported_commands = $supportedCommands
         embedding_provider = $EmbeddingProvider
         embedding_model = if ($EmbeddingProvider -eq 'token-hash') { 'local-token-hash' } else { $EmbeddingModel }
+        embedding_package_pin = $embeddingPackagePin
+        embedding_pooling_baseline = $embeddingPoolingBaseline
+        embedding_baseline_status = $embeddingBaselineStatus
+        embedding_baseline_eval_gate = $embeddingBaselineEvalGate
+        embedding_baseline_change_policy = $embeddingBaselineChangePolicy
         status = if ($null -eq $uvPath) { 'uv-unavailable' } else { 'ready-to-run' }
         next_action = 'Run rebuild after SQLite memory refresh; do not install hooks or crawl project files directly.'
     }
@@ -157,7 +172,7 @@ $arguments = @(
     '--python', '3.12',
     '--with', 'lancedb',
     '--with', 'pyarrow',
-    '--with', 'fastembed==0.8.0',
+    '--with', $fastEmbedPackagePin,
     'python',
     $scriptPath,
     '--command', $Command,

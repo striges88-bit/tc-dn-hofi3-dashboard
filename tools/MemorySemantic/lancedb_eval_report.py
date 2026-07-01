@@ -180,10 +180,19 @@ def render_eval_markdown(report: dict[str, Any]) -> str:
         "",
         f"Status: {'passed' if report.get('passed') else 'failed'}",
         f"Cases: {passed_count}/{total_count} passed",
-        "",
-        "| Case | Pass | Query | Expected | Rank | Source | Confidence | Gap notes |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
+
+    baseline_lines = render_embedding_baseline_lines(report)
+    if baseline_lines:
+        lines.extend(["", "## Embedding baseline", "", *baseline_lines])
+
+    lines.extend(
+        [
+            "",
+            "| Case | Pass | Query | Expected | Rank | Source | Confidence | Gap notes |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        ]
+    )
 
     for case in cases:
         expected = format_expected(case)
@@ -206,6 +215,25 @@ def render_eval_markdown(report: dict[str, Any]) -> str:
         )
 
     return "\n".join(lines) + "\n"
+
+
+def render_embedding_baseline_lines(report: dict[str, Any]) -> list[str]:
+    keys = [
+        ("Provider", "embedding_provider"),
+        ("Model", "embedding_model"),
+        ("Package version", "embedding_package_version"),
+        ("Package pin", "embedding_package_pin"),
+        ("Pooling baseline", "embedding_pooling_baseline"),
+        ("Baseline status", "embedding_baseline_status"),
+        ("Eval gate", "embedding_baseline_eval_gate"),
+        ("Change policy", "embedding_baseline_change_policy"),
+    ]
+    lines: list[str] = []
+    for label, key in keys:
+        value = report.get(key)
+        if value is not None and str(value).strip():
+            lines.append(f"- {label}: {markdown_cell(value)}")
+    return lines
 
 
 def format_expected(case: dict[str, Any]) -> str:
