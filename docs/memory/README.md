@@ -138,7 +138,12 @@ Generate the provider-neutral curated retain dry-run and redaction report withou
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-dry-run.ps1
 ```
 
-The report is written to ignored `docs/memory/generated/curated-retain-dry-run-report.json`. It lists only allowlisted source candidates and redaction findings; it is review evidence, not an import or retain operation.
+The reports are written to ignored generated files:
+
+- `docs/memory/generated/curated-retain-dry-run-report.json`
+- `docs/memory/generated/curated-retain-dry-run-report.md`
+
+They list only allowlisted source candidates and redaction findings. Findings include severity (`critical`, `review`, `info`), type counts, severity counts, de-duplication, and `policy_reference` markers so policy docs do not look like real leaked secrets. These reports are review evidence, not import or retain operations.
 
 Review curated retain policy before any external retain or Codex auto-retain:
 

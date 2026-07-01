@@ -50,5 +50,6 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - When `memory-refresh-all` uses `refresh-from-commit --commit HEAD`, run it after committing durable source changes or before push/PR, not before the commit; otherwise it correctly indexes the previous `HEAD`.
 - Pin local embedding package versions in wrapper scripts and record provider/model/package metadata in reports; unpinned semantic dependencies can silently change retrieval baselines.
 - For CI-executed PowerShell scripts, avoid relying on optional cmdlets such as `Get-FileHash`; use portable .NET APIs for required hashing so Windows runner environments cannot fail on missing modules.
+- Keep repository maintenance scripts compatible with Windows PowerShell 5.1 unless a script explicitly declares `pwsh`; PS7 can be used locally, but tests should catch 5.1 binding quirks such as empty string and empty collection parameters.
 - Avoid triggering the same PR CI twice through both `push` on feature branches and `pull_request`; use PR checks plus protected-branch/main checks unless duplicate runs are intentionally needed.
 - When expanding memory lifecycle policy, preserve existing guardrail phrases that tests and retrieval rely on, such as "auto-retain must remain disabled during MVP"; add stricter wording without removing old safety anchors.
