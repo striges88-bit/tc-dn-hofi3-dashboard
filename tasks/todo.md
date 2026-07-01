@@ -1058,3 +1058,22 @@
 - Updated memory and scripts docs with the dry-run command and scope.
 - Verification before commit: `CuratedRetainDryRunTests` passed `2/2`; expanded retain/memory guardrail tests passed `22/22`; full solution tests passed `106/106`; solution build passed with `0` warnings and `0` errors; `git diff --check` passed.
 - Post-commit memory gate completed before push: `memory-refresh-all` completed with SQLite stale-check `issues: []`, LanceDB indexed the committed metadata, LanceDB eval passed `9/9`, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+
+## Memory Polish Roadmap Todo
+
+- [x] Start branch `codex/memory-polish-roadmap` from clean `main`.
+- [x] Add a five-slice implementation plan for a polished memory system.
+- [x] Slice 1: improve curated retain report quality with severity, type counts, de-duplication, policy-reference classification, and Markdown output.
+- [ ] Slice 2: add provider-neutral retain export/delete dry-run policy tooling before any external/Codex retain can be enabled.
+- [ ] Slice 3: validate optional post-commit marker local install behavior without enabling rebuild or retain hooks.
+- [ ] Slice 4: make the FastEmbed/LanceDB warning an explicit semantic baseline decision backed by eval.
+- [ ] Slice 5: add a simple operator UX helper for routine memory checks.
+- [ ] For each slice: use RED/GREEN tests, run narrow verification, build when shared scripts/docs are touched, commit the verified slice, refresh memory from committed `HEAD`, and run the manual pre-push gate before PR/push.
+
+## Memory Polish Roadmap Results
+
+- Added detailed plan `docs/superpowers/plans/2026-07-01-memory-polish-roadmap.md` covering five slices: report quality, export/delete policy tooling, post-commit marker validation, FastEmbed/LanceDB baseline, and operator UX.
+- Slice 1 improved `scripts/curated-retain-dry-run.ps1`: JSON report now includes severity counts, type counts, de-duplicated findings, and `policy_reference`; the script also writes ignored Markdown report `docs/memory/generated/curated-retain-dry-run-report.md`.
+- Added RED/GREEN coverage in `CuratedRetainDryRunTests` for Markdown output, severity summary, policy-only references, duplicate finding keys, blank-line compatibility, and `token-hash` not being treated as a secret token.
+- Real dry-run on the repository now reports `24` allowlisted files, `133` findings, `0` critical, `78` review, `55` info, and `16` files requiring redaction review.
+- Verification for Slice 1 passed: `CuratedRetainDryRunTests` `3/3`, real `curated-retain-dry-run.ps1`, solution build with `0` warnings/errors, and `git diff --check`.

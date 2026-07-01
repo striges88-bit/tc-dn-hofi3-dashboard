@@ -12,7 +12,7 @@ public sealed class CuratedRetainDryRunTests
     {
         using var fixture = TemporaryProjectFixture.Create();
         fixture.Write("CryptoIndicatorApp.sln", string.Empty);
-        fixture.Write("AGENTS.md", "# Agents\n");
+        fixture.Write("AGENTS.md", "# Agents\n\n");
         fixture.Write("TC-DN-HOFI3.md", "# Formula Source\n");
         fixture.Write("docs/formulas.md", "# Formulas\n");
         fixture.Write("tasks/lessons.md", "# Lessons\n");
@@ -109,6 +109,71 @@ public sealed class CuratedRetainDryRunTests
         Assert.Contains("local_proxy_detail", findingTypes);
         Assert.Contains("raw_jsonl_or_dump", findingTypes);
         Assert.Contains("generated_export_reference", findingTypes);
+    }
+
+    [Fact]
+    public async Task DryRunReportAddsSeverityBreakdownsMarkdownAndPolicyReferenceSignals()
+    {
+        using var fixture = TemporaryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        fixture.Write("AGENTS.md", "Do not store OPENAI_API_KEY values or .env contents.\n");
+        fixture.Write("TC-DN-HOFI3.md", "# Formula Source\n");
+        fixture.Write("docs/formulas.md", "Example leaked key: sk-testtoken1234567890\n");
+        fixture.Write("tasks/lessons.md", "Replace C:\\Users\\MECHREVO\\Desktop\\PRJCT-INDIC with repo-relative paths.\n");
+        fixture.Write("docs/decisions/0008-curated-retain-and-memory-lifecycle-policy.md", "# ADR\n");
+        fixture.Write("docs/memory/contract.md", "Generated export docs/memory/generated/lancedb-eval-report.md is not retained.\n");
+        fixture.Write("docs/memory/lancedb-spike.md", "The old deterministic token-hash vectors remain fallback-only.\n");
+        fixture.Write("docs/memory/retain-policy.md", "Raw JSONL and local proxy details must not be retained.\n");
+
+        var reportPath = await RunDryRunScriptAsync(fixture.Root);
+        var markdownReportPath = Path.Combine(fixture.Root, "docs", "memory", "generated", "curated-retain-dry-run-report.md");
+        Assert.True(File.Exists(markdownReportPath), $"Missing markdown report: {markdownReportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal("docs/memory/generated/curated-retain-dry-run-report.md", root.GetProperty("markdown_report_path").GetString());
+
+        var summary = root.GetProperty("summary");
+        var severityCounts = summary.GetProperty("findings_by_severity");
+        Assert.True(severityCounts.GetProperty("critical").GetInt32() >= 1);
+        Assert.True(severityCounts.GetProperty("review").GetInt32() >= 1);
+        Assert.True(severityCounts.GetProperty("info").GetInt32() >= 1);
+
+        var typeCounts = summary.GetProperty("findings_by_type");
+        Assert.True(typeCounts.GetProperty("secret_reference").GetInt32() >= 2);
+        Assert.True(typeCounts.GetProperty("absolute_local_path").GetInt32() >= 1);
+
+        var findings = root.GetProperty("findings").EnumerateArray().ToArray();
+        Assert.Contains(findings, finding =>
+            finding.GetProperty("type").GetString() == "secret_reference" &&
+            finding.GetProperty("severity").GetString() == "critical" &&
+            !finding.GetProperty("policy_reference").GetBoolean());
+
+        Assert.Contains(findings, finding =>
+            finding.GetProperty("type").GetString() == "secret_reference" &&
+            finding.GetProperty("severity").GetString() == "info" &&
+            finding.GetProperty("policy_reference").GetBoolean());
+
+        Assert.DoesNotContain(findings, finding =>
+            finding.GetProperty("type").GetString() == "secret_reference" &&
+            finding.GetProperty("source_path").GetString() == "docs/memory/lancedb-spike.md");
+
+        Assert.Equal(
+            findings.Length,
+            findings.Select(finding =>
+                string.Join(
+                    "|",
+                    finding.GetProperty("type").GetString(),
+                    finding.GetProperty("source_path").GetString(),
+                    finding.GetProperty("line").GetInt32(),
+                    finding.GetProperty("rule").GetString()))
+                .Distinct(StringComparer.Ordinal)
+                .Count());
+
+        var markdown = File.ReadAllText(markdownReportPath);
+        Assert.Contains("# Curated Retain Dry-Run Report", markdown);
+        Assert.Contains("## Findings By Severity", markdown);
+        Assert.Contains("## Review Findings", markdown);
     }
 
     private static async Task<string> RunDryRunScriptAsync(string projectRoot)
