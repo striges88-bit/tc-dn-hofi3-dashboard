@@ -105,6 +105,85 @@ public sealed class ManualMemoryGateTests
     }
 
     [Fact]
+    public async Task PrePushCheckRejectsNonEvalLanceDbReportWithoutPowerShellPropertyCrash()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "memory-pre-push-check.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        using var temp = TemporaryDirectory.Create();
+        File.WriteAllText(Path.Combine(temp.Path, "CryptoIndicatorApp.sln"), string.Empty);
+
+        var refreshReportPath = Path.Combine(temp.Path, "memory-refresh-all-report.json");
+        var evalJsonPath = Path.Combine(temp.Path, "lancedb-sidecar-report.json");
+        var evalMarkdownPath = Path.Combine(temp.Path, "lancedb-eval-report.md");
+        var outputPath = Path.Combine(temp.Path, "memory-pre-push-check-report.json");
+
+        File.WriteAllText(
+            refreshReportPath,
+            """
+            {
+              "schema_version": 1,
+              "generator": "scripts/memory-refresh-all.ps1",
+              "mode": "full-local-rebuild",
+              "status": "completed",
+              "cloud_enabled": false,
+              "codex_auto_retain_enabled": false,
+              "auto_commit_refresh_enabled": false,
+              "commit_hook_installed": false,
+              "installs_hooks": false,
+              "direct_project_crawl_enabled": false,
+              "imports_raw_jsonl": false,
+              "imports_generated_exports": false,
+              "uses_generated_exports_as_source": false,
+              "imports_secrets": false,
+              "imports_local_proxy_details": false,
+              "imports_build_artifacts": false,
+              "touches_raw_jsonl": false,
+              "touches_hindsight_store": false,
+              "touches_secret_storage": false,
+              "touches_build_artifacts": false,
+              "steps": [
+                { "name": "legacy-json-refresh", "status": "completed", "exit_code": 0, "uses_cloud": false, "uses_hook": false },
+                { "name": "sqlite-refresh", "status": "completed", "exit_code": 0, "uses_cloud": false, "uses_hook": false },
+                { "name": "sqlite-stale-check", "status": "completed", "exit_code": 0, "stdout_tail": "{\"issues\": []}", "uses_cloud": false, "uses_hook": false },
+                { "name": "lancedb-cleanup", "status": "completed", "exit_code": 0, "uses_cloud": false, "uses_hook": false },
+                { "name": "lancedb-rebuild", "status": "completed", "exit_code": 0, "uses_cloud": false, "uses_hook": false },
+                { "name": "lancedb-eval", "status": "completed", "exit_code": 0, "uses_cloud": false, "uses_hook": false }
+              ]
+            }
+            """);
+        File.WriteAllText(
+            evalJsonPath,
+            """
+            {
+              "schema_version": 1,
+              "generator": "scripts/lancedb-sidecar.ps1",
+              "status": "ready-to-run",
+              "command": "probe"
+            }
+            """);
+        File.WriteAllText(evalMarkdownPath, "# Probe report, not eval\n");
+
+        var result = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(temp.Path)} -RefreshAllReportPath {Quote(refreshReportPath)} -EvalJsonReportPath {Quote(evalJsonPath)} -EvalMarkdownReportPath {Quote(evalMarkdownPath)} -OutputPath {Quote(outputPath)}");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.DoesNotContain("passed_count", result.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.True(File.Exists(outputPath), $"Missing report: {outputPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(outputPath));
+        var root = report.RootElement;
+        Assert.Equal("failed", root.GetProperty("status").GetString());
+
+        var evalCheck = root.GetProperty("checks")
+            .EnumerateArray()
+            .Single(check => check.GetProperty("name").GetString() == "lancedb-eval-passed");
+        Assert.Equal("failed", evalCheck.GetProperty("status").GetString());
+        Assert.Contains("missing", evalCheck.GetProperty("detail").GetString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ManualMemoryGateDocsRejectPostCommitAutomation()
     {
         var adr = ReadText("docs/decisions/0005-manual-memory-gate.md");

@@ -1202,3 +1202,19 @@
 - Slice 4 source committed as `68ea272`; post-commit memory gate passed: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
 - Slice 5 hardened optional marker-only automation without enabling it by default: post-commit marker installer and marker helper now reject non-positive `-TimeoutSeconds`; marker helper reports include `lock_path`.
 - Slice 5 verification before commit passed: RED timeout tests failed for the expected reason, GREEN timeout tests passed `2/2`, `ManualMemoryGateTests` passed `15/15`, custom hook-path `install-memory-post-commit-marker-hook.ps1 -PlanOnly` reported `actual_repo_hook_touched=false`, and solution build completed with `0` warnings and `0` errors.
+- Slice 5 source committed as `94996ea`; post-commit memory gate passed before the full solution test run: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+
+## Compact Handoff - Pre-Push Gate Robustness
+
+- [x] Fix `scripts/memory-pre-push-check.ps1` so a non-eval/probe-style LanceDB sidecar JSON report is reported as a failed `lancedb-eval-passed` check instead of throwing a PowerShell missing-property exception.
+- [x] Run the new regression test `PrePushCheckRejectsNonEvalLanceDbReportWithoutPowerShellPropertyCrash` and then `ManualMemoryGateTests`.
+- [ ] Rerun `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1` after committing the fix.
+- [ ] Retry `git push -u origin codex/memory-futureproof-phase2-roadmap`.
+
+Current evidence:
+
+- Push failed because the managed pre-push hook invoked `scripts/memory-pre-push-check.ps1` after full `dotnet test` had overwritten `docs/memory/generated/lancedb-sidecar-report.json` with a non-eval/probe-style report (`status=ready-to-run`, no `passed_count`).
+- A RED regression test has been added in `CryptoIndicatorApp.Infrastructure.Tests/ManualMemoryGateTests.cs`: `PrePushCheckRejectsNonEvalLanceDbReportWithoutPowerShellPropertyCrash`.
+- RED was confirmed: the test fails because stderr contains the missing-property crash for `passed_count`.
+- GREEN was confirmed after the fix: the regression test passed `1/1`, `ManualMemoryGateTests` passed `16/16`, solution build passed with `0` warnings/errors, and `git diff --check` passed.
+- Do not run `memory-refresh-all` before committing the eventual fix; memory refresh indexes committed `HEAD`.
