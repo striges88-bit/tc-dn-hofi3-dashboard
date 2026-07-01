@@ -23,6 +23,14 @@ Generated graph, SQLite, or memory exports belong in `docs/memory/generated/`, w
 
 ## Commands
 
+Run a read-only operator snapshot before deciding whether a heavier refresh/check is needed:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-daily-check.ps1 -PlanOnly
+```
+
+This writes `docs/memory/generated/memory-daily-check-report.json` and reports the current branch, `HEAD`, indexed commit when the generated SQLite store already exists, `needs_refresh`, marker status, latest LanceDB eval status, and generated report presence. It does not run `memory-refresh-all`, rebuild memory, import curated retain, install hooks, call Cloud, call Hindsight, or call Codex retain.
+
 Run the full manual memory refresh sequence:
 
 ```powershell

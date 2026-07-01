@@ -1117,3 +1117,33 @@
 - The generated LanceDB Markdown eval report now includes an "Embedding baseline" section before retrieval cases.
 - Updated `docs/memory/lancedb-spike.md`, `docs/memory/contract.md`, and `docs/memory/README.md` so the warning is not treated as hidden noise.
 - Verification passed: Python sidecar tests returned `ok`; LanceDB cleanup/rebuild/eval completed with FastEmbed warning visible and eval `9/9`; `LanceDbSidecarSpikeTests|MemoryRefreshAllTests|ManualMemoryGateTests|CuratedRetainPolicyTests` passed `22/22`; `tools/Memory.Tests` passed `6/6`; solution build completed with `0` warnings and `0` errors; `git diff --check` passed.
+
+## Memory Polish Slice 5 Todo
+
+- [x] Create branch `codex/memory-operator-ux-helper` from clean `main`.
+- [x] Add RED tests for `scripts/memory-daily-check.ps1 -PlanOnly`.
+- [x] Implement a read/report-only memory operator helper.
+- [x] Document the helper in memory and scripts docs.
+- [x] Run helper tests, real `-PlanOnly`, memory status, build, diff hygiene, and review diff before commit.
+- [x] After committing this source slice, run `memory-refresh-all`, `memory status`, and `memory-pre-push-check`.
+
+## Memory Polish Slice 5 Results
+
+- RED verification passed before implementation:
+  `MemoryDailyCheckPlanWritesReadOnlyOperatorReport` failed on missing `scripts/memory-daily-check.ps1`;
+  `MemoryDailyCheckDocsDescribeReadOnlyRoutine` failed on missing documentation.
+- Added `scripts/memory-daily-check.ps1` as a read-only operator snapshot. It reports branch, `HEAD`, existing SQLite memory status, marker status, LanceDB eval status, and generated report presence. It does not run `memory-refresh-all`, rebuild memory, install hooks, import retain data, call Cloud, call Hindsight, or call Codex retain.
+- Updated `docs/memory/README.md` and `scripts/README.md` with the routine command and explicit read-only limits.
+- Verification passed so far:
+  `MemoryDailyCheckPlanWritesReadOnlyOperatorReport` `1/1`;
+  `MemoryDailyCheckDocsDescribeReadOnlyRoutine` `1/1`;
+  `ManualMemoryGateTests` `13/13`;
+  `ManualMemoryGateTests|MemoryRefreshAllTests|CuratedRetainPolicyTests|LanceDbSidecarSpikeTests` `24/24`;
+  `tools/Memory.Tests` `6/6`;
+  real `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-daily-check.ps1 -ProjectRoot . -PlanOnly` completed and wrote the ignored daily report;
+  `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` completed with `0` warnings and `0` errors;
+  `git diff --check` passed and the diff was reviewed.
+- `memory status` before compact handoff: `needs_refresh=false`, `marker_exists=false`, `indexed_commit=d330bfa98dbf2ac879228e7fc2cce4e4bc6dbb2d`, `working_tree_dirty=true`.
+- Compact handoff was resumed; build, diff hygiene, source commit, and post-commit memory gate were completed.
+- `memory-refresh-all` was intentionally run only after committing the slice because refresh indexes committed `HEAD`, not the dirty working tree.
+- Post-commit memory gate passed after the final source commit: `scripts\memory-refresh-all.ps1` completed, `memory status` reported `needs_refresh=false`, and `scripts\memory-pre-push-check.ps1` reported `status=passed` with LanceDB eval `9/9`.

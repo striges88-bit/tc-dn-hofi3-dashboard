@@ -125,6 +125,105 @@ public sealed class ManualMemoryGateTests
     }
 
     [Fact]
+    public async Task MemoryDailyCheckPlanWritesReadOnlyOperatorReport()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "memory-daily-check.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        using var temp = TemporaryDirectory.Create();
+        var reportPath = Path.Combine(temp.Path, "memory-daily-check-report.json");
+
+        var result = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(Root)} -OutputPath {Quote(reportPath)} -PlanOnly");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+
+        Assert.Equal(1, root.GetProperty("schema_version").GetInt32());
+        Assert.Equal("scripts/memory-daily-check.ps1", root.GetProperty("generator").GetString());
+        Assert.Equal("plan-only", root.GetProperty("mode").GetString());
+        Assert.Equal("reported", root.GetProperty("status").GetString());
+        Assert.True(root.GetProperty("manual_only").GetBoolean());
+        Assert.True(root.GetProperty("read_only").GetBoolean());
+        Assert.False(root.GetProperty("runs_refresh_all").GetBoolean());
+        Assert.False(root.GetProperty("rebuilds_memory").GetBoolean());
+        Assert.False(root.GetProperty("imports_curated_retain").GetBoolean());
+        Assert.False(root.GetProperty("installs_hooks").GetBoolean());
+        Assert.False(root.GetProperty("cloud_enabled").GetBoolean());
+        Assert.False(root.GetProperty("calls_hindsight").GetBoolean());
+        Assert.False(root.GetProperty("calls_codex_retain").GetBoolean());
+        Assert.False(root.GetProperty("codex_auto_retain_enabled").GetBoolean());
+        Assert.False(root.GetProperty("post_commit_auto_refresh_enabled").GetBoolean());
+        Assert.False(root.GetProperty("touches_raw_jsonl").GetBoolean());
+        Assert.False(root.GetProperty("touches_hindsight_store").GetBoolean());
+        Assert.False(root.GetProperty("touches_secret_storage").GetBoolean());
+        Assert.False(root.GetProperty("uses_generated_exports_as_source").GetBoolean());
+        Assert.False(root.GetProperty("touches_build_artifacts").GetBoolean());
+
+        var git = root.GetProperty("git");
+        Assert.True(git.TryGetProperty("branch", out _));
+        Assert.False(string.IsNullOrWhiteSpace(git.GetProperty("head").GetString()));
+
+        var memoryStatus = root.GetProperty("memory_status");
+        Assert.True(memoryStatus.TryGetProperty("head", out _));
+        Assert.True(memoryStatus.TryGetProperty("indexed_commit", out _));
+        Assert.True(memoryStatus.TryGetProperty("needs_refresh", out _));
+        Assert.True(memoryStatus.TryGetProperty("marker_exists", out _));
+        Assert.True(memoryStatus.TryGetProperty("working_tree_dirty", out _));
+
+        var marker = root.GetProperty("marker");
+        Assert.Equal("docs/memory/generated/memory-needs-refresh.marker.json", marker.GetProperty("path").GetString());
+        Assert.True(marker.TryGetProperty("exists", out _));
+
+        var eval = root.GetProperty("lancedb_eval");
+        Assert.Equal("docs/memory/generated/lancedb-sidecar-report.json", eval.GetProperty("json_report_path").GetString());
+        Assert.Equal("docs/memory/generated/lancedb-eval-report.md", eval.GetProperty("markdown_report_path").GetString());
+        Assert.True(eval.TryGetProperty("status", out _));
+        Assert.True(eval.TryGetProperty("passed", out _));
+        Assert.True(eval.TryGetProperty("passed_count", out _));
+        Assert.True(eval.TryGetProperty("failed_count", out _));
+
+        var reportNames = root.GetProperty("generated_reports")
+            .EnumerateArray()
+            .Select(item => item.GetProperty("name").GetString())
+            .ToArray();
+
+        Assert.Contains("memory-refresh-all", reportNames);
+        Assert.Contains("lancedb-eval-json", reportNames);
+        Assert.Contains("lancedb-eval-markdown", reportNames);
+        Assert.Contains("memory-pre-push-check", reportNames);
+
+        Assert.All(root.GetProperty("observations").EnumerateArray(), observation =>
+        {
+            Assert.False(observation.GetProperty("uses_cloud").GetBoolean());
+            Assert.False(observation.GetProperty("uses_hook").GetBoolean());
+            Assert.False(observation.GetProperty("runs_rebuild").GetBoolean());
+            Assert.False(observation.GetProperty("touches_denylist").GetBoolean());
+        });
+    }
+
+    [Fact]
+    public void MemoryDailyCheckDocsDescribeReadOnlyRoutine()
+    {
+        var memoryReadme = ReadText("docs/memory/README.md");
+        var scriptsReadme = ReadText("scripts/README.md");
+        var roadmap = ReadText("docs/superpowers/plans/2026-07-01-memory-polish-roadmap.md");
+
+        Assert.Contains("memory-daily-check.ps1", memoryReadme, StringComparison.Ordinal);
+        Assert.Contains("read-only", memoryReadme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not run `memory-refresh-all`", memoryReadme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("memory-daily-check.ps1", scriptsReadme, StringComparison.Ordinal);
+        Assert.Contains("operator", scriptsReadme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not rebuild", scriptsReadme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Memory Operator UX", roadmap, StringComparison.Ordinal);
+        Assert.Contains("memory-daily-check.ps1", roadmap, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task InstallPrePushHookPlanDoesNotInstallHookOrRunRebuild()
     {
         var scriptPath = Path.Combine(Root, "scripts", "install-memory-pre-push-hook.ps1");
