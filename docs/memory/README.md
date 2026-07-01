@@ -132,6 +132,14 @@ Generate the pre-install Hindsight curated import manifest without calling Hinds
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\hindsight-curated-import.ps1
 ```
 
+Generate the provider-neutral curated retain dry-run and redaction report without calling Hindsight, Cloud, Codex retain, hooks, or memory rebuild:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-dry-run.ps1
+```
+
+The report is written to ignored `docs/memory/generated/curated-retain-dry-run-report.json`. It lists only allowlisted source candidates and redaction findings; it is review evidence, not an import or retain operation.
+
 Review curated retain policy before any external retain or Codex auto-retain:
 
 ```text
