@@ -1,5 +1,6 @@
 import subprocess
 import tempfile
+import warnings
 from pathlib import Path
 
 import lancedb_sidecar
@@ -14,6 +15,9 @@ from lancedb_sidecar import (
     find_git_executable,
     source_matches,
 )
+
+
+FASTEMBED_MEAN_POOLING_WARNING = "now uses mean pooling instead of CLS embedding"
 
 
 def test_default_embedding_provider_is_local_fastembed_multilingual_onnx():
@@ -33,14 +37,65 @@ def test_fastembed_baseline_metadata_is_explicit_and_eval_gated():
         "fastembed",
         DEFAULT_EMBEDDING_MODEL,
         "0.8.0",
+        lancedb_sidecar.FASTEMBED_RUNTIME_MODEL,
     )
 
     assert baseline["embedding_package_version"] == "0.8.0"
     assert baseline["embedding_package_pin"] == "fastembed==0.8.0"
+    assert baseline["embedding_runtime_model"] == lancedb_sidecar.FASTEMBED_RUNTIME_MODEL
+    assert baseline["embedding_pooling"] == "mean"
     assert baseline["embedding_pooling_baseline"] == "mean-pooling"
     assert baseline["embedding_baseline_status"] == "accepted-if-eval-passes"
     assert baseline["embedding_baseline_eval_gate"] == "lancedb-eval-9-of-9"
+    assert baseline["embedding_warning_policy"] == "production-custom-alias-no-suppression"
     assert "rerun cleanup/rebuild/eval" in baseline["embedding_baseline_change_policy"]
+
+
+def test_fastembed_mean_pooling_baseline_uses_custom_runtime_alias_without_production_suppression():
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always")
+        provider = make_embedding_provider("fastembed", DEFAULT_EMBEDDING_MODEL)
+
+    warning_text = "\n".join(str(warning.message) for warning in seen)
+    metadata = provider.metadata()
+
+    assert metadata["embedding_model"] == DEFAULT_EMBEDDING_MODEL
+    assert metadata["embedding_runtime_model"] == lancedb_sidecar.FASTEMBED_RUNTIME_MODEL
+    assert metadata["embedding_pooling"] == "mean"
+    assert metadata["embedding_pooling_baseline"] == "mean-pooling"
+    assert metadata["embedding_warning_policy"] == "production-custom-alias-no-suppression"
+    assert "now uses mean pooling instead of CLS embedding" not in warning_text
+
+
+def test_fastembed_diagnostic_warning_capture_keeps_unrelated_warnings_visible():
+    class FakeTextEmbedding:
+        def __init__(self, model_name):
+            self.model_name = model_name
+            warnings.warn("different FastEmbed warning", UserWarning)
+
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always")
+        model = create_diagnostic_fastembed_model(FakeTextEmbedding, DEFAULT_EMBEDDING_MODEL)
+
+    warning_text = "\n".join(str(warning.message) for warning in seen)
+
+    assert model.model_name == DEFAULT_EMBEDDING_MODEL
+    assert "different FastEmbed warning" in warning_text
+
+
+def create_diagnostic_fastembed_model(text_embedding_type, model_name):
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always")
+        model = text_embedding_type(model_name=model_name)
+
+    for warning in seen:
+        message = str(warning.message)
+        if model_name == DEFAULT_EMBEDDING_MODEL and FASTEMBED_MEAN_POOLING_WARNING in message:
+            continue
+
+        warnings.warn(message, warning.category, stacklevel=2)
+
+    return model
 
 
 def test_token_hash_fallback_can_embed_text():
@@ -286,8 +341,10 @@ def test_eval_markdown_report_contains_compact_operator_table():
         "failed_count": 0,
         "embedding_provider": "fastembed",
         "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        "embedding_runtime_model": "tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean",
         "embedding_package_version": "0.8.0",
         "embedding_package_pin": "fastembed==0.8.0",
+        "embedding_pooling": "mean",
         "embedding_pooling_baseline": "mean-pooling",
         "embedding_baseline_eval_gate": "lancedb-eval-9-of-9",
         "cases": [
@@ -316,6 +373,8 @@ def test_eval_markdown_report_contains_compact_operator_table():
     assert "0.98" in markdown
     assert "Embedding baseline" in markdown
     assert "fastembed" in markdown
+    assert "tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean" in markdown
+    assert "mean" in markdown
     assert "mean-pooling" in markdown
     assert "lancedb-eval-9-of-9" in markdown
 
@@ -382,6 +441,8 @@ def test_store_path_guard_allows_only_generated_child_paths():
 if __name__ == "__main__":
     test_default_embedding_provider_is_local_fastembed_multilingual_onnx()
     test_fastembed_baseline_metadata_is_explicit_and_eval_gated()
+    test_fastembed_mean_pooling_baseline_uses_custom_runtime_alias_without_production_suppression()
+    test_fastembed_diagnostic_warning_capture_keeps_unrelated_warnings_visible()
     test_token_hash_fallback_can_embed_text()
     test_commit_source_match_uses_git_blob_instead_of_dirty_worktree()
     test_rerank_prefers_typed_formula_over_generic_chunk()

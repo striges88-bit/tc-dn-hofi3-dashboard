@@ -221,8 +221,10 @@ def render_embedding_baseline_lines(report: dict[str, Any]) -> list[str]:
     keys = [
         ("Provider", "embedding_provider"),
         ("Model", "embedding_model"),
+        ("Runtime model", "embedding_runtime_model"),
         ("Package version", "embedding_package_version"),
         ("Package pin", "embedding_package_pin"),
+        ("Pooling", "embedding_pooling"),
         ("Pooling baseline", "embedding_pooling_baseline"),
         ("Baseline status", "embedding_baseline_status"),
         ("Eval gate", "embedding_baseline_eval_gate"),

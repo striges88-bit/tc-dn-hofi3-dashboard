@@ -118,7 +118,17 @@ $scriptPath = Join-Path $root 'tools\MemorySemantic\lancedb_sidecar.py'
 $uvPath = Find-Executable -Name 'uv.exe'
 $supportedCommands = @('probe', 'rebuild', 'search', 'explain', 'eval', 'cleanup')
 $fastEmbedPackagePin = 'fastembed==0.8.0'
+$fastEmbedDefaultModel = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
+$fastEmbedRuntimeModel = 'tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean'
 $embeddingPackagePin = if ($EmbeddingProvider -eq 'token-hash') { 'builtin' } else { $fastEmbedPackagePin }
+$embeddingRuntimeModel = if ($EmbeddingProvider -eq 'token-hash') {
+    'local-token-hash'
+} elseif ($EmbeddingModel -eq $fastEmbedDefaultModel) {
+    $fastEmbedRuntimeModel
+} else {
+    $EmbeddingModel
+}
+$embeddingPooling = if ($EmbeddingProvider -eq 'token-hash') { 'not-applicable' } elseif ($EmbeddingModel -eq $fastEmbedDefaultModel) { 'mean' } else { 'unknown' }
 $embeddingPoolingBaseline = if ($EmbeddingProvider -eq 'token-hash') { 'not-applicable' } else { 'mean-pooling' }
 $embeddingBaselineStatus = if ($EmbeddingProvider -eq 'token-hash') { 'fallback-test-only' } else { 'accepted-if-eval-passes' }
 $embeddingBaselineEvalGate = if ($EmbeddingProvider -eq 'token-hash') { 'not-semantic-quality-evidence' } else { 'lancedb-eval-9-of-9' }
@@ -126,6 +136,11 @@ $embeddingBaselineChangePolicy = if ($EmbeddingProvider -eq 'token-hash') {
     'do not use token-hash as semantic quality evidence'
 } else {
     'rerun cleanup/rebuild/eval and update docs before changing package, model, or pooling'
+}
+$embeddingWarningPolicy = if ($EmbeddingProvider -eq 'token-hash') {
+    'not-applicable'
+} else {
+    'production-custom-alias-no-suppression'
 }
 
 if ($Command -eq 'probe') {
@@ -149,10 +164,13 @@ if ($Command -eq 'probe') {
         embedding_provider = $EmbeddingProvider
         embedding_model = if ($EmbeddingProvider -eq 'token-hash') { 'local-token-hash' } else { $EmbeddingModel }
         embedding_package_pin = $embeddingPackagePin
+        embedding_runtime_model = $embeddingRuntimeModel
+        embedding_pooling = $embeddingPooling
         embedding_pooling_baseline = $embeddingPoolingBaseline
         embedding_baseline_status = $embeddingBaselineStatus
         embedding_baseline_eval_gate = $embeddingBaselineEvalGate
         embedding_baseline_change_policy = $embeddingBaselineChangePolicy
+        embedding_warning_policy = $embeddingWarningPolicy
         status = if ($null -eq $uvPath) { 'uv-unavailable' } else { 'ready-to-run' }
         next_action = 'Run rebuild after SQLite memory refresh; do not install hooks or crawl project files directly.'
     }
