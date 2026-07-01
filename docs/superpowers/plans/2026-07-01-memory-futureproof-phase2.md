@@ -125,7 +125,7 @@ Run Memory CLI tests, real wrapper scripts against a clean fixture or blocked re
 - Modify: `docs/memory/README.md`
 - Modify: `tasks/todo.md`
 
-- [ ] **Step 1: Add RED eval cases**
+- [x] **Step 1: Add RED eval cases**
 
 Required retrieval cases:
 - current OFI formula
@@ -138,11 +138,11 @@ Required retrieval cases:
 - exchange adapter impact
 - superseded/failed exclusion
 
-- [ ] **Step 2: Implement report fields**
+- [x] **Step 2: Implement report fields**
 
 Generated eval reports must include query, expected ids/types, rank, source path, confidence, freshness/gap notes, and exclusion result for superseded/failed facts.
 
-- [ ] **Step 3: Verify Slice 3**
+- [x] **Step 3: Verify Slice 3**
 
 Run Memory CLI tests, Python sidecar tests, LanceDB rebuild/eval, build, and diff hygiene.
 
@@ -211,9 +211,9 @@ Run manual gate tests, helper `-PlanOnly`, build, diff hygiene, memory refresh, 
 
 ## Completion Criteria
 
-- [ ] Controlled local retain import exists and is blocked unless sources are allowlisted, redaction-clean, and commit-grounded.
+- [x] Controlled local retain import exists and is blocked unless sources are allowlisted, redaction-clean, and commit-grounded.
 - [x] Imported retained items can be searched, exported, deleted, and verified absent.
-- [ ] Retrieval quality gate covers the expanded cases and excludes superseded/failed facts.
+- [x] Retrieval quality gate covers the expanded cases and excludes superseded/failed facts.
 - [ ] A documented rebuild path restores SQLite and LanceDB from Git `HEAD`.
 - [ ] Optional automation remains marker-only, explicit, disableable, and documented.
 - [ ] No workflow calls Cloud, Hindsight, Codex auto-retain, post-commit rebuild, raw JSONL import, generated export import, secrets import, or build-artifact import.

@@ -1152,7 +1152,7 @@
 
 - [x] Start branch `codex/memory-futureproof-phase2-roadmap` from clean `main`.
 - [x] Create roadmap plan `docs/superpowers/plans/2026-07-01-memory-futureproof-phase2.md`.
-- [ ] Slice 1: controlled curated retain import into local SQLite, commit-grounded and blocked by redaction/denylist/stale metadata.
+- [x] Slice 1: controlled curated retain import into local SQLite, commit-grounded and blocked by redaction/denylist/stale metadata.
   - [x] Add RED Memory CLI tests for `retain-import`.
   - [x] Implement local-only `retain-import` and generated report wrapper.
   - [x] Update retain policy, memory contract, and script docs.
@@ -1161,10 +1161,10 @@
   - [x] Add RED tests for `retain-search`, `retain-export`, `retain-delete`, and absent-after-delete verification.
   - [x] Implement local-only lifecycle commands and wrappers.
   - [x] Verify lifecycle tests, wrapper reports, solution build, and diff hygiene.
-- [ ] Slice 3: expanded retrieval quality gate.
-  - [ ] Add eval cases for formula owner, funding-source rationale, Binance DTO boundary, REST hot path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
-  - [ ] Update JSON/Markdown eval reports with rank, source path, confidence, freshness, and gap notes.
-  - [ ] Verify Memory CLI tests, Python sidecar tests, LanceDB rebuild/eval, build, and diff hygiene.
+- [x] Slice 3: expanded retrieval quality gate.
+  - [x] Add eval cases for formula owner, funding-source rationale, Binance DTO boundary, REST hot path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
+  - [x] Update JSON/Markdown eval reports with rank, source path, confidence, freshness, and gap notes.
+  - [x] Verify Memory CLI tests, Python sidecar tests, LanceDB rebuild/eval, build, and diff hygiene.
 - [ ] Slice 4: recovery/rebuild proof from Git `HEAD`.
   - [ ] Add tests for deleting local SQLite/LanceDB generated stores and rebuilding from committed sources.
   - [ ] Add documented recovery wrapper that touches only approved generated memory artifacts.
@@ -1193,3 +1193,6 @@
   solution build `0` warnings and `0` errors;
   `git diff --check` clean.
 - Commit Slice 2 source before running `memory-refresh-all`, because refresh indexes committed `HEAD`.
+- Slice 2 source committed as `ef77b37`; post-commit memory gate passed: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+- Slice 3 required retrieval quality gate was already implemented before this roadmap checkpoint: LanceDB eval has 9 cases covering current OFI formula, formula owner, funding-source rationale, Binance DTO boundary, REST hot-path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
+- Slice 3 verification passed: Memory CLI tests `9/9`, Python sidecar tests through `uv` returned `ok`, and post-Slice-2 `memory-refresh-all` LanceDB eval reported `9/9`.
