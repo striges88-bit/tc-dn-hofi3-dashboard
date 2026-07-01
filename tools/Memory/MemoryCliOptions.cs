@@ -10,6 +10,8 @@ public enum MemoryCommand
     Status,
     RetainImport,
     RetainSearch,
+    RetainExport,
+    RetainDelete,
 }
 
 public sealed record MemoryCliOptions(
@@ -19,13 +21,15 @@ public sealed record MemoryCliOptions(
     string Query,
     string Commit,
     string InputReportPath,
+    string OutputPath,
+    string SourcePath,
     bool Json)
 {
     public static MemoryCliOptions Parse(string[] args)
     {
         if (args.Length == 0)
         {
-            throw new InvalidOperationException("Command is required: refresh, refresh-from-commit, search, explain, stale-check, status, retain-import, or retain-search.");
+            throw new InvalidOperationException("Command is required: refresh, refresh-from-commit, search, explain, stale-check, status, retain-import, retain-search, retain-export, or retain-delete.");
         }
 
         var command = args[0].ToLowerInvariant() switch
@@ -38,6 +42,8 @@ public sealed record MemoryCliOptions(
             "status" => MemoryCommand.Status,
             "retain-import" => MemoryCommand.RetainImport,
             "retain-search" => MemoryCommand.RetainSearch,
+            "retain-export" => MemoryCommand.RetainExport,
+            "retain-delete" => MemoryCommand.RetainDelete,
             _ => throw new InvalidOperationException($"Unknown memory command: {args[0]}")
         };
 
@@ -46,6 +52,8 @@ public sealed record MemoryCliOptions(
         var query = string.Empty;
         var commit = "HEAD";
         var inputReportPath = string.Empty;
+        var outputPath = string.Empty;
+        var sourcePath = string.Empty;
         var json = false;
 
         for (var index = 1; index < args.Length; index++)
@@ -68,6 +76,12 @@ public sealed record MemoryCliOptions(
                 case "--input-report":
                     inputReportPath = ReadValue(args, ref index, argument);
                     break;
+                case "--output":
+                    outputPath = ReadValue(args, ref index, argument);
+                    break;
+                case "--source-path":
+                    sourcePath = ReadValue(args, ref index, argument).Replace('\\', '/');
+                    break;
                 case "--json":
                     json = true;
                     break;
@@ -79,6 +93,7 @@ public sealed record MemoryCliOptions(
         projectRoot = ResolveProjectRoot(projectRoot);
         databasePath = ResolveDatabasePath(projectRoot, databasePath);
         inputReportPath = ResolveInputReportPath(projectRoot, inputReportPath);
+        outputPath = ResolveOutputPath(projectRoot, outputPath);
 
         if ((command is MemoryCommand.Search or MemoryCommand.Explain or MemoryCommand.RetainSearch) && string.IsNullOrWhiteSpace(query))
         {
@@ -90,7 +105,12 @@ public sealed record MemoryCliOptions(
             throw new InvalidOperationException("--commit is required for refresh-from-commit and retain-import.");
         }
 
-        return new MemoryCliOptions(command, projectRoot, databasePath, query, commit, inputReportPath, json);
+        if (command is MemoryCommand.RetainDelete && string.IsNullOrWhiteSpace(sourcePath))
+        {
+            throw new InvalidOperationException("--source-path is required for retain-delete.");
+        }
+
+        return new MemoryCliOptions(command, projectRoot, databasePath, query, commit, inputReportPath, outputPath, sourcePath, json);
     }
 
     private static string ReadValue(string[] args, ref int index, string option)
@@ -148,5 +168,20 @@ public sealed record MemoryCliOptions(
         }
 
         return Path.GetFullPath(inputReportPath);
+    }
+
+    private static string ResolveOutputPath(string projectRoot, string outputPath)
+    {
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            outputPath = Path.Combine(projectRoot, "docs", "memory", "generated", "curated-retain-export-report.json");
+        }
+
+        if (!Path.IsPathRooted(outputPath))
+        {
+            outputPath = Path.Combine(projectRoot, outputPath);
+        }
+
+        return Path.GetFullPath(outputPath);
     }
 }

@@ -97,7 +97,7 @@ Expected behavior:
 - `retain-delete --source-path <path>` deletes matching local retained rows and FTS rows.
 - A second `retain-search` proves the deleted content is absent.
 
-- [ ] **Step 2: Implement lifecycle commands**
+- [x] **Step 2: Implement lifecycle commands**
 
 Keep commands local-only:
 
@@ -109,7 +109,7 @@ retain-delete --source-path docs/memory/example.md --json
 
 Do not delete source files, generated dry-run reports, hooks, LanceDB data, Cloud data, or Codex memory.
 
-- [ ] **Step 3: Verify Slice 2**
+- [x] **Step 3: Verify Slice 2**
 
 Run Memory CLI tests, real wrapper scripts against a clean fixture or blocked repo state, full build, and `git diff --check`.
 
@@ -212,7 +212,7 @@ Run manual gate tests, helper `-PlanOnly`, build, diff hygiene, memory refresh, 
 ## Completion Criteria
 
 - [ ] Controlled local retain import exists and is blocked unless sources are allowlisted, redaction-clean, and commit-grounded.
-- [ ] Imported retained items can be searched, exported, deleted, and verified absent.
+- [x] Imported retained items can be searched, exported, deleted, and verified absent.
 - [ ] Retrieval quality gate covers the expanded cases and excludes superseded/failed facts.
 - [ ] A documented rebuild path restores SQLite and LanceDB from Git `HEAD`.
 - [ ] Optional automation remains marker-only, explicit, disableable, and documented.

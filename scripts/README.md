@@ -21,3 +21,7 @@ Use `curated-retain-export-dry-run.ps1` after the curated retain dry-run to gene
 Use `curated-retain-delete-dry-run.ps1` after the export dry-run to generate ignored deletion-plan reports. It validates export metadata and planned selectors, but does not delete files, retained items, provider data, hooks, local stores, or generated reports.
 
 Use `curated-retain-import.ps1` only after reviewing the curated retain dry-run report. It wraps local SQLite `retain-import`, reads source text from the selected Git commit tree, defaults to `HEAD`, and writes `docs/memory/generated/curated-retain-import-report.json`. It imports only allowlisted redaction-clean sources and keeps external retain, Codex auto-retain, Cloud, hooks, refresh wrappers, rebuilds, raw JSONL, generated exports, secrets, and build artifacts disabled.
+
+Use `curated-retain-export.ps1` to export local SQLite retained rows into `docs/memory/generated/curated-retain-export-report.json`. This is local lifecycle evidence for reviewed retained rows; it does not call external providers, install hooks, or rebuild memory.
+
+Use `curated-retain-delete.ps1 -SourcePath <repo/path.md>` to delete local SQLite retained rows for one source path and write `docs/memory/generated/curated-retain-delete-report.json`. It removes retained rows only and does not remove source files, generated reports, hooks, LanceDB data, provider data, or build artifacts.

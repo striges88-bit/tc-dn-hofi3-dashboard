@@ -313,6 +313,70 @@ public sealed class MemoryCliTests
         Assert.False(root.GetProperty("rebuilds_memory").GetBoolean());
     }
 
+    [Fact]
+    public void RetainExportDeleteLifecycleProvesImportedItemCanBeRemoved()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        var retainedText = "# Lifecycle Retain Source\n\nlifecycleonlyretain phrase for export and delete proof.\n";
+        fixture.Write("docs/memory/lifecycle-retain.md", retainedText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile("docs/memory/lifecycle-retain.md", HashText(retainedText), retainedText.Length, "candidate", 0));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(0, import.ExitCode);
+
+        using var searchBeforeDelete = fixture.RunMemoryCli("retain-search", "--query", "lifecycleonlyretain", "--json");
+        Assert.Equal(0, searchBeforeDelete.ExitCode);
+        using (var searchBeforeDeleteJson = JsonDocument.Parse(searchBeforeDelete.StandardOutput))
+        {
+            Assert.Single(searchBeforeDeleteJson.RootElement.GetProperty("results").EnumerateArray());
+        }
+
+        var exportPath = Path.Combine(fixture.Root, "docs", "memory", "generated", "curated-retain-export-report.json");
+        using var export = fixture.RunMemoryCli("retain-export", "--output", exportPath, "--json");
+        Assert.Equal(0, export.ExitCode);
+        Assert.True(File.Exists(exportPath), $"Missing export report: {exportPath}");
+        using (var exportJson = JsonDocument.Parse(export.StandardOutput))
+        {
+            var root = exportJson.RootElement;
+            Assert.Equal("exported", root.GetProperty("status").GetString());
+            Assert.Equal(1, root.GetProperty("exported_count").GetInt32());
+            Assert.True(root.GetProperty("source_content_included").GetBoolean());
+            Assert.False(root.GetProperty("external_retain_enabled").GetBoolean());
+            Assert.False(root.GetProperty("calls_codex_retain").GetBoolean());
+            Assert.False(root.GetProperty("calls_hindsight").GetBoolean());
+            Assert.False(root.GetProperty("installs_hooks").GetBoolean());
+            Assert.False(root.GetProperty("runs_refresh_all").GetBoolean());
+            var item = root.GetProperty("items")[0];
+            Assert.Equal("docs/memory/lifecycle-retain.md", item.GetProperty("source_path").GetString());
+            Assert.Contains("lifecycleonlyretain", item.GetProperty("text").GetString(), StringComparison.Ordinal);
+        }
+
+        using var delete = fixture.RunMemoryCli("retain-delete", "--source-path", "docs/memory/lifecycle-retain.md", "--json");
+        Assert.Equal(0, delete.ExitCode);
+        using (var deleteJson = JsonDocument.Parse(delete.StandardOutput))
+        {
+            var root = deleteJson.RootElement;
+            Assert.Equal("deleted", root.GetProperty("status").GetString());
+            Assert.Equal(1, root.GetProperty("deleted_count").GetInt32());
+            Assert.False(root.GetProperty("removes_files").GetBoolean());
+            Assert.False(root.GetProperty("external_retain_enabled").GetBoolean());
+            Assert.False(root.GetProperty("calls_codex_retain").GetBoolean());
+            Assert.False(root.GetProperty("calls_hindsight").GetBoolean());
+            Assert.False(root.GetProperty("installs_hooks").GetBoolean());
+            Assert.False(root.GetProperty("runs_refresh_all").GetBoolean());
+        }
+
+        Assert.True(File.Exists(Path.Combine(fixture.Root, "docs", "memory", "lifecycle-retain.md")), "Retain delete must not remove source files.");
+
+        using var searchAfterDelete = fixture.RunMemoryCli("retain-search", "--query", "lifecycleonlyretain", "--json");
+        Assert.Equal(0, searchAfterDelete.ExitCode);
+        using var searchAfterDeleteJson = JsonDocument.Parse(searchAfterDelete.StandardOutput);
+        Assert.Empty(searchAfterDeleteJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
     private static CliResult RunMemoryCli(params string[] arguments)
     {
         var projectPath = Path.Combine(RepositoryRoot, "tools", "Memory", "CryptoIndicatorApp.Memory.csproj");

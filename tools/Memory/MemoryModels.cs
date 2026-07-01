@@ -188,3 +188,47 @@ public sealed record RetainSearchHit(
     string Provider,
     string RedactionStatus,
     double Rank);
+
+public sealed record RetainExportResult(
+    string Mode,
+    string Status,
+    string OutputPath,
+    int ExportedCount,
+    bool SourceContentIncluded,
+    bool ExternalRetainEnabled,
+    bool CodexAutoRetainEnabled,
+    bool CloudEnabled,
+    bool CallsHindsight,
+    bool CallsCodexRetain,
+    bool InstallsHooks,
+    bool RunsRefreshAll,
+    bool RebuildsMemory,
+    IReadOnlyList<RetainExportItem> Items);
+
+public sealed record RetainExportItem(
+    string Id,
+    string SourcePath,
+    string SourceHash,
+    string SourceBlobSha,
+    string CommitSha,
+    string TreeSha,
+    string Provider,
+    string RedactionStatus,
+    string RetainedAt,
+    string Text);
+
+public sealed record RetainDeleteResult(
+    string Mode,
+    string Status,
+    string SourcePath,
+    int DeletedCount,
+    bool DeletesItems,
+    bool RemovesFiles,
+    bool ExternalRetainEnabled,
+    bool CodexAutoRetainEnabled,
+    bool CloudEnabled,
+    bool CallsHindsight,
+    bool CallsCodexRetain,
+    bool InstallsHooks,
+    bool RunsRefreshAll,
+    bool RebuildsMemory);

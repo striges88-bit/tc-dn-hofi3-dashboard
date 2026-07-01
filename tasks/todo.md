@@ -1157,10 +1157,10 @@
   - [x] Implement local-only `retain-import` and generated report wrapper.
   - [x] Update retain policy, memory contract, and script docs.
   - [x] Verify with Memory CLI tests, wrapper run, solution build, and diff hygiene.
-- [ ] Slice 2: end-to-end local retain lifecycle.
-  - [ ] Add RED tests for `retain-search`, `retain-export`, `retain-delete`, and absent-after-delete verification.
-  - [ ] Implement local-only lifecycle commands and wrappers.
-  - [ ] Verify lifecycle tests, wrapper reports, solution build, and diff hygiene.
+- [x] Slice 2: end-to-end local retain lifecycle.
+  - [x] Add RED tests for `retain-search`, `retain-export`, `retain-delete`, and absent-after-delete verification.
+  - [x] Implement local-only lifecycle commands and wrappers.
+  - [x] Verify lifecycle tests, wrapper reports, solution build, and diff hygiene.
 - [ ] Slice 3: expanded retrieval quality gate.
   - [ ] Add eval cases for formula owner, funding-source rationale, Binance DTO boundary, REST hot path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
   - [ ] Update JSON/Markdown eval reports with rank, source path, confidence, freshness, and gap notes.
@@ -1183,3 +1183,13 @@
 - Denylisted paths and redaction-review sources block the whole import batch with exit code `2` at the CLI layer.
 - Added `scripts/curated-retain-import.ps1` as a local-only wrapper that writes ignored report `docs/memory/generated/curated-retain-import-report.json`; real repo run is currently `blocked` with `imported_count=0` because the existing dry-run report has redaction/stale-source blockers.
 - Verification for Slice 1 passed: `tools/Memory.Tests` `8/8`, `CuratedRetainPolicyTests|MemoryContractTests|ManualMemoryGateTests` `28/28`, solution build `0` warnings and `0` errors, and `git diff --check` clean.
+- Slice 1 source committed as `079d4fb` and post-commit memory gate passed: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+- Slice 2 adds local-only `retain-export`, `retain-delete`, `scripts/curated-retain-export.ps1`, and `scripts/curated-retain-delete.ps1`.
+- Slice 2 lifecycle proof covers: import retained item, find through `retain-search`, export retained text and metadata, delete retained rows by `source_path`, and verify the deleted phrase is absent from `retain-search`.
+- Slice 2 verification passed before commit:
+  `RetainExportDeleteLifecycleProvesImportedItemCanBeRemoved` `1/1` (user-run full Memory CLI suite reported `9/9`);
+  `ControlledRetainLifecycleScriptsAndDocsStayLocalOnly` `1/1`;
+  related Infrastructure guardrails `29/29`;
+  solution build `0` warnings and `0` errors;
+  `git diff --check` clean.
+- Commit Slice 2 source before running `memory-refresh-all`, because refresh indexes committed `HEAD`.

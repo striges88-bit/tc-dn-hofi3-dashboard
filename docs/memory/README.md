@@ -177,6 +177,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-i
 
 This writes `docs/memory/generated/curated-retain-import-report.json` and imports only allowlisted redaction-clean sources into local SQLite. The imported text is read from the selected Git commit tree, not from dirty working-tree files. A blocked report is expected while redaction findings remain.
 
+Export or delete locally retained rows for lifecycle proof:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-export.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-delete.ps1 -SourcePath docs/memory/example.md
+```
+
+Delete removes only local SQLite retained rows for the selected source path. It does not remove repository files.
+
 Review curated retain policy before any external retain or Codex auto-retain:
 
 ```text

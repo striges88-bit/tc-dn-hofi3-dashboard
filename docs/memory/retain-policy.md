@@ -118,3 +118,11 @@ Controlled local import uses `scripts/curated-retain-import.ps1`, which wraps `t
 Import is allowed only when every source is allowlisted, current for the selected commit, and redaction-clean. Denylisted paths, stale hashes, missing source metadata, or redaction review findings block the whole batch. The generated report is `docs/memory/generated/curated-retain-import-report.json`.
 
 Controlled local import does not enable external retain, Codex auto-retain, Cloud, Hindsight, hooks, refresh wrappers, LanceDB rebuild, raw JSONL import, generated export import, or build-artifact import.
+
+## Controlled Local Export And Delete
+
+After controlled local import, retained SQLite rows must be lifecycle-testable before any external memory is considered. Use `scripts/curated-retain-export.ps1` to export local retained rows into `docs/memory/generated/curated-retain-export-report.json`.
+
+Use `scripts/curated-retain-delete.ps1 -SourcePath <repo/path.md>` to delete local retained rows for one source path. Delete must not remove source files, generated dry-run reports, hooks, LanceDB data, Cloud data, or Codex memory. The proof is: import a clean source, find it through `retain-search`, export it, delete it, then verify the phrase is absent from retain-search.
+
+These lifecycle commands are local SQLite operations. They do not change repository source of truth and do not enable external retain or Codex auto-retain.
