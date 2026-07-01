@@ -1232,8 +1232,8 @@ Current evidence:
 - [x] Commit initial source slice, then run `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1`.
 - [x] Run real `scripts\memory-clone-recovery-check.ps1` on committed source.
 - [x] Fix the clone recovery ownership marker so the marker does not dirty the temporary clone working tree.
-- [ ] Commit the marker fix, then rerun `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1`.
-- [ ] Rerun real `scripts\memory-clone-recovery-check.ps1` and confirm clone `needs_refresh=false` with a clean clone working tree.
+- [x] Commit the marker fix, then rerun `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1`.
+- [x] Rerun real `scripts\memory-clone-recovery-check.ps1` and confirm clone `needs_refresh=false` with a clean clone working tree.
 
 ## Memory Operations Polish Runbook Results
 
@@ -1255,4 +1255,8 @@ Current evidence:
 - Root cause: the ownership marker was written into the clone worktree root before `memory status`, so Git saw it as untracked.
 - RED/GREEN marker regression:
   `CloneLikeRecoveryOwnershipMarkerDoesNotDirtyWorkingTree` failed before the fix and passed after moving the marker under `.git`.
-- Current next command: run related tests/build/diff-check for the marker fix, commit it, then rerun final memory refresh/status/pre-push and real clone recovery.
+- Marker fix verification passed:
+  `MemoryRefreshAllTests|ManualMemoryGateTests` passed `22/22`, solution build passed with `0` warnings/errors, and `git diff --check` passed.
+- Marker fix commit `3591a3c` passed `memory-refresh-all`, `memory status` (`needs_refresh=false`), and `memory-pre-push-check` with LanceDB eval `9/9`.
+- Final real clone-like recovery on `3591a3c` completed, deleted the temporary clone, and reported clone `needs_refresh=false` and `working_tree_dirty=false`.
+- Final post-commit gate for this todo evidence is reported in generated reports and the agent response, not committed back into `tasks/todo.md`; otherwise every evidence update would create a new `HEAD` that needs another refresh.
