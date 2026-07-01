@@ -1219,3 +1219,44 @@ Current evidence:
 - GREEN was confirmed after the fix: the regression test passed `1/1`, `ManualMemoryGateTests` passed `16/16`, solution build passed with `0` warnings/errors, and `git diff --check` passed.
 - Post-commit memory gate passed on commit `506c9a6`: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed with LanceDB eval `9/9`.
 - Push retry succeeded; the managed pre-push hook also passed and published `codex/memory-futureproof-phase2-roadmap`.
+
+## Memory Operations Polish Runbook Todo
+
+- [x] Start branch `codex/memory-operations-polish-runbook` from clean `main`.
+- [x] Create plan `docs/superpowers/plans/2026-07-01-memory-operations-polish-runbook.md`.
+- [x] Add `scripts/memory-clone-recovery-check.ps1` for a fresh clone-like recovery proof from committed `HEAD`.
+- [x] Add plan-only tests proving the clone-like recovery wrapper is safe: no hooks, no Cloud, no Codex retain, no raw JSONL/secrets/build artifacts, and no rebuild in `-PlanOnly`.
+- [x] Add short user-facing runbook `docs/memory/operations-runbook.md` for daily, after-commit, before-push/PR, recovery, and `/compact` moments.
+- [x] Update `docs/memory/README.md` and `scripts/README.md` to point operators to the runbook and clone-like recovery check.
+- [x] Run narrow tests, real `-PlanOnly`, solution build, and `git diff --check`.
+- [x] Commit initial source slice, then run `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1`.
+- [x] Run real `scripts\memory-clone-recovery-check.ps1` on committed source.
+- [x] Fix the clone recovery ownership marker so the marker does not dirty the temporary clone working tree.
+- [x] Commit the marker fix, then rerun `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1`.
+- [x] Rerun real `scripts\memory-clone-recovery-check.ps1` and confirm clone `needs_refresh=false` with a clean clone working tree.
+
+## Memory Operations Polish Runbook Results
+
+- Branch created from local `main` after `git pull` reported `Already up to date`.
+- RED confirmed:
+  `CloneLikeRecoveryPlanWritesSafeReportWithoutRunningCloneOrRebuild` failed on missing `scripts/memory-clone-recovery-check.ps1`;
+  `MemoryOperationsRunbookListsRoutineCommandsAndAutomationLimits` failed on missing `docs/memory/operations-runbook.md`.
+- GREEN confirmed:
+  `CloneLikeRecoveryPlanWritesSafeReportWithoutRunningCloneOrRebuild` passed `1/1`;
+  `MemoryOperationsRunbookListsRoutineCommandsAndAutomationLimits` passed `1/1`;
+  `MemoryRefreshAllTests|ManualMemoryGateTests` passed `21/21`.
+- Real plan-only run passed:
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-clone-recovery-check.ps1 -PlanOnly` wrote `docs/memory/generated/memory-clone-recovery-check-report.json`, reported `status=planned`, `clone_created=false`, `runs_recovery=false`, `runs_refresh_all=false`.
+- Build passed:
+  `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore` completed with `0` warnings and `0` errors.
+- `git diff --check` passed.
+- Initial source commit `8d20905` passed `memory-refresh-all`, `memory status` (`needs_refresh=false`), and `memory-pre-push-check` with LanceDB eval `9/9`.
+- First real clone-like recovery completed, deleted the temporary clone, and proved clone `needs_refresh=false`, but its report showed `clone_memory_status.working_tree_dirty=true`.
+- Root cause: the ownership marker was written into the clone worktree root before `memory status`, so Git saw it as untracked.
+- RED/GREEN marker regression:
+  `CloneLikeRecoveryOwnershipMarkerDoesNotDirtyWorkingTree` failed before the fix and passed after moving the marker under `.git`.
+- Marker fix verification passed:
+  `MemoryRefreshAllTests|ManualMemoryGateTests` passed `22/22`, solution build passed with `0` warnings/errors, and `git diff --check` passed.
+- Marker fix commit `3591a3c` passed `memory-refresh-all`, `memory status` (`needs_refresh=false`), and `memory-pre-push-check` with LanceDB eval `9/9`.
+- Final real clone-like recovery on `3591a3c` completed, deleted the temporary clone, and reported clone `needs_refresh=false` and `working_tree_dirty=false`.
+- Final post-commit gate for this todo evidence is reported in generated reports and the agent response, not committed back into `tasks/todo.md`; otherwise every evidence update would create a new `HEAD` that needs another refresh.

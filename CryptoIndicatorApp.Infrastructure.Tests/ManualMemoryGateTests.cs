@@ -303,6 +303,32 @@ public sealed class ManualMemoryGateTests
     }
 
     [Fact]
+    public void MemoryOperationsRunbookListsRoutineCommandsAndAutomationLimits()
+    {
+        var runbook = ReadText("docs/memory/operations-runbook.md");
+        var memoryReadme = ReadText("docs/memory/README.md");
+        var scriptsReadme = ReadText("scripts/README.md");
+
+        Assert.Contains("memory-daily-check.ps1", runbook, StringComparison.Ordinal);
+        Assert.Contains("memory-refresh-all.ps1", runbook, StringComparison.Ordinal);
+        Assert.Contains("memory-pre-push-check.ps1", runbook, StringComparison.Ordinal);
+        Assert.Contains("memory-clone-recovery-check.ps1", runbook, StringComparison.Ordinal);
+        Assert.Contains("memory-rebuild-from-head.ps1", runbook, StringComparison.Ordinal);
+        Assert.Contains("/compact", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("needs_refresh=false", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("9/9", runbook, StringComparison.Ordinal);
+        Assert.Contains("auto-retain", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("post-commit rebuild", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("raw JSONL", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("secrets", runbook, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("operations-runbook.md", memoryReadme, StringComparison.Ordinal);
+        Assert.Contains("memory-clone-recovery-check.ps1", memoryReadme, StringComparison.Ordinal);
+        Assert.Contains("memory-clone-recovery-check.ps1", scriptsReadme, StringComparison.Ordinal);
+        Assert.Contains("clone-like", scriptsReadme, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task InstallPrePushHookPlanDoesNotInstallHookOrRunRebuild()
     {
         var scriptPath = Path.Combine(Root, "scripts", "install-memory-pre-push-hook.ps1");
