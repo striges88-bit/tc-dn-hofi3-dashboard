@@ -24,6 +24,11 @@ CURRENT_STATUSES = ("current", "proposed")
 DEFAULT_EMBEDDING_PROVIDER = "fastembed"
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 TOKEN_HASH_MODEL = "local-token-hash"
+FASTEMBED_PACKAGE_PIN = "fastembed==0.8.0"
+FASTEMBED_POOLING_BASELINE = "mean-pooling"
+FASTEMBED_BASELINE_STATUS = "accepted-if-eval-passes"
+FASTEMBED_BASELINE_EVAL_GATE = "lancedb-eval-9-of-9"
+FASTEMBED_BASELINE_CHANGE_POLICY = "rerun cleanup/rebuild/eval and update docs before changing package, model, or pooling"
 
 
 def main() -> int:
@@ -94,6 +99,7 @@ def build_base_report(args: argparse.Namespace) -> dict[str, Any]:
         "supported_commands": ["probe", "rebuild", "search", "explain", "eval", "cleanup"],
         "embedding_provider": args.embedding_provider,
         "embedding_model": normalized_embedding_model(args.embedding_provider, args.embedding_model),
+        **build_embedding_baseline_metadata(args.embedding_provider, args.embedding_model),
         "status": "ok",
     }
 
@@ -406,6 +412,42 @@ def record_text(record: dict[str, Any]) -> str:
     return f"{record['title']}\n\n{record['body']}"
 
 
+def build_embedding_baseline_metadata(
+    provider_name: str,
+    model_name: str,
+    package_version: str | None = None,
+) -> dict[str, Any]:
+    if provider_name == "token-hash":
+        return {
+            "embedding_package_version": package_version or "builtin",
+            "embedding_package_pin": "builtin",
+            "embedding_pooling_baseline": "not-applicable",
+            "embedding_baseline_status": "fallback-test-only",
+            "embedding_baseline_eval_gate": "not-semantic-quality-evidence",
+            "embedding_baseline_change_policy": "do not use token-hash as semantic quality evidence",
+        }
+
+    normalized_model = normalized_embedding_model(provider_name, model_name)
+    if provider_name == "fastembed" and normalized_model == DEFAULT_EMBEDDING_MODEL:
+        return {
+            "embedding_package_version": package_version,
+            "embedding_package_pin": FASTEMBED_PACKAGE_PIN,
+            "embedding_pooling_baseline": FASTEMBED_POOLING_BASELINE,
+            "embedding_baseline_status": FASTEMBED_BASELINE_STATUS,
+            "embedding_baseline_eval_gate": FASTEMBED_BASELINE_EVAL_GATE,
+            "embedding_baseline_change_policy": FASTEMBED_BASELINE_CHANGE_POLICY,
+        }
+
+    return {
+        "embedding_package_version": package_version,
+        "embedding_package_pin": "",
+        "embedding_pooling_baseline": "unknown",
+        "embedding_baseline_status": "unapproved-model",
+        "embedding_baseline_eval_gate": "requires-new-eval-baseline",
+        "embedding_baseline_change_policy": FASTEMBED_BASELINE_CHANGE_POLICY,
+    }
+
+
 @dataclass
 class EmbeddingProvider:
     provider_name: str
@@ -418,12 +460,14 @@ class EmbeddingProvider:
         return self.embed_many([text])[0]
 
     def metadata(self) -> dict[str, Any]:
-        return {
+        metadata = {
             "embedding_provider": self.provider_name,
             "embedding_model": self.model_name,
             "embedding_dimensions": self.dimensions,
             "embedding_package_version": self.package_version,
         }
+        metadata.update(build_embedding_baseline_metadata(self.provider_name, self.model_name, self.package_version))
+        return metadata
 
 
 def make_embedding_provider(provider_name: str, model_name: str) -> EmbeddingProvider:
@@ -586,6 +630,11 @@ def read_table_embedding_metadata(rows: list[dict[str, Any]]) -> dict[str, Any] 
         "embedding_model": first.get("embedding_model"),
         "embedding_dimensions": first.get("embedding_dimensions"),
         "embedding_package_version": first.get("embedding_package_version"),
+        "embedding_package_pin": first.get("embedding_package_pin"),
+        "embedding_pooling_baseline": first.get("embedding_pooling_baseline"),
+        "embedding_baseline_status": first.get("embedding_baseline_status"),
+        "embedding_baseline_eval_gate": first.get("embedding_baseline_eval_gate"),
+        "embedding_baseline_change_policy": first.get("embedding_baseline_change_policy"),
     }
 
 
