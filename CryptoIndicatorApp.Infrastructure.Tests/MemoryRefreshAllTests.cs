@@ -122,12 +122,103 @@ public sealed class MemoryRefreshAllTests
         Assert.Contains("SQLite refresh", readme, StringComparison.Ordinal);
         Assert.Contains("LanceDB", readme, StringComparison.Ordinal);
         Assert.Contains("eval", readme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("scripts/memory-rebuild-from-head.ps1", readme, StringComparison.Ordinal);
+        Assert.Contains("generated memory artifacts", readme, StringComparison.OrdinalIgnoreCase);
 
         Assert.Contains("memory-refresh-all", contract, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("memory-rebuild-from-head", contract, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("manual", contract, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("must not install hooks", contract, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("memory-refresh-all", ReadText("CryptoIndicatorApp.Desktop/CryptoIndicatorApp.Desktop.csproj"), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("memory-refresh-all", ReadText("CryptoIndicatorApp.Application/CryptoIndicatorApp.Application.csproj"), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("memory-rebuild-from-head", ReadText("CryptoIndicatorApp.Desktop/CryptoIndicatorApp.Desktop.csproj"), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("memory-rebuild-from-head", ReadText("CryptoIndicatorApp.Application/CryptoIndicatorApp.Application.csproj"), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RebuildFromHeadPlanDeletesOnlyGeneratedMemoryArtifactsAndRunsRefresh()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "memory-rebuild-from-head.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        var reportPath = Path.Combine(Root, "docs", "memory", "generated", "memory-rebuild-from-head-report.json");
+        var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" -ProjectRoot \"{Root}\" -OutputPath \"{reportPath}\" -PlanOnly",
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        });
+
+        Assert.NotNull(process);
+        var outputTask = process!.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        try
+        {
+            await process.WaitForExitAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                process.Kill();
+            }
+            catch
+            {
+                // The assertion below is the useful failure; cleanup is best effort.
+            }
+
+            Assert.Fail("memory-rebuild-from-head.ps1 plan timed out.");
+        }
+
+        var output = await outputTask;
+        var error = await errorTask;
+        Assert.True(process.ExitCode == 0, $"Exit {process.ExitCode}\nSTDOUT:\n{output}\nSTDERR:\n{error}");
+        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+
+        Assert.Equal(1, root.GetProperty("schema_version").GetInt32());
+        Assert.Equal("scripts/memory-rebuild-from-head.ps1", root.GetProperty("generator").GetString());
+        Assert.Equal("plan-only", root.GetProperty("mode").GetString());
+        Assert.Equal("planned", root.GetProperty("status").GetString());
+        Assert.Equal(".", root.GetProperty("project_root").GetString());
+        Assert.True(root.GetProperty("planned_refresh_all").GetBoolean());
+        Assert.False(root.GetProperty("runs_refresh_all").GetBoolean());
+        Assert.False(root.GetProperty("cloud_enabled").GetBoolean());
+        Assert.False(root.GetProperty("codex_auto_retain_enabled").GetBoolean());
+        Assert.False(root.GetProperty("installs_hooks").GetBoolean());
+        Assert.False(root.GetProperty("deletes_raw_jsonl").GetBoolean());
+        Assert.False(root.GetProperty("deletes_secrets").GetBoolean());
+        Assert.False(root.GetProperty("deletes_build_artifacts").GetBoolean());
+        Assert.False(root.GetProperty("deletes_hindsight_store").GetBoolean());
+        Assert.False(root.GetProperty("deletes_source_files").GetBoolean());
+
+        var plannedDeletes = root.GetProperty("delete_plan").EnumerateArray().ToArray();
+        Assert.Contains(plannedDeletes, item => item.GetProperty("path").GetString() == "docs/memory/generated/project-memory.sqlite");
+        Assert.Contains(plannedDeletes, item => item.GetProperty("path").GetString() == "docs/memory/generated/lancedb");
+        Assert.Contains(plannedDeletes, item => item.GetProperty("path").GetString() == "docs/memory/generated/memory-needs-refresh.marker.json");
+
+        Assert.All(plannedDeletes, item =>
+        {
+            Assert.True(item.GetProperty("under_generated_memory").GetBoolean());
+            var path = item.GetProperty("path").GetString()!.Replace('\\', '/');
+            Assert.StartsWith("docs/memory/generated/", path, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("recordings/", path, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(".hindsight/", path, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("secret", path, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("/bin/", path, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("/obj/", path, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("publish/", path, StringComparison.OrdinalIgnoreCase);
+        });
+
+        var refreshCommand = root.GetProperty("refresh_all_command").GetString()!;
+        Assert.Contains("scripts", refreshCommand, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("memory-refresh-all.ps1", refreshCommand, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ReadText(string relativePath)

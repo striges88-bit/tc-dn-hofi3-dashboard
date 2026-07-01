@@ -1165,10 +1165,10 @@
   - [x] Add eval cases for formula owner, funding-source rationale, Binance DTO boundary, REST hot path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
   - [x] Update JSON/Markdown eval reports with rank, source path, confidence, freshness, and gap notes.
   - [x] Verify Memory CLI tests, Python sidecar tests, LanceDB rebuild/eval, build, and diff hygiene.
-- [ ] Slice 4: recovery/rebuild proof from Git `HEAD`.
-  - [ ] Add tests for deleting local SQLite/LanceDB generated stores and rebuilding from committed sources.
-  - [ ] Add documented recovery wrapper that touches only approved generated memory artifacts.
-  - [ ] Verify recovery tests, real plan/report mode, build, and diff hygiene.
+- [x] Slice 4: recovery/rebuild proof from Git `HEAD`.
+  - [x] Add tests for deleting local SQLite/LanceDB generated stores and rebuilding from committed sources.
+  - [x] Add documented recovery wrapper that touches only approved generated memory artifacts.
+  - [x] Verify recovery tests, real plan/report mode, build, and diff hygiene.
 - [ ] Slice 5: optional marker-only automation hardening.
   - [ ] Keep post-commit automation explicit, disableable, marker-only, timeout/lock/report-backed, and no rebuild/retain/Cloud.
   - [ ] Verify manual gate tests, helper `-PlanOnly`, build, memory refresh, status, and pre-push gate.
@@ -1196,3 +1196,6 @@
 - Slice 2 source committed as `ef77b37`; post-commit memory gate passed: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
 - Slice 3 required retrieval quality gate was already implemented before this roadmap checkpoint: LanceDB eval has 9 cases covering current OFI formula, formula owner, funding-source rationale, Binance DTO boundary, REST hot-path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
 - Slice 3 verification passed: Memory CLI tests `9/9`, Python sidecar tests through `uv` returned `ok`, and post-Slice-2 `memory-refresh-all` LanceDB eval reported `9/9`.
+- Slice 3 source committed as `2dbacaa`; post-commit memory gate passed: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+- Slice 4 adds `scripts/memory-rebuild-from-head.ps1` as a local recovery wrapper with `-PlanOnly`, allowlisted deletes under `docs/memory/generated/`, `memory-refresh-all` execution, and final `memory status needs_refresh=false` verification.
+- Slice 4 real recovery run passed: deleted local generated SQLite/LanceDB/report artifacts only, rebuilt from committed `HEAD`, and reported `memory_status_needs_refresh=false`.

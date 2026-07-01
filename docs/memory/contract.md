@@ -176,6 +176,8 @@ The MVP refresh mechanism is a manual or commit-addressed refresh command. Do no
 
 Use `scripts/memory-refresh-all.ps1` as the preferred manual full rebuild wrapper. It runs legacy JSON refresh, SQLite `refresh-from-commit --commit HEAD`, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order, then writes an ignored report under `docs/memory/generated/`.
 
+Use `scripts/memory-rebuild-from-head.ps1` only for local recovery proof or local generated-store corruption. It must expose `-PlanOnly`, may delete only allowlisted generated memory artifacts under `docs/memory/generated/`, then runs `scripts/memory-refresh-all.ps1` and verifies `memory status needs_refresh=false`. It must not delete source files, raw JSONL recordings, secrets, `.hindsight/`, `bin/`, `obj/`, `publish/`, hooks, Cloud data, Codex memory, external retain data, or human-authored memory docs.
+
 Use `scripts/memory-pre-push-check.ps1` as a manual evidence gate after `memory-refresh-all` and before push or PR review. It validates the generated refresh/eval reports, does not run a rebuild by default, does not install hooks, and keeps no post-commit refresh automation in the MVP flow.
 
 `scripts/install-memory-pre-push-hook.ps1` is the approved optional pre-push hook installer. It requires `-Confirm`, refuses unmanaged existing hooks, installs a local managed `pre-push` hook that calls only `scripts/memory-pre-push-check.ps1`, and does not run `memory-refresh-all` inside the hook. Disable the managed hook with `scripts/install-memory-pre-push-hook.ps1 -Disable -Confirm`.

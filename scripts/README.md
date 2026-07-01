@@ -8,6 +8,8 @@ Use `memory-daily-check.ps1 -PlanOnly` as the quick read-only operator snapshot.
 
 Use `memory-refresh-all.ps1` for the full manual project-memory rebuild. It orchestrates the legacy JSON refresh, canonical SQLite `refresh-from-commit --commit HEAD`/stale-check, and LanceDB cleanup/rebuild/eval sequence without installing hooks or enabling background automation.
 
+Use `memory-rebuild-from-head.ps1 -PlanOnly` to review the local recovery delete plan. Without `-PlanOnly`, it deletes only allowlisted generated memory artifacts under `docs/memory/generated/`, runs `memory-refresh-all.ps1`, and verifies `memory status needs_refresh=false`; it does not delete source files, raw JSONL, secrets, `.hindsight/`, `bin/`, `obj/`, `publish/`, hooks, Cloud data, Codex memory, or external retain data.
+
 Use `memory-pre-push-check.ps1` after `memory-refresh-all.ps1` as a manual evidence gate before push or PR review. It validates the generated refresh/eval reports and does not install hooks, run post-commit automation, or rebuild memory by itself.
 
 Use `install-memory-pre-push-hook.ps1 -Confirm` only when you explicitly want a local managed Git `pre-push` hook. The hook calls `memory-pre-push-check.ps1` and does not rebuild memory. Disable it with `install-memory-pre-push-hook.ps1 -Disable -Confirm`. The installer refuses to overwrite unmanaged hooks.

@@ -19,7 +19,7 @@ The application runtime must not depend on these files or generated stores.
 - `gbrain-spike.md`: confirmed upstream GBrain CLI/API surface and current local availability.
 - `open-questions.md`: unresolved questions that should not be silently encoded as facts.
 
-Generated graph, SQLite, or memory exports belong in `docs/memory/generated/`, which is ignored by Git. Use `scripts/memory-refresh-all.ps1` for a full local rebuild from `HEAD`, `tools/Memory` for the canonical local SQLite store, and `scripts/memory-refresh.ps1` only for the legacy JSON refresh report.
+Generated graph, SQLite, or memory exports belong in `docs/memory/generated/`, which is ignored by Git. Use `scripts/memory-refresh-all.ps1` for a full local rebuild from `HEAD`, `scripts/memory-rebuild-from-head.ps1` when local generated memory artifacts must be deleted and recreated from committed sources, `tools/Memory` for the canonical local SQLite store, and `scripts/memory-refresh.ps1` only for the legacy JSON refresh report.
 
 ## Commands
 
@@ -38,6 +38,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-a
 ```
 
 This runs legacy JSON refresh, SQLite refresh from commit (`refresh-from-commit --commit HEAD`), SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order. It writes an ignored wrapper report to `docs/memory/generated/memory-refresh-all-report.json`; the LanceDB eval step also writes `docs/memory/generated/lancedb-sidecar-report.json` and `docs/memory/generated/lancedb-eval-report.md`. It does not install hooks, enable Codex auto-retain, use Cloud, crawl project files directly for LanceDB, or import raw JSONL/generated exports/secrets/local proxy details/build artifacts.
+
+Rebuild local generated memory artifacts from committed `HEAD` after local store corruption or recovery testing:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-rebuild-from-head.ps1
+```
+
+Use `-PlanOnly` first to review the delete plan. The wrapper may delete only allowlisted generated memory artifacts under `docs/memory/generated/`, then runs `scripts/memory-refresh-all.ps1` and checks that `memory status` ends with `needs_refresh=false`. It does not delete source files, raw JSONL, secrets, `.hindsight/`, `bin/`, `obj/`, `publish/`, hooks, Cloud data, Codex memory, or external retain data.
 
 Run the manual pre-push evidence gate after `memory-refresh-all`:
 
