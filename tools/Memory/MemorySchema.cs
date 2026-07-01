@@ -17,9 +17,11 @@ internal static class MemorySchema
         "DROP TABLE IF EXISTS relations",
         "DROP TABLE IF EXISTS sources",
         "DROP TABLE IF EXISTS todos",
+        "DROP TABLE IF EXISTS retained_items",
         "DROP TABLE IF EXISTS search_documents",
         "DROP TABLE IF EXISTS query_log",
         "DROP TABLE IF EXISTS memory_metadata",
+        "DROP TABLE IF EXISTS retained_items_fts",
         "DROP TABLE IF EXISTS search_documents_fts",
         """
         CREATE TABLE files(
@@ -43,6 +45,20 @@ internal static class MemorySchema
         "CREATE TABLE relations(id TEXT PRIMARY KEY, from_id TEXT NOT NULL, relation TEXT NOT NULL, to_id TEXT NOT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
         "CREATE TABLE sources(id TEXT PRIMARY KEY, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
         "CREATE TABLE todos(id TEXT PRIMARY KEY, status TEXT NOT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        """
+        CREATE TABLE retained_items(
+            id TEXT PRIMARY KEY,
+            source_path TEXT NOT NULL,
+            source_hash TEXT NOT NULL,
+            source_blob_sha TEXT NOT NULL,
+            commit_sha TEXT NOT NULL,
+            tree_sha TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            redaction_status TEXT NOT NULL,
+            retained_at TEXT NOT NULL,
+            text TEXT NOT NULL
+        )
+        """,
         """
         CREATE TABLE search_documents(
             id TEXT PRIMARY KEY,
@@ -69,6 +85,13 @@ internal static class MemorySchema
             body,
             type UNINDEXED,
             status UNINDEXED,
+            source_path UNINDEXED
+        )
+        """,
+        """
+        CREATE VIRTUAL TABLE retained_items_fts USING fts5(
+            id UNINDEXED,
+            text,
             source_path UNINDEXED
         )
         """,

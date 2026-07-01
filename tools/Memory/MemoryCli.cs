@@ -19,11 +19,18 @@ public static class MemoryCli
                 MemoryCommand.Explain => store.Explain(options.Query),
                 MemoryCommand.StaleCheck => store.StaleCheck(options.ProjectRoot),
                 MemoryCommand.Status => store.Status(options.ProjectRoot),
+                MemoryCommand.RetainImport => await RetainImportAsync(options, store),
+                MemoryCommand.RetainSearch => store.RetainSearch(options.Query),
                 _ => throw new InvalidOperationException($"Unsupported command: {options.Command}")
             };
 
             WriteResponse(response, options.Json);
-            return response is StaleCheckResult staleCheck && staleCheck.Issues.Count > 0 ? 2 : 0;
+            return response switch
+            {
+                StaleCheckResult staleCheck when staleCheck.Issues.Count > 0 => 2,
+                RetainImportResult retainImport when retainImport.Status.Equals("blocked", StringComparison.OrdinalIgnoreCase) => 2,
+                _ => 0
+            };
         }
         catch (Exception exception)
         {
@@ -46,6 +53,13 @@ public static class MemoryCli
         var result = store.Refresh(snapshot);
         MemoryRefreshMarker.Clear(options.ProjectRoot);
         return result;
+    }
+
+    private static async Task<RetainImportResult> RetainImportAsync(MemoryCliOptions options, MemoryStore store)
+    {
+        var importer = new CuratedRetainImporter(options.ProjectRoot);
+        var import = await importer.BuildImportAsync(options.InputReportPath, options.Commit);
+        return store.RetainImport(import);
     }
 
     private static void WriteResponse(object response, bool json)

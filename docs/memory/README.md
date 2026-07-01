@@ -169,6 +169,14 @@ These reports are written to ignored generated files:
 
 The export dry-run records source metadata and hash freshness only; it does not include source text until redaction is implemented. The delete dry-run writes a deletion plan only; it does not remove source files, generated reports, local stores, hooks, provider data, or retained items. Missing, stale, denylisted, or redaction-review reports keep external retain and Codex auto-retain disabled.
 
+Run controlled local retain import only after reviewing the dry-run report:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-import.ps1 -Commit HEAD
+```
+
+This writes `docs/memory/generated/curated-retain-import-report.json` and imports only allowlisted redaction-clean sources into local SQLite. The imported text is read from the selected Git commit tree, not from dirty working-tree files. A blocked report is expected while redaction findings remain.
+
 Review curated retain policy before any external retain or Codex auto-retain:
 
 ```text

@@ -108,3 +108,13 @@ External retain and Codex auto-retain must not be enabled until all gates pass:
 - dry-run reports with redaction findings block retain until reviewed and redacted.
 
 The first implementation should be a dry-run report. Real retain/import is a later explicit decision.
+
+## Controlled Local Import
+
+The first non-dry-run retain implementation is controlled local import into SQLite only. It is still below repository source of truth and must not call external memory providers or Codex memory.
+
+Controlled local import uses `scripts/curated-retain-import.ps1`, which wraps `tools/Memory` command `retain-import`. Import reads source text from the requested Git commit tree, default `HEAD`, and uses the curated dry-run report as review metadata. A dirty working tree must not change imported text.
+
+Import is allowed only when every source is allowlisted, current for the selected commit, and redaction-clean. Denylisted paths, stale hashes, missing source metadata, or redaction review findings block the whole batch. The generated report is `docs/memory/generated/curated-retain-import-report.json`.
+
+Controlled local import does not enable external retain, Codex auto-retain, Cloud, Hindsight, hooks, refresh wrappers, LanceDB rebuild, raw JSONL import, generated export import, or build-artifact import.

@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace CryptoIndicatorApp.Memory.Tests;
@@ -233,6 +235,84 @@ public sealed class MemoryCliTests
         Assert.Contains("unknown_symbol_reference", issueCodes);
     }
 
+    [Fact]
+    public void RetainImportUsesGitCommitTreeAndSearchFindsImportedLocalItem()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        var committedText = "# Clean Retain Source\n\ncommittedonlyretain phrase for local sqlite import.\n";
+        fixture.Write("docs/memory/clean-retain.md", committedText);
+        fixture.InitializeGitRepository();
+
+        var head = fixture.RunGit("rev-parse", "HEAD").Trim();
+        var tree = fixture.RunGit("rev-parse", "HEAD^{tree}").Trim();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile("docs/memory/clean-retain.md", HashText(committedText), committedText.Length, "candidate", 0));
+
+        fixture.Write("docs/memory/clean-retain.md", "# Clean Retain Source\n\ndirtyonlyretain phrase must not import.\n");
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(0, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var importRoot = importJson.RootElement;
+
+        Assert.Equal("imported", importRoot.GetProperty("status").GetString());
+        Assert.Equal(1, importRoot.GetProperty("imported_count").GetInt32());
+        Assert.Equal(head, importRoot.GetProperty("commit_sha").GetString());
+        Assert.Equal(tree, importRoot.GetProperty("tree_sha").GetString());
+        Assert.False(importRoot.GetProperty("external_retain_enabled").GetBoolean());
+        Assert.False(importRoot.GetProperty("calls_codex_retain").GetBoolean());
+        Assert.False(importRoot.GetProperty("calls_hindsight").GetBoolean());
+        Assert.False(importRoot.GetProperty("installs_hooks").GetBoolean());
+        Assert.False(importRoot.GetProperty("runs_refresh_all").GetBoolean());
+        Assert.False(importRoot.GetProperty("rebuilds_memory").GetBoolean());
+        Assert.Equal("docs/memory/clean-retain.md", importRoot.GetProperty("items")[0].GetProperty("source_path").GetString());
+
+        using var committedSearch = fixture.RunMemoryCli("retain-search", "--query", "committedonlyretain", "--json");
+        Assert.Equal(0, committedSearch.ExitCode);
+        using var committedSearchJson = JsonDocument.Parse(committedSearch.StandardOutput);
+        var committedResults = committedSearchJson.RootElement.GetProperty("results").EnumerateArray().ToArray();
+        Assert.Single(committedResults);
+        Assert.Equal("docs/memory/clean-retain.md", committedResults[0].GetProperty("source_path").GetString());
+        Assert.Equal(head, committedResults[0].GetProperty("commit_sha").GetString());
+
+        using var dirtySearch = fixture.RunMemoryCli("retain-search", "--query", "dirtyonlyretain", "--json");
+        Assert.Equal(0, dirtySearch.ExitCode);
+        using var dirtySearchJson = JsonDocument.Parse(dirtySearch.StandardOutput);
+        Assert.Empty(dirtySearchJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
+    [Fact]
+    public void RetainImportBlocksDenylistAndRedactionReviewSources()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        var reviewText = "# Review Source\n\nThis text still needs redaction review.\n";
+        var rawText = "{\"raw\":true}\n";
+        fixture.Write("docs/memory/review-required.md", reviewText);
+        fixture.Write("recordings/live.jsonl", rawText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile("docs/memory/review-required.md", HashText(reviewText), reviewText.Length, "review_required", 1),
+            new MemoryProjectFixture.RetainReportFile("recordings/live.jsonl", HashText(rawText), rawText.Length, "candidate", 0));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+        Assert.Contains("redaction_review_required", root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()));
+        Assert.Contains("denied_sources_in_input_report", root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()));
+        Assert.False(root.GetProperty("external_retain_enabled").GetBoolean());
+        Assert.False(root.GetProperty("calls_codex_retain").GetBoolean());
+        Assert.False(root.GetProperty("calls_hindsight").GetBoolean());
+        Assert.False(root.GetProperty("installs_hooks").GetBoolean());
+        Assert.False(root.GetProperty("runs_refresh_all").GetBoolean());
+        Assert.False(root.GetProperty("rebuilds_memory").GetBoolean());
+    }
+
     private static CliResult RunMemoryCli(params string[] arguments)
     {
         var projectPath = Path.Combine(RepositoryRoot, "tools", "Memory", "CryptoIndicatorApp.Memory.csproj");
@@ -269,6 +349,12 @@ public sealed class MemoryCliTests
         {
             Assert.Contains(expectedValue, actualValues);
         }
+    }
+
+    private static string HashText(string value)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     private static string FindRepositoryRoot()
@@ -378,6 +464,55 @@ public sealed class MemoryCliTests
             Assert.True(process.ExitCode == 0, $"git {string.Join(' ', arguments)} failed with {process.ExitCode}\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}");
             return stdout;
         }
+
+        public string WriteCuratedRetainReport(params RetainReportFile[] files)
+        {
+            var reportPath = Path.Combine(Root, "docs", "memory", "generated", "curated-retain-dry-run-report.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
+            var report = new
+            {
+                schema_version = 1,
+                generator = "test",
+                mode = "dry-run",
+                status = files.Any(file => file.FindingCount > 0 || !file.RedactionStatus.Equals("candidate", StringComparison.OrdinalIgnoreCase))
+                    ? "review_required"
+                    : "ready_for_review",
+                external_retain_enabled = false,
+                codex_auto_retain_enabled = false,
+                cloud_enabled = false,
+                calls_hindsight = false,
+                calls_codex_retain = false,
+                installs_hooks = false,
+                runs_refresh_all = false,
+                rebuilds_memory = false,
+                imports_denylist = false,
+                writes_report_only = true,
+                files = files.Select(file => new
+                {
+                    path = file.Path,
+                    hash = file.Hash,
+                    size_bytes = file.SizeBytes,
+                    redaction_status = file.RedactionStatus,
+                    finding_count = file.FindingCount,
+                }).ToArray(),
+                findings = files
+                    .Where(file => file.FindingCount > 0)
+                    .Select(file => new
+                    {
+                        type = "test_redaction_review",
+                        severity = "review",
+                        policy_reference = false,
+                        source_path = file.Path,
+                        line = 1,
+                        rule = "test finding",
+                    })
+                    .ToArray(),
+            };
+            File.WriteAllText(reportPath, JsonSerializer.Serialize(report));
+            return reportPath;
+        }
+
+        public sealed record RetainReportFile(string Path, string Hash, long SizeBytes, string RedactionStatus, int FindingCount);
 
         public CliResult RunMemoryCli(params string[] arguments)
         {

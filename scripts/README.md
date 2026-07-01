@@ -19,3 +19,5 @@ Use `curated-retain-dry-run.ps1` to generate ignored provider-neutral retain pre
 Use `curated-retain-export-dry-run.ps1` after the curated retain dry-run to generate ignored export lifecycle reports. It validates allowlisted source metadata and hashes, rejects denylisted paths, writes JSON plus Markdown, and does not include source text, call external providers, install hooks, or rebuild memory.
 
 Use `curated-retain-delete-dry-run.ps1` after the export dry-run to generate ignored deletion-plan reports. It validates export metadata and planned selectors, but does not delete files, retained items, provider data, hooks, local stores, or generated reports.
+
+Use `curated-retain-import.ps1` only after reviewing the curated retain dry-run report. It wraps local SQLite `retain-import`, reads source text from the selected Git commit tree, defaults to `HEAD`, and writes `docs/memory/generated/curated-retain-import-report.json`. It imports only allowlisted redaction-clean sources and keeps external retain, Codex auto-retain, Cloud, hooks, refresh wrappers, rebuilds, raw JSONL, generated exports, secrets, and build artifacts disabled.

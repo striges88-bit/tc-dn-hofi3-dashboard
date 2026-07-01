@@ -8,6 +8,8 @@ public enum MemoryCommand
     Explain,
     StaleCheck,
     Status,
+    RetainImport,
+    RetainSearch,
 }
 
 public sealed record MemoryCliOptions(
@@ -16,13 +18,14 @@ public sealed record MemoryCliOptions(
     string DatabasePath,
     string Query,
     string Commit,
+    string InputReportPath,
     bool Json)
 {
     public static MemoryCliOptions Parse(string[] args)
     {
         if (args.Length == 0)
         {
-            throw new InvalidOperationException("Command is required: refresh, refresh-from-commit, search, explain, stale-check, or status.");
+            throw new InvalidOperationException("Command is required: refresh, refresh-from-commit, search, explain, stale-check, status, retain-import, or retain-search.");
         }
 
         var command = args[0].ToLowerInvariant() switch
@@ -33,6 +36,8 @@ public sealed record MemoryCliOptions(
             "explain" => MemoryCommand.Explain,
             "stale-check" => MemoryCommand.StaleCheck,
             "status" => MemoryCommand.Status,
+            "retain-import" => MemoryCommand.RetainImport,
+            "retain-search" => MemoryCommand.RetainSearch,
             _ => throw new InvalidOperationException($"Unknown memory command: {args[0]}")
         };
 
@@ -40,6 +45,7 @@ public sealed record MemoryCliOptions(
         var databasePath = string.Empty;
         var query = string.Empty;
         var commit = "HEAD";
+        var inputReportPath = string.Empty;
         var json = false;
 
         for (var index = 1; index < args.Length; index++)
@@ -59,6 +65,9 @@ public sealed record MemoryCliOptions(
                 case "--commit":
                     commit = ReadValue(args, ref index, argument);
                     break;
+                case "--input-report":
+                    inputReportPath = ReadValue(args, ref index, argument);
+                    break;
                 case "--json":
                     json = true;
                     break;
@@ -69,18 +78,19 @@ public sealed record MemoryCliOptions(
 
         projectRoot = ResolveProjectRoot(projectRoot);
         databasePath = ResolveDatabasePath(projectRoot, databasePath);
+        inputReportPath = ResolveInputReportPath(projectRoot, inputReportPath);
 
-        if ((command is MemoryCommand.Search or MemoryCommand.Explain) && string.IsNullOrWhiteSpace(query))
+        if ((command is MemoryCommand.Search or MemoryCommand.Explain or MemoryCommand.RetainSearch) && string.IsNullOrWhiteSpace(query))
         {
-            throw new InvalidOperationException("--query is required for search and explain.");
+            throw new InvalidOperationException("--query is required for search, explain, and retain-search.");
         }
 
-        if (command is MemoryCommand.RefreshFromCommit && string.IsNullOrWhiteSpace(commit))
+        if (command is MemoryCommand.RefreshFromCommit or MemoryCommand.RetainImport && string.IsNullOrWhiteSpace(commit))
         {
-            throw new InvalidOperationException("--commit is required for refresh-from-commit.");
+            throw new InvalidOperationException("--commit is required for refresh-from-commit and retain-import.");
         }
 
-        return new MemoryCliOptions(command, projectRoot, databasePath, query, commit, json);
+        return new MemoryCliOptions(command, projectRoot, databasePath, query, commit, inputReportPath, json);
     }
 
     private static string ReadValue(string[] args, ref int index, string option)
@@ -123,5 +133,20 @@ public sealed record MemoryCliOptions(
         }
 
         return Path.GetFullPath(databasePath);
+    }
+
+    private static string ResolveInputReportPath(string projectRoot, string inputReportPath)
+    {
+        if (string.IsNullOrWhiteSpace(inputReportPath))
+        {
+            inputReportPath = Path.Combine(projectRoot, "docs", "memory", "generated", "curated-retain-dry-run-report.json");
+        }
+
+        if (!Path.IsPathRooted(inputReportPath))
+        {
+            inputReportPath = Path.Combine(projectRoot, inputReportPath);
+        }
+
+        return Path.GetFullPath(inputReportPath);
     }
 }

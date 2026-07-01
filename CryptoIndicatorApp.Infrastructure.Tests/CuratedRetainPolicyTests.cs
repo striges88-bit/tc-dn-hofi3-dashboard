@@ -206,6 +206,29 @@ public sealed class CuratedRetainPolicyTests
     }
 
     [Fact]
+    public void ControlledRetainImportScriptAndDocsStayLocalOnly()
+    {
+        var script = ReadText("scripts/curated-retain-import.ps1");
+        var policy = ReadText("docs/memory/retain-policy.md");
+        var contract = ReadText("docs/memory/contract.md");
+        var scriptsReadme = ReadText("scripts/README.md");
+
+        Assert.Contains("retain-import", script, StringComparison.Ordinal);
+        Assert.Contains("curated-retain-import-report.json", script, StringComparison.Ordinal);
+        Assert.Contains("external_retain_enabled = $false", script, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("codex_auto_retain_enabled = $false", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("hindsight retain", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("codex retain", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("memory-refresh-all", script, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("controlled local import", policy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("commit tree", policy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("redaction-clean", policy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("curated-retain-import.ps1", contract, StringComparison.Ordinal);
+        Assert.Contains("curated-retain-import.ps1", scriptsReadme, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task LifecycleDryRunsBlockRetainWhenReportsAreMissingOrStale()
     {
         using var temp = TemporaryDirectory.Create();

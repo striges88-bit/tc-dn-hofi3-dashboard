@@ -1147,3 +1147,39 @@
 - Compact handoff was resumed; build, diff hygiene, source commit, and post-commit memory gate were completed.
 - `memory-refresh-all` was intentionally run only after committing the slice because refresh indexes committed `HEAD`, not the dirty working tree.
 - Post-commit memory gate passed after the final source commit: `scripts\memory-refresh-all.ps1` completed, `memory status` reported `needs_refresh=false`, and `scripts\memory-pre-push-check.ps1` reported `status=passed` with LanceDB eval `9/9`.
+
+## Memory Futureproof Phase 2 Todo
+
+- [x] Start branch `codex/memory-futureproof-phase2-roadmap` from clean `main`.
+- [x] Create roadmap plan `docs/superpowers/plans/2026-07-01-memory-futureproof-phase2.md`.
+- [ ] Slice 1: controlled curated retain import into local SQLite, commit-grounded and blocked by redaction/denylist/stale metadata.
+  - [x] Add RED Memory CLI tests for `retain-import`.
+  - [x] Implement local-only `retain-import` and generated report wrapper.
+  - [x] Update retain policy, memory contract, and script docs.
+  - [x] Verify with Memory CLI tests, wrapper run, solution build, and diff hygiene.
+- [ ] Slice 2: end-to-end local retain lifecycle.
+  - [ ] Add RED tests for `retain-search`, `retain-export`, `retain-delete`, and absent-after-delete verification.
+  - [ ] Implement local-only lifecycle commands and wrappers.
+  - [ ] Verify lifecycle tests, wrapper reports, solution build, and diff hygiene.
+- [ ] Slice 3: expanded retrieval quality gate.
+  - [ ] Add eval cases for formula owner, funding-source rationale, Binance DTO boundary, REST hot path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
+  - [ ] Update JSON/Markdown eval reports with rank, source path, confidence, freshness, and gap notes.
+  - [ ] Verify Memory CLI tests, Python sidecar tests, LanceDB rebuild/eval, build, and diff hygiene.
+- [ ] Slice 4: recovery/rebuild proof from Git `HEAD`.
+  - [ ] Add tests for deleting local SQLite/LanceDB generated stores and rebuilding from committed sources.
+  - [ ] Add documented recovery wrapper that touches only approved generated memory artifacts.
+  - [ ] Verify recovery tests, real plan/report mode, build, and diff hygiene.
+- [ ] Slice 5: optional marker-only automation hardening.
+  - [ ] Keep post-commit automation explicit, disableable, marker-only, timeout/lock/report-backed, and no rebuild/retain/Cloud.
+  - [ ] Verify manual gate tests, helper `-PlanOnly`, build, memory refresh, status, and pre-push gate.
+
+## Memory Futureproof Phase 2 Results
+
+- Roadmap starts from the already merged Memory Polish Phase 1 baseline: SQLite FTS5 canonical store, LanceDB sidecar, manual memory gate, curated retain dry-runs, operator daily check, and marker-only hook policy are already present.
+- Critical implementation constraint: controlled retain must read from a committed Git tree plus reviewed allowlist metadata, not from a dirty working directory.
+- Slice 1 RED/GREEN completed: `retain-import` initially failed as an unknown command; after implementation, Memory CLI retain-import tests passed `2/2`.
+- `retain-import` now imports only redaction-clean allowlisted files from the selected Git commit tree into local SQLite retained-memory tables; dirty working-tree text is not imported.
+- `retain-search` can find locally imported retained items and excludes dirty working-tree-only content in tests.
+- Denylisted paths and redaction-review sources block the whole import batch with exit code `2` at the CLI layer.
+- Added `scripts/curated-retain-import.ps1` as a local-only wrapper that writes ignored report `docs/memory/generated/curated-retain-import-report.json`; real repo run is currently `blocked` with `imported_count=0` because the existing dry-run report has redaction/stale-source blockers.
+- Verification for Slice 1 passed: `tools/Memory.Tests` `8/8`, `CuratedRetainPolicyTests|MemoryContractTests|ManualMemoryGateTests` `28/28`, solution build `0` warnings and `0` errors, and `git diff --check` clean.
