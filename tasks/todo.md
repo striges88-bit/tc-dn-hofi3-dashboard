@@ -1169,9 +1169,9 @@
   - [x] Add tests for deleting local SQLite/LanceDB generated stores and rebuilding from committed sources.
   - [x] Add documented recovery wrapper that touches only approved generated memory artifacts.
   - [x] Verify recovery tests, real plan/report mode, build, and diff hygiene.
-- [ ] Slice 5: optional marker-only automation hardening.
-  - [ ] Keep post-commit automation explicit, disableable, marker-only, timeout/lock/report-backed, and no rebuild/retain/Cloud.
-  - [ ] Verify manual gate tests, helper `-PlanOnly`, build, memory refresh, status, and pre-push gate.
+- [x] Slice 5: optional marker-only automation hardening.
+  - [x] Keep post-commit automation explicit, disableable, marker-only, timeout/lock/report-backed, and no rebuild/retain/Cloud.
+  - [x] Verify manual gate tests, helper `-PlanOnly`, build, memory refresh, status, and pre-push gate.
 
 ## Memory Futureproof Phase 2 Results
 
@@ -1199,3 +1199,6 @@
 - Slice 3 source committed as `2dbacaa`; post-commit memory gate passed: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
 - Slice 4 adds `scripts/memory-rebuild-from-head.ps1` as a local recovery wrapper with `-PlanOnly`, allowlisted deletes under `docs/memory/generated/`, `memory-refresh-all` execution, and final `memory status needs_refresh=false` verification.
 - Slice 4 real recovery run passed: deleted local generated SQLite/LanceDB/report artifacts only, rebuilt from committed `HEAD`, and reported `memory_status_needs_refresh=false`.
+- Slice 4 source committed as `68ea272`; post-commit memory gate passed: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+- Slice 5 hardened optional marker-only automation without enabling it by default: post-commit marker installer and marker helper now reject non-positive `-TimeoutSeconds`; marker helper reports include `lock_path`.
+- Slice 5 verification before commit passed: RED timeout tests failed for the expected reason, GREEN timeout tests passed `2/2`, `ManualMemoryGateTests` passed `15/15`, custom hook-path `install-memory-post-commit-marker-hook.ps1 -PlanOnly` reported `actual_repo_hook_touched=false`, and solution build completed with `0` warnings and `0` errors.

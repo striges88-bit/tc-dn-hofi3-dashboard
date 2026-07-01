@@ -501,6 +501,35 @@ public sealed class ManualMemoryGateTests
     }
 
     [Fact]
+    public async Task InstallPostCommitMarkerHookRejectsNonPositiveTimeout()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "install-memory-post-commit-marker-hook.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        using var temp = TemporaryDirectory.Create();
+        var hookPath = Path.Combine(temp.Path, "post-commit");
+        var reportPath = Path.Combine(temp.Path, "invalid-timeout-report.json");
+
+        var result = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(Root)} -HookPath {Quote(hookPath)} -OutputPath {Quote(reportPath)} -Confirm -TimeoutSeconds 0");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.False(File.Exists(hookPath));
+        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal("failed", root.GetProperty("status").GetString());
+        Assert.Equal("invalid-timeout-seconds", root.GetProperty("failure_code").GetString());
+        Assert.Equal(0, root.GetProperty("timeout_seconds").GetInt32());
+        Assert.False(root.GetProperty("installs_hooks").GetBoolean());
+        Assert.False(root.GetProperty("post_commit_hook_installed").GetBoolean());
+        AssertCustomPostCommitHookValidationPath(root);
+        AssertPostCommitMarkerSafetyFlags(root);
+    }
+
+    [Fact]
     public async Task InstallPostCommitMarkerHookConfirmRefusesUnmanagedExistingHook()
     {
         var scriptPath = Path.Combine(Root, "scripts", "install-memory-post-commit-marker-hook.ps1");
@@ -567,6 +596,38 @@ public sealed class ManualMemoryGateTests
         Assert.Equal("marked", reportRoot.GetProperty("status").GetString());
         Assert.True(reportRoot.GetProperty("writes_marker").GetBoolean());
         Assert.True(reportRoot.GetProperty("uses_lock").GetBoolean());
+        AssertPostCommitMarkerSafetyFlags(reportRoot);
+    }
+
+    [Fact]
+    public async Task PostCommitMarkerHelperRejectsNonPositiveTimeoutWithoutWritingMarker()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "memory-mark-needs-refresh.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        using var temp = TemporaryDirectory.Create();
+        File.WriteAllText(Path.Combine(temp.Path, "CryptoIndicatorApp.sln"), string.Empty);
+
+        var markerPath = Path.Combine(temp.Path, "docs", "memory", "generated", "memory-needs-refresh.marker.json");
+        var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "memory-mark-needs-refresh-report.json");
+
+        var result = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(temp.Path)} -MarkerPath {Quote(markerPath)} -OutputPath {Quote(reportPath)} -Reason post-commit-validation -TimeoutSeconds 0");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.False(File.Exists(markerPath));
+        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var reportRoot = report.RootElement;
+        Assert.Equal("failed", reportRoot.GetProperty("status").GetString());
+        Assert.Equal("invalid-timeout-seconds", reportRoot.GetProperty("failure_code").GetString());
+        Assert.Equal(0, reportRoot.GetProperty("timeout_seconds").GetInt32());
+        Assert.True(reportRoot.GetProperty("uses_lock").GetBoolean());
+        Assert.False(reportRoot.GetProperty("lock_acquired").GetBoolean());
+        Assert.False(reportRoot.GetProperty("writes_marker").GetBoolean());
+        Assert.EndsWith("docs/memory/generated/memory-needs-refresh.lock", reportRoot.GetProperty("lock_path").GetString()!.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase);
         AssertPostCommitMarkerSafetyFlags(reportRoot);
     }
 

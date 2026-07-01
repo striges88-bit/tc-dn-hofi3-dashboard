@@ -192,7 +192,7 @@ Run recovery tests, real plan/report mode, real rebuild only after confirming ge
 - Modify: `scripts/README.md`
 - Modify: `tasks/todo.md`
 
-- [ ] **Step 1: Add RED hardening tests**
+- [x] **Step 1: Add RED hardening tests**
 
 Expected behavior:
 - installer requires `-Confirm`;
@@ -201,11 +201,11 @@ Expected behavior:
 - timeout/lock/report are present;
 - hook never runs `memory-refresh-all`, LanceDB rebuild, retain import/export/delete, Cloud, Hindsight, or Codex auto-retain.
 
-- [ ] **Step 2: Polish reports/docs**
+- [x] **Step 2: Polish reports/docs**
 
 Prefer status/report clarity over new automation. Do not install the real hook during CI or default verification.
 
-- [ ] **Step 3: Verify Slice 5**
+- [x] **Step 3: Verify Slice 5**
 
 Run manual gate tests, helper `-PlanOnly`, build, diff hygiene, memory refresh, memory status, and pre-push gate.
 
@@ -215,5 +215,5 @@ Run manual gate tests, helper `-PlanOnly`, build, diff hygiene, memory refresh, 
 - [x] Imported retained items can be searched, exported, deleted, and verified absent.
 - [x] Retrieval quality gate covers the expanded cases and excludes superseded/failed facts.
 - [x] A documented rebuild path restores SQLite and LanceDB from Git `HEAD`.
-- [ ] Optional automation remains marker-only, explicit, disableable, and documented.
-- [ ] No workflow calls Cloud, Hindsight, Codex auto-retain, post-commit rebuild, raw JSONL import, generated export import, secrets import, or build-artifact import.
+- [x] Optional automation remains marker-only, explicit, disableable, and documented.
+- [x] No workflow calls Cloud, Hindsight, Codex auto-retain, post-commit rebuild, raw JSONL import, generated export import, secrets import, or build-artifact import.
