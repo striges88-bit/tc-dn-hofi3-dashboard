@@ -1064,7 +1064,11 @@
 - [x] Start branch `codex/memory-polish-roadmap` from clean `main`.
 - [x] Add a five-slice implementation plan for a polished memory system.
 - [x] Slice 1: improve curated retain report quality with severity, type counts, de-duplication, policy-reference classification, and Markdown output.
-- [ ] Slice 2: add provider-neutral retain export/delete dry-run policy tooling before any external/Codex retain can be enabled.
+- [x] Slice 2: add provider-neutral retain export/delete dry-run policy tooling before any external/Codex retain can be enabled.
+  - [x] Add RED tests for export/delete lifecycle gate, missing/stale reports, and denylist exclusion.
+  - [x] Implement report-only export/delete dry-run scripts under `docs/memory/generated/`.
+  - [x] Update retain lifecycle docs and script operator docs.
+  - [x] Run narrow tests, real dry-runs, full build, and diff hygiene.
 - [ ] Slice 3: validate optional post-commit marker local install behavior without enabling rebuild or retain hooks.
 - [ ] Slice 4: make the FastEmbed/LanceDB warning an explicit semantic baseline decision backed by eval.
 - [ ] Slice 5: add a simple operator UX helper for routine memory checks.
@@ -1077,3 +1081,7 @@
 - Added RED/GREEN coverage in `CuratedRetainDryRunTests` for Markdown output, severity summary, policy-only references, duplicate finding keys, blank-line compatibility, and `token-hash` not being treated as a secret token.
 - Real dry-run on the repository now reports `24` allowlisted files, `133` findings, `0` critical, `78` review, `55` info, and `16` files requiring redaction review.
 - Verification for Slice 1 passed: `CuratedRetainDryRunTests` `3/3`, real `curated-retain-dry-run.ps1`, solution build with `0` warnings/errors, and `git diff --check`.
+- Slice 2 added provider-neutral lifecycle dry-runs: `scripts/curated-retain-export-dry-run.ps1` validates curated report source metadata/hash freshness without exporting source text, and `scripts/curated-retain-delete-dry-run.ps1` writes a deletion plan without deleting files, provider data, hooks, generated reports, local stores, or retained items.
+- Added RED/GREEN coverage in `CuratedRetainPolicyTests` for missing/stale lifecycle reports, denylist rejection even if an input report is compromised, metadata-only export, and delete-plan-only behavior.
+- Real Slice 2 dry-runs on the repository produced blocked reports as expected: 24 allowlisted sources, 0 invalid/denied sources, 0 source hash mismatches, external retain disabled, Codex auto-retain disabled, delete actions executed `false`, and 16 sources still requiring redaction review.
+- Verification for Slice 2 passed: `CuratedRetainPolicyTests|CuratedRetainDryRunTests` `9/9`, real curated retain dry-run/export dry-run/delete dry-run, solution build with `0` warnings/errors, and `git diff --check`.

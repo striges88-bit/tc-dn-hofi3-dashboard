@@ -72,6 +72,10 @@ At minimum, export must provide:
 
 The export must be reviewable without calling Cloud services.
 
+MVP implementation is `scripts/curated-retain-export-dry-run.ps1`. It reads the curated retain dry-run report plus allowlisted source metadata, validates source hashes, rejects denylisted paths even if an input report contains them, and writes JSON/Markdown reports under `docs/memory/generated/`.
+
+The MVP export dry-run does not include retained text because redaction is not implemented yet. This is intentional: exporting source text before redaction would create another leak surface. Real retained-text export remains blocked until redaction is implemented and tested.
+
 ## Delete Policy
 
 Delete policy must exist and be tested before enabling external retain or Codex auto-retain.
@@ -86,6 +90,8 @@ At minimum, delete must support:
 
 If delete cannot be verified, external retain and Codex auto-retain must not be enabled.
 
+MVP implementation is `scripts/curated-retain-delete-dry-run.ps1`. It reads the export dry-run report, validates that sources are still allowlisted and current, and writes a deletion plan report only. It does not delete retained items, source files, generated reports, provider data, hooks, or local stores.
+
 ## Enablement Gate
 
 External retain and Codex auto-retain must not be enabled until all gates pass:
@@ -97,5 +103,8 @@ External retain and Codex auto-retain must not be enabled until all gates pass:
 - delete policy is tested;
 - no Cloud retain path is used unless separately approved;
 - post-commit marker remains marker-only and does not run retain, rebuild, or Cloud calls.
+- missing or stale dry-run reports block retain;
+- dry-run reports with denylisted sources block retain;
+- dry-run reports with redaction findings block retain until reviewed and redacted.
 
 The first implementation should be a dry-run report. Real retain/import is a later explicit decision.

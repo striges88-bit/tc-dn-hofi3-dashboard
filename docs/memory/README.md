@@ -145,6 +145,22 @@ The reports are written to ignored generated files:
 
 They list only allowlisted source candidates and redaction findings. Findings include severity (`critical`, `review`, `info`), type counts, severity counts, de-duplication, and `policy_reference` markers so policy docs do not look like real leaked secrets. These reports are review evidence, not import or retain operations.
 
+Generate provider-neutral export/delete lifecycle dry-runs:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-export-dry-run.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-delete-dry-run.ps1
+```
+
+These reports are written to ignored generated files:
+
+- `docs/memory/generated/curated-retain-export-dry-run-report.json`
+- `docs/memory/generated/curated-retain-export-dry-run-report.md`
+- `docs/memory/generated/curated-retain-delete-dry-run-report.json`
+- `docs/memory/generated/curated-retain-delete-dry-run-report.md`
+
+The export dry-run records source metadata and hash freshness only; it does not include source text until redaction is implemented. The delete dry-run writes a deletion plan only; it does not remove source files, generated reports, local stores, hooks, provider data, or retained items. Missing, stale, denylisted, or redaction-review reports keep external retain and Codex auto-retain disabled.
+
 Review curated retain policy before any external retain or Codex auto-retain:
 
 ```text

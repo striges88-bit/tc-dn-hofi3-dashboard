@@ -13,3 +13,7 @@ Use `install-memory-pre-push-hook.ps1 -Confirm` only when you explicitly want a 
 Use `install-memory-post-commit-marker-hook.ps1 -Confirm` only when you explicitly want a local managed Git `post-commit` hook that writes a refresh-needed marker. The hook calls `memory-mark-needs-refresh.ps1` and does not run rebuild, `memory-refresh-all`, LanceDB, curated retain, Cloud, or Codex auto-retain. Disable it with `install-memory-post-commit-marker-hook.ps1 -Disable -Confirm`.
 
 Use `curated-retain-dry-run.ps1` to generate ignored provider-neutral retain preflight reports under `docs/memory/generated/`. It enumerates only approved retain candidates, scans for redaction risks, classifies findings by severity, marks policy-only references, writes JSON plus Markdown, and does not call Hindsight, Cloud, Codex retain, hooks, or rebuild commands.
+
+Use `curated-retain-export-dry-run.ps1` after the curated retain dry-run to generate ignored export lifecycle reports. It validates allowlisted source metadata and hashes, rejects denylisted paths, writes JSON plus Markdown, and does not include source text, call external providers, install hooks, or rebuild memory.
+
+Use `curated-retain-delete-dry-run.ps1` after the export dry-run to generate ignored deletion-plan reports. It validates export metadata and planned selectors, but does not delete files, retained items, provider data, hooks, local stores, or generated reports.
