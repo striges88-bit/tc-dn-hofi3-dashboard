@@ -28,7 +28,7 @@
 - Modify: `scripts/README.md`
 - Modify: `tasks/todo.md`
 
-- [ ] **Step 1: Add RED tests**
+- [x] **Step 1: Add RED tests**
 
 Expected behavior:
 - `retain-import --input-report <report> --commit HEAD` imports only allowlisted, redaction-clean sources.
@@ -45,7 +45,7 @@ Run:
 
 Expected: FAIL before implementation because `retain-import` does not exist.
 
-- [ ] **Step 2: Implement minimal local import**
+- [x] **Step 2: Implement minimal local import**
 
 Add CLI command:
 
@@ -55,11 +55,11 @@ Add CLI command:
 
 The command creates local SQLite retained-memory tables, validates the dry-run report, imports only clean allowlisted sources from the Git commit tree, and returns a JSON summary. It must not modify app code, human docs, hooks, LanceDB, external stores, or generated reports except through the SQLite DB.
 
-- [ ] **Step 3: Add script wrapper**
+- [x] **Step 3: Add script wrapper**
 
 Add `scripts/curated-retain-import.ps1` as a thin operator wrapper around the CLI. It must pass through `-Commit`, default to `HEAD`, write a generated report, and keep external retain disabled.
 
-- [ ] **Step 4: Verify Slice 1**
+- [x] **Step 4: Verify Slice 1**
 
 Run:
 
@@ -89,7 +89,7 @@ Expected: tests pass; real repo import may be `blocked` while redaction findings
 - Modify: `scripts/README.md`
 - Modify: `tasks/todo.md`
 
-- [ ] **Step 1: Add RED lifecycle tests**
+- [x] **Step 1: Add RED lifecycle tests**
 
 Expected behavior:
 - `retain-search --query <text>` finds imported local retained items.
