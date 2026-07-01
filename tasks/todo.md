@@ -1085,3 +1085,19 @@
 - Added RED/GREEN coverage in `CuratedRetainPolicyTests` for missing/stale lifecycle reports, denylist rejection even if an input report is compromised, metadata-only export, and delete-plan-only behavior.
 - Real Slice 2 dry-runs on the repository produced blocked reports as expected: 24 allowlisted sources, 0 invalid/denied sources, 0 source hash mismatches, external retain disabled, Codex auto-retain disabled, delete actions executed `false`, and 16 sources still requiring redaction review.
 - Verification for Slice 2 passed: `CuratedRetainPolicyTests|CuratedRetainDryRunTests` `9/9`, real curated retain dry-run/export dry-run/delete dry-run, solution build with `0` warnings/errors, and `git diff --check`.
+
+## Memory Polish Slice 3 Todo
+
+- [x] Create branch `codex/memory-post-commit-marker-validation` from clean `main`.
+- [x] Add RED tests for post-commit marker installer validation metadata, confirm-required behavior, unmanaged-hook refusal, and marker-only helper reports.
+- [x] Keep validation in temporary/custom hook paths; do not install or disable the actual repository `.git/hooks/post-commit`.
+- [x] Update script reports/docs so operators can see whether a run targets the real repo hook or a safe validation hook path.
+- [x] Run narrow memory hook tests, related memory guardrail tests, Memory CLI tests, build, diff hygiene, and verify the real repo `post-commit` hook was not created.
+
+## Memory Polish Slice 3 Results
+
+- Added report metadata to `scripts/install-memory-post-commit-marker-hook.ps1`: `default_hook_path`, `targets_default_repo_hook`, `custom_hook_path`, `writes_default_repo_hook`, `removes_default_repo_hook`, and `actual_repo_hook_touched`.
+- Added RED/GREEN coverage for custom-path validation metadata, missing `-Confirm`, unmanaged hook refusal, managed install/disable, and marker-only helper output.
+- Updated memory and scripts docs so validation uses temporary/custom hook paths and real hook installation remains explicit opt-in.
+- Verification before commit passed: `ManualMemoryGateTests` `11/11`; `ManualMemoryGateTests|CuratedRetainPolicyTests|MemoryRefreshAllTests` `19/19`; `tools/Memory.Tests` `6/6`; solution build completed with `0` warnings and `0` errors; `git diff --check` passed.
+- `Test-Path .git/hooks/post-commit` returned `False`; the real repository post-commit hook was not installed.

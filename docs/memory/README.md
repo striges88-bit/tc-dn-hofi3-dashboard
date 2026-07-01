@@ -57,7 +57,7 @@ Optionally install a local managed `post-commit` marker hook:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install-memory-post-commit-marker-hook.ps1 -Confirm
 ```
 
-The optional hook calls `scripts/memory-mark-needs-refresh.ps1` only. It writes `docs/memory/generated/memory-needs-refresh.marker.json` after a commit and does not run rebuild, `memory-refresh-all`, LanceDB, curated retain, Cloud, or Codex auto-retain. Disable it with:
+The optional hook calls `scripts/memory-mark-needs-refresh.ps1` only. It writes `docs/memory/generated/memory-needs-refresh.marker.json` after a commit and does not run rebuild, `memory-refresh-all`, LanceDB, curated retain, Cloud, or Codex auto-retain. Local validation should use a custom temporary `-HookPath`/`-OutputPath`; the generated installer report records `targets_default_repo_hook`, `custom_hook_path`, and `actual_repo_hook_touched` so reviewers can confirm the real `.git/hooks/post-commit` was not touched. Disable it with:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install-memory-post-commit-marker-hook.ps1 -Disable -Confirm
