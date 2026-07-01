@@ -19,11 +19,20 @@ public static class MemoryCli
                 MemoryCommand.Explain => store.Explain(options.Query),
                 MemoryCommand.StaleCheck => store.StaleCheck(options.ProjectRoot),
                 MemoryCommand.Status => store.Status(options.ProjectRoot),
+                MemoryCommand.RetainImport => await RetainImportAsync(options, store),
+                MemoryCommand.RetainSearch => store.RetainSearch(options.Query),
+                MemoryCommand.RetainExport => RetainExport(options, store),
+                MemoryCommand.RetainDelete => store.RetainDelete(options.SourcePath),
                 _ => throw new InvalidOperationException($"Unsupported command: {options.Command}")
             };
 
             WriteResponse(response, options.Json);
-            return response is StaleCheckResult staleCheck && staleCheck.Issues.Count > 0 ? 2 : 0;
+            return response switch
+            {
+                StaleCheckResult staleCheck when staleCheck.Issues.Count > 0 => 2,
+                RetainImportResult retainImport when retainImport.Status.Equals("blocked", StringComparison.OrdinalIgnoreCase) => 2,
+                _ => 0
+            };
         }
         catch (Exception exception)
         {
@@ -48,6 +57,26 @@ public static class MemoryCli
         return result;
     }
 
+    private static async Task<RetainImportResult> RetainImportAsync(MemoryCliOptions options, MemoryStore store)
+    {
+        var importer = new CuratedRetainImporter(options.ProjectRoot);
+        var import = await importer.BuildImportAsync(options.InputReportPath, options.Commit);
+        return store.RetainImport(import);
+    }
+
+    private static RetainExportResult RetainExport(MemoryCliOptions options, MemoryStore store)
+    {
+        var result = store.RetainExport(ToRepoPath(options.ProjectRoot, options.OutputPath));
+        var directory = Path.GetDirectoryName(options.OutputPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        WriteJsonFile(options.OutputPath, result);
+        return result;
+    }
+
     private static void WriteResponse(object response, bool json)
     {
         if (json)
@@ -62,5 +91,27 @@ public static class MemoryCli
         }
 
         Console.WriteLine(response);
+    }
+
+    private static void WriteJsonFile(string path, object response)
+    {
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            WriteIndented = true,
+        };
+        File.WriteAllText(path, JsonSerializer.Serialize(response, options));
+    }
+
+    private static string ToRepoPath(string projectRoot, string path)
+    {
+        var root = Path.GetFullPath(projectRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var fullPath = Path.GetFullPath(path);
+        if (!fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        {
+            return path;
+        }
+
+        return fullPath[root.Length..].TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace('\\', '/');
     }
 }

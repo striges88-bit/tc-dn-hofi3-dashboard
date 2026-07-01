@@ -131,3 +131,104 @@ public sealed record MemoryStatusResult(
     bool NeedsRefresh,
     bool WorkingTreeDirty,
     string MarkerPath);
+
+public sealed record RetainImportBatch(
+    string InputReportPath,
+    string CommitSha,
+    string TreeSha,
+    IReadOnlyList<string> BlockingReasons,
+    IReadOnlyList<RetainedMemoryItem> Items);
+
+public sealed record RetainedMemoryItem(
+    string Id,
+    string SourcePath,
+    string SourceHash,
+    string SourceBlobSha,
+    string CommitSha,
+    string TreeSha,
+    string Provider,
+    string RedactionStatus,
+    string RetainedAt,
+    string Text);
+
+public sealed record RetainImportResult(
+    string Mode,
+    string Status,
+    string InputReportPath,
+    string CommitSha,
+    string TreeSha,
+    int CandidateCount,
+    int ImportedCount,
+    IReadOnlyList<string> BlockingReasons,
+    bool ExternalRetainEnabled,
+    bool CodexAutoRetainEnabled,
+    bool CloudEnabled,
+    bool CallsHindsight,
+    bool CallsCodexRetain,
+    bool InstallsHooks,
+    bool RunsRefreshAll,
+    bool RebuildsMemory,
+    IReadOnlyList<RetainImportItemResult> Items);
+
+public sealed record RetainImportItemResult(
+    string Id,
+    string SourcePath,
+    string SourceHash,
+    string SourceBlobSha,
+    string CommitSha,
+    string Provider,
+    string RedactionStatus);
+
+public sealed record RetainSearchResult(string Query, IReadOnlyList<RetainSearchHit> Results);
+
+public sealed record RetainSearchHit(
+    string Id,
+    string SourcePath,
+    string CommitSha,
+    string Provider,
+    string RedactionStatus,
+    double Rank);
+
+public sealed record RetainExportResult(
+    string Mode,
+    string Status,
+    string OutputPath,
+    int ExportedCount,
+    bool SourceContentIncluded,
+    bool ExternalRetainEnabled,
+    bool CodexAutoRetainEnabled,
+    bool CloudEnabled,
+    bool CallsHindsight,
+    bool CallsCodexRetain,
+    bool InstallsHooks,
+    bool RunsRefreshAll,
+    bool RebuildsMemory,
+    IReadOnlyList<RetainExportItem> Items);
+
+public sealed record RetainExportItem(
+    string Id,
+    string SourcePath,
+    string SourceHash,
+    string SourceBlobSha,
+    string CommitSha,
+    string TreeSha,
+    string Provider,
+    string RedactionStatus,
+    string RetainedAt,
+    string Text);
+
+public sealed record RetainDeleteResult(
+    string Mode,
+    string Status,
+    string SourcePath,
+    int DeletedCount,
+    bool DeletesItems,
+    bool RemovesFiles,
+    bool ExternalRetainEnabled,
+    bool CodexAutoRetainEnabled,
+    bool CloudEnabled,
+    bool CallsHindsight,
+    bool CallsCodexRetain,
+    bool InstallsHooks,
+    bool RunsRefreshAll,
+    bool RebuildsMemory);

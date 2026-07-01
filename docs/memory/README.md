@@ -19,7 +19,7 @@ The application runtime must not depend on these files or generated stores.
 - `gbrain-spike.md`: confirmed upstream GBrain CLI/API surface and current local availability.
 - `open-questions.md`: unresolved questions that should not be silently encoded as facts.
 
-Generated graph, SQLite, or memory exports belong in `docs/memory/generated/`, which is ignored by Git. Use `scripts/memory-refresh-all.ps1` for a full local rebuild from `HEAD`, `tools/Memory` for the canonical local SQLite store, and `scripts/memory-refresh.ps1` only for the legacy JSON refresh report.
+Generated graph, SQLite, or memory exports belong in `docs/memory/generated/`, which is ignored by Git. Use `scripts/memory-refresh-all.ps1` for a full local rebuild from `HEAD`, `scripts/memory-rebuild-from-head.ps1` when local generated memory artifacts must be deleted and recreated from committed sources, `tools/Memory` for the canonical local SQLite store, and `scripts/memory-refresh.ps1` only for the legacy JSON refresh report.
 
 ## Commands
 
@@ -38,6 +38,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-a
 ```
 
 This runs legacy JSON refresh, SQLite refresh from commit (`refresh-from-commit --commit HEAD`), SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order. It writes an ignored wrapper report to `docs/memory/generated/memory-refresh-all-report.json`; the LanceDB eval step also writes `docs/memory/generated/lancedb-sidecar-report.json` and `docs/memory/generated/lancedb-eval-report.md`. It does not install hooks, enable Codex auto-retain, use Cloud, crawl project files directly for LanceDB, or import raw JSONL/generated exports/secrets/local proxy details/build artifacts.
+
+Rebuild local generated memory artifacts from committed `HEAD` after local store corruption or recovery testing:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-rebuild-from-head.ps1
+```
+
+Use `-PlanOnly` first to review the delete plan. The wrapper may delete only allowlisted generated memory artifacts under `docs/memory/generated/`, then runs `scripts/memory-refresh-all.ps1` and checks that `memory status` ends with `needs_refresh=false`. It does not delete source files, raw JSONL, secrets, `.hindsight/`, `bin/`, `obj/`, `publish/`, hooks, Cloud data, Codex memory, or external retain data.
 
 Run the manual pre-push evidence gate after `memory-refresh-all`:
 
@@ -65,7 +73,7 @@ Optionally install a local managed `post-commit` marker hook:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install-memory-post-commit-marker-hook.ps1 -Confirm
 ```
 
-The optional hook calls `scripts/memory-mark-needs-refresh.ps1` only. It writes `docs/memory/generated/memory-needs-refresh.marker.json` after a commit and does not run rebuild, `memory-refresh-all`, LanceDB, curated retain, Cloud, or Codex auto-retain. Local validation should use a custom temporary `-HookPath`/`-OutputPath`; the generated installer report records `targets_default_repo_hook`, `custom_hook_path`, and `actual_repo_hook_touched` so reviewers can confirm the real `.git/hooks/post-commit` was not touched. Disable it with:
+The optional hook calls `scripts/memory-mark-needs-refresh.ps1` only. It writes `docs/memory/generated/memory-needs-refresh.marker.json` after a commit and does not run rebuild, `memory-refresh-all`, LanceDB, curated retain, Cloud, or Codex auto-retain. `-TimeoutSeconds` must be positive, and marker reports include the lock path used for coordination. Local validation should use a custom temporary `-HookPath`/`-OutputPath`; the generated installer report records `targets_default_repo_hook`, `custom_hook_path`, and `actual_repo_hook_touched` so reviewers can confirm the real `.git/hooks/post-commit` was not touched. Disable it with:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install-memory-post-commit-marker-hook.ps1 -Disable -Confirm
@@ -168,6 +176,23 @@ These reports are written to ignored generated files:
 - `docs/memory/generated/curated-retain-delete-dry-run-report.md`
 
 The export dry-run records source metadata and hash freshness only; it does not include source text until redaction is implemented. The delete dry-run writes a deletion plan only; it does not remove source files, generated reports, local stores, hooks, provider data, or retained items. Missing, stale, denylisted, or redaction-review reports keep external retain and Codex auto-retain disabled.
+
+Run controlled local retain import only after reviewing the dry-run report:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-import.ps1 -Commit HEAD
+```
+
+This writes `docs/memory/generated/curated-retain-import-report.json` and imports only allowlisted redaction-clean sources into local SQLite. The imported text is read from the selected Git commit tree, not from dirty working-tree files. A blocked report is expected while redaction findings remain.
+
+Export or delete locally retained rows for lifecycle proof:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-export.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-delete.ps1 -SourcePath docs/memory/example.md
+```
+
+Delete removes only local SQLite retained rows for the selected source path. It does not remove repository files.
 
 Review curated retain policy before any external retain or Codex auto-retain:
 

@@ -207,6 +207,18 @@ $reportPath = Resolve-RootedOrRelativePath `
     -DefaultPath (Join-Path $root 'docs\memory\generated\install-memory-post-commit-marker-hook-report.json')
 $markerScriptPath = Join-Path $root 'scripts\memory-mark-needs-refresh.ps1'
 
+if ($TimeoutSeconds -le 0) {
+    $report = New-Report `
+        -Status 'failed' `
+        -FailureCode 'invalid-timeout-seconds' `
+        -InstallsHooks $false `
+        -PostCommitHookInstalled (Test-ManagedHook -Path $hookFilePath) `
+        -ManagedHookRemoved $false `
+        -UnmanagedHookDetected ((Test-Path -LiteralPath $hookFilePath) -and -not (Test-ManagedHook -Path $hookFilePath))
+    Write-JsonReport -Path $reportPath -Payload $report
+    exit 1
+}
+
 if ($PlanOnly) {
     $report = New-Report `
         -Status 'planned' `

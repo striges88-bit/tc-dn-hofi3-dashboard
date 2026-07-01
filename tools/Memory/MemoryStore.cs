@@ -218,6 +218,162 @@ public sealed class MemoryStore : IDisposable
         return new SearchResult(query, SearchInternal(query, explainPlan: null, logQuery: true, out _));
     }
 
+    public RetainImportResult RetainImport(RetainImportBatch import)
+    {
+        EnsureRetainSchema();
+
+        if (import.BlockingReasons.Count > 0)
+        {
+            return NewRetainImportResult("blocked", import, []);
+        }
+
+        using var transaction = _connection.BeginTransaction();
+        foreach (var item in import.Items)
+        {
+            Execute("DELETE FROM retained_items_fts WHERE id = $id", transaction, ("$id", item.Id));
+            Execute("DELETE FROM retained_items WHERE id = $id", transaction, ("$id", item.Id));
+            Execute(
+                """
+                INSERT INTO retained_items(id, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, provider, redaction_status, retained_at, text)
+                VALUES ($id, $source, $hash, $blob, $commit, $tree, $provider, $redaction, $retained, $text)
+                """,
+                transaction,
+                ("$id", item.Id),
+                ("$source", item.SourcePath),
+                ("$hash", item.SourceHash),
+                ("$blob", item.SourceBlobSha),
+                ("$commit", item.CommitSha),
+                ("$tree", item.TreeSha),
+                ("$provider", item.Provider),
+                ("$redaction", item.RedactionStatus),
+                ("$retained", item.RetainedAt),
+                ("$text", item.Text));
+            Execute(
+                "INSERT INTO retained_items_fts(id, text, source_path) VALUES ($id, $text, $source)",
+                transaction,
+                ("$id", item.Id),
+                ("$text", item.Text),
+                ("$source", item.SourcePath));
+        }
+
+        transaction.Commit();
+        return NewRetainImportResult("imported", import, import.Items);
+    }
+
+    public RetainSearchResult RetainSearch(string query)
+    {
+        EnsureRetainSchema();
+        var ftsQuery = BuildFtsQuery(query);
+        var results = new List<RetainSearchHit>();
+        using var command = CreateCommand(
+            """
+            SELECT r.id, r.source_path, r.commit_sha, r.provider, r.redaction_status, bm25(retained_items_fts) AS rank
+            FROM retained_items_fts
+            JOIN retained_items r ON r.id = retained_items_fts.id
+            WHERE retained_items_fts MATCH $query
+            ORDER BY rank, r.source_path, r.id
+            LIMIT 10
+            """);
+        command.Parameters.AddWithValue("$query", ftsQuery);
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            results.Add(new RetainSearchHit(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetDouble(5)));
+        }
+
+        return new RetainSearchResult(query, results);
+    }
+
+    public RetainExportResult RetainExport(string outputPath)
+    {
+        EnsureRetainSchema();
+        var items = new List<RetainExportItem>();
+        using var command = CreateCommand(
+            """
+            SELECT id, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, provider, redaction_status, retained_at, text
+            FROM retained_items
+            ORDER BY source_path, id
+            """);
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            items.Add(new RetainExportItem(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetString(5),
+                reader.GetString(6),
+                reader.GetString(7),
+                reader.GetString(8),
+                reader.GetString(9)));
+        }
+
+        return new RetainExportResult(
+            "retain-export",
+            "exported",
+            outputPath,
+            items.Count,
+            SourceContentIncluded: true,
+            ExternalRetainEnabled: false,
+            CodexAutoRetainEnabled: false,
+            CloudEnabled: false,
+            CallsHindsight: false,
+            CallsCodexRetain: false,
+            InstallsHooks: false,
+            RunsRefreshAll: false,
+            RebuildsMemory: false,
+            items);
+    }
+
+    public RetainDeleteResult RetainDelete(string sourcePath)
+    {
+        EnsureRetainSchema();
+        sourcePath = sourcePath.Replace('\\', '/');
+        var ids = new List<string>();
+        using (var select = CreateCommand("SELECT id FROM retained_items WHERE source_path = $source"))
+        {
+            select.Parameters.AddWithValue("$source", sourcePath);
+            using var reader = select.ExecuteReader();
+            while (reader.Read())
+            {
+                ids.Add(reader.GetString(0));
+            }
+        }
+
+        using var transaction = _connection.BeginTransaction();
+        foreach (var id in ids)
+        {
+            Execute("DELETE FROM retained_items_fts WHERE id = $id", transaction, ("$id", id));
+        }
+
+        Execute("DELETE FROM retained_items WHERE source_path = $source", transaction, ("$source", sourcePath));
+        transaction.Commit();
+
+        return new RetainDeleteResult(
+            "retain-delete",
+            "deleted",
+            sourcePath,
+            ids.Count,
+            DeletesItems: ids.Count > 0,
+            RemovesFiles: false,
+            ExternalRetainEnabled: false,
+            CodexAutoRetainEnabled: false,
+            CloudEnabled: false,
+            CallsHindsight: false,
+            CallsCodexRetain: false,
+            InstallsHooks: false,
+            RunsRefreshAll: false,
+            RebuildsMemory: false);
+    }
+
     public ExplainResult Explain(string query)
     {
         var plan = ExplainPlan(query);
@@ -338,6 +494,67 @@ public sealed class MemoryStore : IDisposable
         {
             Execute(statement);
         }
+    }
+
+    private static RetainImportResult NewRetainImportResult(
+        string status,
+        RetainImportBatch import,
+        IReadOnlyList<RetainedMemoryItem> importedItems)
+    {
+        return new RetainImportResult(
+            "retain-import",
+            status,
+            import.InputReportPath,
+            import.CommitSha,
+            import.TreeSha,
+            import.Items.Count,
+            importedItems.Count,
+            import.BlockingReasons,
+            ExternalRetainEnabled: false,
+            CodexAutoRetainEnabled: false,
+            CloudEnabled: false,
+            CallsHindsight: false,
+            CallsCodexRetain: false,
+            InstallsHooks: false,
+            RunsRefreshAll: false,
+            RebuildsMemory: false,
+            importedItems
+                .Select(item => new RetainImportItemResult(
+                    item.Id,
+                    item.SourcePath,
+                    item.SourceHash,
+                    item.SourceBlobSha,
+                    item.CommitSha,
+                    item.Provider,
+                    item.RedactionStatus))
+                .ToArray());
+    }
+
+    private void EnsureRetainSchema()
+    {
+        Execute(
+            """
+            CREATE TABLE IF NOT EXISTS retained_items(
+                id TEXT PRIMARY KEY,
+                source_path TEXT NOT NULL,
+                source_hash TEXT NOT NULL,
+                source_blob_sha TEXT NOT NULL,
+                commit_sha TEXT NOT NULL,
+                tree_sha TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                redaction_status TEXT NOT NULL,
+                retained_at TEXT NOT NULL,
+                text TEXT NOT NULL
+            )
+            """);
+        Execute(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS retained_items_fts USING fts5(
+                id UNINDEXED,
+                text,
+                source_path UNINDEXED
+            )
+            """);
     }
 
     private void InsertSearchDocument(SearchDocument document, MemorySnapshotMetadata metadata, SqliteTransaction transaction)
@@ -533,6 +750,7 @@ public sealed class MemoryStore : IDisposable
         {
             var name = reader.GetString(0);
             if (!name.StartsWith("search_documents_fts_", StringComparison.OrdinalIgnoreCase)
+                && !name.StartsWith("retained_items_fts_", StringComparison.OrdinalIgnoreCase)
                 && !name.StartsWith("sqlite_", StringComparison.OrdinalIgnoreCase))
             {
                 names.Add(name);

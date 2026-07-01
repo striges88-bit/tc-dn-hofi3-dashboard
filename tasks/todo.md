@@ -1147,3 +1147,75 @@
 - Compact handoff was resumed; build, diff hygiene, source commit, and post-commit memory gate were completed.
 - `memory-refresh-all` was intentionally run only after committing the slice because refresh indexes committed `HEAD`, not the dirty working tree.
 - Post-commit memory gate passed after the final source commit: `scripts\memory-refresh-all.ps1` completed, `memory status` reported `needs_refresh=false`, and `scripts\memory-pre-push-check.ps1` reported `status=passed` with LanceDB eval `9/9`.
+
+## Memory Futureproof Phase 2 Todo
+
+- [x] Start branch `codex/memory-futureproof-phase2-roadmap` from clean `main`.
+- [x] Create roadmap plan `docs/superpowers/plans/2026-07-01-memory-futureproof-phase2.md`.
+- [x] Slice 1: controlled curated retain import into local SQLite, commit-grounded and blocked by redaction/denylist/stale metadata.
+  - [x] Add RED Memory CLI tests for `retain-import`.
+  - [x] Implement local-only `retain-import` and generated report wrapper.
+  - [x] Update retain policy, memory contract, and script docs.
+  - [x] Verify with Memory CLI tests, wrapper run, solution build, and diff hygiene.
+- [x] Slice 2: end-to-end local retain lifecycle.
+  - [x] Add RED tests for `retain-search`, `retain-export`, `retain-delete`, and absent-after-delete verification.
+  - [x] Implement local-only lifecycle commands and wrappers.
+  - [x] Verify lifecycle tests, wrapper reports, solution build, and diff hygiene.
+- [x] Slice 3: expanded retrieval quality gate.
+  - [x] Add eval cases for formula owner, funding-source rationale, Binance DTO boundary, REST hot path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
+  - [x] Update JSON/Markdown eval reports with rank, source path, confidence, freshness, and gap notes.
+  - [x] Verify Memory CLI tests, Python sidecar tests, LanceDB rebuild/eval, build, and diff hygiene.
+- [x] Slice 4: recovery/rebuild proof from Git `HEAD`.
+  - [x] Add tests for deleting local SQLite/LanceDB generated stores and rebuilding from committed sources.
+  - [x] Add documented recovery wrapper that touches only approved generated memory artifacts.
+  - [x] Verify recovery tests, real plan/report mode, build, and diff hygiene.
+- [x] Slice 5: optional marker-only automation hardening.
+  - [x] Keep post-commit automation explicit, disableable, marker-only, timeout/lock/report-backed, and no rebuild/retain/Cloud.
+  - [x] Verify manual gate tests, helper `-PlanOnly`, build, memory refresh, status, and pre-push gate.
+
+## Memory Futureproof Phase 2 Results
+
+- Roadmap starts from the already merged Memory Polish Phase 1 baseline: SQLite FTS5 canonical store, LanceDB sidecar, manual memory gate, curated retain dry-runs, operator daily check, and marker-only hook policy are already present.
+- Critical implementation constraint: controlled retain must read from a committed Git tree plus reviewed allowlist metadata, not from a dirty working directory.
+- Slice 1 RED/GREEN completed: `retain-import` initially failed as an unknown command; after implementation, Memory CLI retain-import tests passed `2/2`.
+- `retain-import` now imports only redaction-clean allowlisted files from the selected Git commit tree into local SQLite retained-memory tables; dirty working-tree text is not imported.
+- `retain-search` can find locally imported retained items and excludes dirty working-tree-only content in tests.
+- Denylisted paths and redaction-review sources block the whole import batch with exit code `2` at the CLI layer.
+- Added `scripts/curated-retain-import.ps1` as a local-only wrapper that writes ignored report `docs/memory/generated/curated-retain-import-report.json`; real repo run is currently `blocked` with `imported_count=0` because the existing dry-run report has redaction/stale-source blockers.
+- Verification for Slice 1 passed: `tools/Memory.Tests` `8/8`, `CuratedRetainPolicyTests|MemoryContractTests|ManualMemoryGateTests` `28/28`, solution build `0` warnings and `0` errors, and `git diff --check` clean.
+- Slice 1 source committed as `079d4fb` and post-commit memory gate passed: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+- Slice 2 adds local-only `retain-export`, `retain-delete`, `scripts/curated-retain-export.ps1`, and `scripts/curated-retain-delete.ps1`.
+- Slice 2 lifecycle proof covers: import retained item, find through `retain-search`, export retained text and metadata, delete retained rows by `source_path`, and verify the deleted phrase is absent from `retain-search`.
+- Slice 2 verification passed before commit:
+  `RetainExportDeleteLifecycleProvesImportedItemCanBeRemoved` `1/1` (user-run full Memory CLI suite reported `9/9`);
+  `ControlledRetainLifecycleScriptsAndDocsStayLocalOnly` `1/1`;
+  related Infrastructure guardrails `29/29`;
+  solution build `0` warnings and `0` errors;
+  `git diff --check` clean.
+- Commit Slice 2 source before running `memory-refresh-all`, because refresh indexes committed `HEAD`.
+- Slice 2 source committed as `ef77b37`; post-commit memory gate passed: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+- Slice 3 required retrieval quality gate was already implemented before this roadmap checkpoint: LanceDB eval has 9 cases covering current OFI formula, formula owner, funding-source rationale, Binance DTO boundary, REST hot-path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
+- Slice 3 verification passed: Memory CLI tests `9/9`, Python sidecar tests through `uv` returned `ok`, and post-Slice-2 `memory-refresh-all` LanceDB eval reported `9/9`.
+- Slice 3 source committed as `2dbacaa`; post-commit memory gate passed: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+- Slice 4 adds `scripts/memory-rebuild-from-head.ps1` as a local recovery wrapper with `-PlanOnly`, allowlisted deletes under `docs/memory/generated/`, `memory-refresh-all` execution, and final `memory status needs_refresh=false` verification.
+- Slice 4 real recovery run passed: deleted local generated SQLite/LanceDB/report artifacts only, rebuilt from committed `HEAD`, and reported `memory_status_needs_refresh=false`.
+- Slice 4 source committed as `68ea272`; post-commit memory gate passed: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+- Slice 5 hardened optional marker-only automation without enabling it by default: post-commit marker installer and marker helper now reject non-positive `-TimeoutSeconds`; marker helper reports include `lock_path`.
+- Slice 5 verification before commit passed: RED timeout tests failed for the expected reason, GREEN timeout tests passed `2/2`, `ManualMemoryGateTests` passed `15/15`, custom hook-path `install-memory-post-commit-marker-hook.ps1 -PlanOnly` reported `actual_repo_hook_touched=false`, and solution build completed with `0` warnings and `0` errors.
+- Slice 5 source committed as `94996ea`; post-commit memory gate passed before the full solution test run: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.
+
+## Compact Handoff - Pre-Push Gate Robustness
+
+- [x] Fix `scripts/memory-pre-push-check.ps1` so a non-eval/probe-style LanceDB sidecar JSON report is reported as a failed `lancedb-eval-passed` check instead of throwing a PowerShell missing-property exception.
+- [x] Run the new regression test `PrePushCheckRejectsNonEvalLanceDbReportWithoutPowerShellPropertyCrash` and then `ManualMemoryGateTests`.
+- [x] Rerun `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1` after committing the fix.
+- [x] Retry `git push -u origin codex/memory-futureproof-phase2-roadmap`.
+
+Current evidence:
+
+- Push failed because the managed pre-push hook invoked `scripts/memory-pre-push-check.ps1` after full `dotnet test` had overwritten `docs/memory/generated/lancedb-sidecar-report.json` with a non-eval/probe-style report (`status=ready-to-run`, no `passed_count`).
+- A RED regression test has been added in `CryptoIndicatorApp.Infrastructure.Tests/ManualMemoryGateTests.cs`: `PrePushCheckRejectsNonEvalLanceDbReportWithoutPowerShellPropertyCrash`.
+- RED was confirmed: the test fails because stderr contains the missing-property crash for `passed_count`.
+- GREEN was confirmed after the fix: the regression test passed `1/1`, `ManualMemoryGateTests` passed `16/16`, solution build passed with `0` warnings/errors, and `git diff --check` passed.
+- Post-commit memory gate passed on commit `506c9a6`: `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed with LanceDB eval `9/9`.
+- Push retry succeeded; the managed pre-push hook also passed and published `codex/memory-futureproof-phase2-roadmap`.

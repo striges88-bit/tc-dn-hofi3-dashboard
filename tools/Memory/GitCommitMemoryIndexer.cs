@@ -69,9 +69,24 @@ internal sealed class GitCommitMemoryIndexer
         return TryRunGitText(projectRoot, "rev-parse", $"{commitSha}^{{tree}}")?.Trim();
     }
 
+    public static async Task<string> ResolveCommitAsync(string projectRoot, string commitSpec)
+    {
+        return (await RunGitTextCoreAsync(projectRoot, "rev-parse", "--verify", $"{commitSpec}^{{commit}}")).Trim();
+    }
+
+    public static async Task<string> ReadTreeAsync(string projectRoot, string commitSha)
+    {
+        return (await RunGitTextCoreAsync(projectRoot, "rev-parse", $"{commitSha}^{{tree}}")).Trim();
+    }
+
     public static string? ReadBlobSha(string projectRoot, string commitSha, string sourcePath)
     {
         return TryRunGitText(projectRoot, "rev-parse", $"{commitSha}:{sourcePath}")?.Trim();
+    }
+
+    public static async Task<byte[]> ReadBlobBytesAsync(string projectRoot, string blobSha)
+    {
+        return await RunGitBytesCoreAsync(projectRoot, "cat-file", "-p", blobSha);
     }
 
     public static bool IsWorkingTreeDirty(string projectRoot)

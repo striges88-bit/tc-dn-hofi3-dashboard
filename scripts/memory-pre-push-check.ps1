@@ -137,6 +137,29 @@ function Test-JsonPropertyFalse {
     return $null -ne $property -and $property.Value -eq $false
 }
 
+function Test-JsonPropertyExists {
+    param(
+        [object]$Object,
+        [string]$Name
+    )
+
+    return $null -ne $Object.PSObject.Properties[$Name]
+}
+
+function Get-JsonPropertyValue {
+    param(
+        [object]$Object,
+        [string]$Name
+    )
+
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
 function Read-JsonFile {
     param([string]$Path)
 
@@ -293,19 +316,53 @@ else {
     $evalPassed = $false
     $evalDetail = 'eval report missing'
     if ($null -ne $evalReport) {
-        $evalPassed = $evalReport.generator -eq 'tools/MemorySemantic/lancedb_sidecar.py' -and
-            $evalReport.command -eq 'eval' -and
-            $evalReport.status -eq 'ok' -and
-            $evalReport.source_store -eq 'sqlite-fts5' -and
-            $evalReport.cloud_enabled -eq $false -and
-            $evalReport.auto_commit_refresh_enabled -eq $false -and
-            $evalReport.direct_project_crawl_enabled -eq $false -and
-            $evalReport.commit_hook_installed -eq $false -and
-            $evalReport.passed -eq $true -and
-            $evalReport.failed_count -eq 0 -and
-            $evalReport.passed_count -ge $MinimumEvalCases
+        $requiredEvalProperties = @(
+            'generator',
+            'command',
+            'status',
+            'source_store',
+            'cloud_enabled',
+            'auto_commit_refresh_enabled',
+            'direct_project_crawl_enabled',
+            'commit_hook_installed',
+            'passed',
+            'failed_count',
+            'passed_count'
+        )
 
-        $evalDetail = "passed_count=$($evalReport.passed_count); failed_count=$($evalReport.failed_count)"
+        $missingEvalProperties = @($requiredEvalProperties | Where-Object { -not (Test-JsonPropertyExists -Object $evalReport -Name $_) })
+        if ($missingEvalProperties.Count -gt 0) {
+            $statusValue = Get-JsonPropertyValue -Object $evalReport -Name 'status'
+            $commandValue = Get-JsonPropertyValue -Object $evalReport -Name 'command'
+            $evalDetail = "missing properties: $($missingEvalProperties -join ', '); status=$statusValue; command=$commandValue"
+        }
+        else {
+            $generatorValue = Get-JsonPropertyValue -Object $evalReport -Name 'generator'
+            $commandValue = Get-JsonPropertyValue -Object $evalReport -Name 'command'
+            $statusValue = Get-JsonPropertyValue -Object $evalReport -Name 'status'
+            $sourceStoreValue = Get-JsonPropertyValue -Object $evalReport -Name 'source_store'
+            $cloudEnabledValue = Get-JsonPropertyValue -Object $evalReport -Name 'cloud_enabled'
+            $autoCommitRefreshValue = Get-JsonPropertyValue -Object $evalReport -Name 'auto_commit_refresh_enabled'
+            $directProjectCrawlValue = Get-JsonPropertyValue -Object $evalReport -Name 'direct_project_crawl_enabled'
+            $commitHookInstalledValue = Get-JsonPropertyValue -Object $evalReport -Name 'commit_hook_installed'
+            $passedValue = Get-JsonPropertyValue -Object $evalReport -Name 'passed'
+            $failedCountValue = Get-JsonPropertyValue -Object $evalReport -Name 'failed_count'
+            $passedCountValue = Get-JsonPropertyValue -Object $evalReport -Name 'passed_count'
+
+            $evalPassed = $generatorValue -eq 'tools/MemorySemantic/lancedb_sidecar.py' -and
+                $commandValue -eq 'eval' -and
+                $statusValue -eq 'ok' -and
+                $sourceStoreValue -eq 'sqlite-fts5' -and
+                $cloudEnabledValue -eq $false -and
+                $autoCommitRefreshValue -eq $false -and
+                $directProjectCrawlValue -eq $false -and
+                $commitHookInstalledValue -eq $false -and
+                $passedValue -eq $true -and
+                $failedCountValue -eq 0 -and
+                $passedCountValue -ge $MinimumEvalCases
+
+            $evalDetail = "passed_count=$passedCountValue; failed_count=$failedCountValue"
+        }
     }
 
     $checks.Add((New-CheckResult -Name 'lancedb-eval-passed' -Description 'Require LanceDB eval gate to pass' -Passed $evalPassed -Detail $evalDetail))

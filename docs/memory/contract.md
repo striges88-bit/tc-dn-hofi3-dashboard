@@ -55,6 +55,8 @@ Use `scripts/curated-retain-dry-run.ps1` for the first provider-neutral retain p
 
 Use `scripts/curated-retain-export-dry-run.ps1` and `scripts/curated-retain-delete-dry-run.ps1` for provider-neutral lifecycle proof before any external/Codex retain path is enabled. They read generated dry-run metadata, validate allowlist/denylist and source hashes, and write ignored JSON/Markdown reports only. They must not include source text before redaction, delete files or provider data, call Cloud or retain APIs, install hooks, run `memory-refresh-all`, or rebuild memory. Missing, stale, denylisted, or redaction-review reports keep external retain and Codex auto-retain disabled.
 
+Use `scripts/curated-retain-import.ps1` only for controlled local import after dry-run review. It wraps SQLite `retain-import`, reads source text from the selected Git commit tree, and imports only redaction-clean allowlisted sources. It writes an ignored generated report and must not call external retain providers, Codex memory, Cloud, hooks, LanceDB rebuild, raw JSONL, generated exports, secrets, or build artifacts.
+
 ## Node Schema
 
 Allowed node types:
@@ -173,6 +175,8 @@ Use SQLite diagnostics only:
 The MVP refresh mechanism is a manual or commit-addressed refresh command. Do not add a git post-commit hook as a memory refresh path because Git/PATH availability is fragile on Windows and hidden refresh can index mixed worktree states. A post-commit marker hook is allowed only as an explicit opt-in local helper that writes `docs/memory/generated/memory-needs-refresh.marker.json`; it must not run rebuild, `memory-refresh-all`, LanceDB rebuild/eval, curated retain, Cloud, or Codex auto-retain.
 
 Use `scripts/memory-refresh-all.ps1` as the preferred manual full rebuild wrapper. It runs legacy JSON refresh, SQLite `refresh-from-commit --commit HEAD`, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order, then writes an ignored report under `docs/memory/generated/`.
+
+Use `scripts/memory-rebuild-from-head.ps1` only for local recovery proof or local generated-store corruption. It must expose `-PlanOnly`, may delete only allowlisted generated memory artifacts under `docs/memory/generated/`, then runs `scripts/memory-refresh-all.ps1` and verifies `memory status needs_refresh=false`. It must not delete source files, raw JSONL recordings, secrets, `.hindsight/`, `bin/`, `obj/`, `publish/`, hooks, Cloud data, Codex memory, external retain data, or human-authored memory docs.
 
 Use `scripts/memory-pre-push-check.ps1` as a manual evidence gate after `memory-refresh-all` and before push or PR review. It validates the generated refresh/eval reports, does not run a rebuild by default, does not install hooks, and keeps no post-commit refresh automation in the MVP flow.
 

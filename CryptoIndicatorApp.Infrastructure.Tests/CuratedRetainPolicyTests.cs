@@ -206,6 +206,61 @@ public sealed class CuratedRetainPolicyTests
     }
 
     [Fact]
+    public void ControlledRetainImportScriptAndDocsStayLocalOnly()
+    {
+        var script = ReadText("scripts/curated-retain-import.ps1");
+        var policy = ReadText("docs/memory/retain-policy.md");
+        var contract = ReadText("docs/memory/contract.md");
+        var scriptsReadme = ReadText("scripts/README.md");
+
+        Assert.Contains("retain-import", script, StringComparison.Ordinal);
+        Assert.Contains("curated-retain-import-report.json", script, StringComparison.Ordinal);
+        Assert.Contains("external_retain_enabled = $false", script, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("codex_auto_retain_enabled = $false", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("hindsight retain", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("codex retain", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("memory-refresh-all", script, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("controlled local import", policy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("commit tree", policy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("redaction-clean", policy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("curated-retain-import.ps1", contract, StringComparison.Ordinal);
+        Assert.Contains("curated-retain-import.ps1", scriptsReadme, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ControlledRetainLifecycleScriptsAndDocsStayLocalOnly()
+    {
+        var exportScript = ReadText("scripts/curated-retain-export.ps1");
+        var deleteScript = ReadText("scripts/curated-retain-delete.ps1");
+        var policy = ReadText("docs/memory/retain-policy.md");
+        var scriptsReadme = ReadText("scripts/README.md");
+
+        Assert.Contains("retain-export", exportScript, StringComparison.Ordinal);
+        Assert.Contains("curated-retain-export-report.json", exportScript, StringComparison.Ordinal);
+        Assert.Contains("external_retain_enabled = $false", exportScript, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("codex_auto_retain_enabled = $false", exportScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("hindsight retain", exportScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("codex retain", exportScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("memory-refresh-all", exportScript, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("retain-delete", deleteScript, StringComparison.Ordinal);
+        Assert.Contains("curated-retain-delete-report.json", deleteScript, StringComparison.Ordinal);
+        Assert.Contains("removes_files = $false", deleteScript, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("external_retain_enabled = $false", deleteScript, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("codex_auto_retain_enabled = $false", deleteScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("hindsight retain", deleteScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("codex retain", deleteScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("memory-refresh-all", deleteScript, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("curated-retain-export.ps1", policy, StringComparison.Ordinal);
+        Assert.Contains("curated-retain-delete.ps1", policy, StringComparison.Ordinal);
+        Assert.Contains("absent from retain-search", policy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("curated-retain-export.ps1", scriptsReadme, StringComparison.Ordinal);
+        Assert.Contains("curated-retain-delete.ps1", scriptsReadme, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task LifecycleDryRunsBlockRetainWhenReportsAreMissingOrStale()
     {
         using var temp = TemporaryDirectory.Create();

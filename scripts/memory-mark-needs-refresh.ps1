@@ -162,12 +162,20 @@ $lockPath = Join-Path (Split-Path -Parent $markerFilePath) 'memory-needs-refresh
 
 $status = 'marked'
 $failureCode = ''
-$lockAcquired = Acquire-Lock -Path $lockPath -Timeout $TimeoutSeconds
-if (-not $lockAcquired) {
+$lockAcquired = $false
+if ($TimeoutSeconds -le 0) {
+    $status = 'failed'
+    $failureCode = 'invalid-timeout-seconds'
+}
+else {
+    $lockAcquired = Acquire-Lock -Path $lockPath -Timeout $TimeoutSeconds
+}
+
+if ($status -ne 'failed' -and -not $lockAcquired) {
     $status = 'timeout'
     $failureCode = 'lock-timeout'
 }
-else {
+elseif ($status -ne 'failed') {
     try {
         $head = Read-HeadCommit -Root $root
         $marker = [ordered]@{
@@ -202,6 +210,7 @@ $report = [ordered]@{
     report_path = Convert-ToRepoPath -Root $root -Path $reportPath
     timeout_seconds = $TimeoutSeconds
     uses_lock = $true
+    lock_path = Convert-ToRepoPath -Root $root -Path $lockPath
     lock_acquired = $lockAcquired
     writes_marker = $lockAcquired
     started_at = $startedAt
@@ -223,6 +232,10 @@ Write-Json -Path $reportPath -Payload $report
 
 if ($status -eq 'timeout') {
     exit 0
+}
+
+if ($status -eq 'failed') {
+    exit 1
 }
 
 exit 0
