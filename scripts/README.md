@@ -10,6 +10,8 @@ Use `memory-refresh-all.ps1` for the full manual project-memory rebuild. It orch
 
 Use `memory-rebuild-from-head.ps1 -PlanOnly` to review the local recovery delete plan. Without `-PlanOnly`, it deletes only allowlisted generated memory artifacts under `docs/memory/generated/`, runs `memory-refresh-all.ps1`, and verifies `memory status needs_refresh=false`; it does not delete source files, raw JSONL, secrets, `.hindsight/`, `bin/`, `obj/`, `publish/`, hooks, Cloud data, Codex memory, or external retain data.
 
+Use `memory-clone-recovery-check.ps1 -PlanOnly` to review the clone-like recovery proof. Without `-PlanOnly`, it requires a clean working tree, clones committed `HEAD` to a temporary directory outside the repository, runs the clone's `memory-rebuild-from-head.ps1`, verifies clone memory status, and deletes the temporary clone unless `-KeepClone` is passed. It does not install hooks, call Cloud, enable Codex auto-retain, import raw JSONL, use generated exports as source, touch secrets, or touch build artifacts.
+
 Use `memory-pre-push-check.ps1` after `memory-refresh-all.ps1` as a manual evidence gate before push or PR review. It validates the generated refresh/eval reports and does not install hooks, run post-commit automation, or rebuild memory by itself.
 
 Use `install-memory-pre-push-hook.ps1 -Confirm` only when you explicitly want a local managed Git `pre-push` hook. The hook calls `memory-pre-push-check.ps1` and does not rebuild memory. Disable it with `install-memory-pre-push-hook.ps1 -Disable -Confirm`. The installer refuses to overwrite unmanaged hooks.

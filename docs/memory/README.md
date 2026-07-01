@@ -12,6 +12,7 @@ The application runtime must not depend on these files or generated stores.
 - `entities.md`: domain and architecture entities that graph tools may later ingest.
 - `rules.md`: typed current/superseded project rules used by SQLite/LanceDB quality gates.
 - `retain-policy.md`: curated retain lifecycle gates, including redaction, delete/export policy, allowlist, and denylist.
+- `operations-runbook.md`: short operator flow for daily checks, commit refresh, push/PR gates, recovery, clone-like proof, and `/compact`.
 - `project-map.md`: high-level module map.
 - `hindsight-spike.md`: confirmed upstream Hindsight surface and why it is now historical/failed for this MVP.
 - `lancedb-spike.md`: active local semantic sidecar rules and spike gates.
@@ -19,7 +20,7 @@ The application runtime must not depend on these files or generated stores.
 - `gbrain-spike.md`: confirmed upstream GBrain CLI/API surface and current local availability.
 - `open-questions.md`: unresolved questions that should not be silently encoded as facts.
 
-Generated graph, SQLite, or memory exports belong in `docs/memory/generated/`, which is ignored by Git. Use `scripts/memory-refresh-all.ps1` for a full local rebuild from `HEAD`, `scripts/memory-rebuild-from-head.ps1` when local generated memory artifacts must be deleted and recreated from committed sources, `tools/Memory` for the canonical local SQLite store, and `scripts/memory-refresh.ps1` only for the legacy JSON refresh report.
+Generated graph, SQLite, or memory exports belong in `docs/memory/generated/`, which is ignored by Git. Use `docs/memory/operations-runbook.md` for the short operator flow, `scripts/memory-refresh-all.ps1` for a full local rebuild from `HEAD`, `scripts/memory-rebuild-from-head.ps1` when local generated memory artifacts must be deleted and recreated from committed sources, `tools/Memory` for the canonical local SQLite store, and `scripts/memory-refresh.ps1` only for the legacy JSON refresh report.
 
 ## Commands
 
@@ -46,6 +47,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-rebuild-f
 ```
 
 Use `-PlanOnly` first to review the delete plan. The wrapper may delete only allowlisted generated memory artifacts under `docs/memory/generated/`, then runs `scripts/memory-refresh-all.ps1` and checks that `memory status` ends with `needs_refresh=false`. It does not delete source files, raw JSONL, secrets, `.hindsight/`, `bin/`, `obj/`, `publish/`, hooks, Cloud data, Codex memory, or external retain data.
+
+Prove the same recovery behavior in a fresh clone-like checkout:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-clone-recovery-check.ps1 -PlanOnly
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-clone-recovery-check.ps1
+```
+
+The wrapper requires a clean working tree for real runs, clones the current committed `HEAD` to a temporary directory, runs the clone's `scripts/memory-rebuild-from-head.ps1`, verifies clone `memory status needs_refresh=false`, and deletes the temporary clone unless `-KeepClone` is passed. It writes `docs/memory/generated/memory-clone-recovery-check-report.json` and does not install hooks, call Cloud, enable Codex auto-retain, import raw JSONL, import generated exports, import secrets, or touch build artifacts.
 
 Run the manual pre-push evidence gate after `memory-refresh-all`:
 
