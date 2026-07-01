@@ -25,10 +25,15 @@ DEFAULT_EMBEDDING_PROVIDER = "fastembed"
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 TOKEN_HASH_MODEL = "local-token-hash"
 FASTEMBED_PACKAGE_PIN = "fastembed==0.8.0"
+FASTEMBED_RUNTIME_MODEL = "tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean"
+FASTEMBED_RUNTIME_MODEL_SOURCE_HF = "qdrant/paraphrase-multilingual-MiniLM-L12-v2-onnx-Q"
+FASTEMBED_RUNTIME_MODEL_FILE = "model_optimized.onnx"
+FASTEMBED_POOLING = "mean"
 FASTEMBED_POOLING_BASELINE = "mean-pooling"
 FASTEMBED_BASELINE_STATUS = "accepted-if-eval-passes"
 FASTEMBED_BASELINE_EVAL_GATE = "lancedb-eval-9-of-9"
 FASTEMBED_BASELINE_CHANGE_POLICY = "rerun cleanup/rebuild/eval and update docs before changing package, model, or pooling"
+FASTEMBED_WARNING_POLICY = "production-custom-alias-no-suppression"
 
 
 def main() -> int:
@@ -416,15 +421,19 @@ def build_embedding_baseline_metadata(
     provider_name: str,
     model_name: str,
     package_version: str | None = None,
+    runtime_model_name: str | None = None,
 ) -> dict[str, Any]:
     if provider_name == "token-hash":
         return {
             "embedding_package_version": package_version or "builtin",
             "embedding_package_pin": "builtin",
+            "embedding_runtime_model": TOKEN_HASH_MODEL,
+            "embedding_pooling": "not-applicable",
             "embedding_pooling_baseline": "not-applicable",
             "embedding_baseline_status": "fallback-test-only",
             "embedding_baseline_eval_gate": "not-semantic-quality-evidence",
             "embedding_baseline_change_policy": "do not use token-hash as semantic quality evidence",
+            "embedding_warning_policy": "not-applicable",
         }
 
     normalized_model = normalized_embedding_model(provider_name, model_name)
@@ -432,19 +441,25 @@ def build_embedding_baseline_metadata(
         return {
             "embedding_package_version": package_version,
             "embedding_package_pin": FASTEMBED_PACKAGE_PIN,
+            "embedding_runtime_model": runtime_model_name or FASTEMBED_RUNTIME_MODEL,
+            "embedding_pooling": FASTEMBED_POOLING,
             "embedding_pooling_baseline": FASTEMBED_POOLING_BASELINE,
             "embedding_baseline_status": FASTEMBED_BASELINE_STATUS,
             "embedding_baseline_eval_gate": FASTEMBED_BASELINE_EVAL_GATE,
             "embedding_baseline_change_policy": FASTEMBED_BASELINE_CHANGE_POLICY,
+            "embedding_warning_policy": FASTEMBED_WARNING_POLICY,
         }
 
     return {
         "embedding_package_version": package_version,
         "embedding_package_pin": "",
+        "embedding_runtime_model": runtime_model_name or normalized_model,
+        "embedding_pooling": "unknown",
         "embedding_pooling_baseline": "unknown",
         "embedding_baseline_status": "unapproved-model",
         "embedding_baseline_eval_gate": "requires-new-eval-baseline",
         "embedding_baseline_change_policy": FASTEMBED_BASELINE_CHANGE_POLICY,
+        "embedding_warning_policy": "do-not-suppress",
     }
 
 
@@ -452,6 +467,7 @@ def build_embedding_baseline_metadata(
 class EmbeddingProvider:
     provider_name: str
     model_name: str
+    runtime_model_name: str
     dimensions: int
     embed_many: Callable[[list[str]], list[list[float]]]
     package_version: str
@@ -466,7 +482,14 @@ class EmbeddingProvider:
             "embedding_dimensions": self.dimensions,
             "embedding_package_version": self.package_version,
         }
-        metadata.update(build_embedding_baseline_metadata(self.provider_name, self.model_name, self.package_version))
+        metadata.update(
+            build_embedding_baseline_metadata(
+                self.provider_name,
+                self.model_name,
+                self.package_version,
+                self.runtime_model_name,
+            )
+        )
         return metadata
 
 
@@ -474,6 +497,7 @@ def make_embedding_provider(provider_name: str, model_name: str) -> EmbeddingPro
     if provider_name == "token-hash":
         return EmbeddingProvider(
             "token-hash",
+            TOKEN_HASH_MODEL,
             TOKEN_HASH_MODEL,
             TOKEN_HASH_VECTOR_DIMENSIONS,
             embed_token_hash_many,
@@ -490,7 +514,8 @@ def make_embedding_provider(provider_name: str, model_name: str) -> EmbeddingPro
     except ImportError as exc:
         raise RuntimeError("fastembed is required for the default LanceDB semantic provider.") from exc
 
-    model = TextEmbedding(model_name=normalized_model)
+    runtime_model = ensure_fastembed_runtime_model(TextEmbedding, normalized_model)
+    model = TextEmbedding(model_name=runtime_model)
     dimensions = fastembed_dimensions(TextEmbedding, normalized_model)
     package_version = version("fastembed")
 
@@ -500,7 +525,35 @@ def make_embedding_provider(provider_name: str, model_name: str) -> EmbeddingPro
             return []
         return vectors
 
-    return EmbeddingProvider("fastembed", normalized_model, dimensions, embed_fastembed_many, package_version)
+    return EmbeddingProvider("fastembed", normalized_model, runtime_model, dimensions, embed_fastembed_many, package_version)
+
+
+def ensure_fastembed_runtime_model(text_embedding_type: Any, model_name: str) -> str:
+    if normalized_embedding_model("fastembed", model_name) != DEFAULT_EMBEDDING_MODEL:
+        return model_name
+
+    if fastembed_model_exists(text_embedding_type, FASTEMBED_RUNTIME_MODEL):
+        return FASTEMBED_RUNTIME_MODEL
+
+    from fastembed.common.model_description import ModelSource, PoolingType  # type: ignore
+
+    text_embedding_type.add_custom_model(
+        model=FASTEMBED_RUNTIME_MODEL,
+        pooling=PoolingType.MEAN,
+        normalization=False,
+        sources=ModelSource(hf=FASTEMBED_RUNTIME_MODEL_SOURCE_HF),
+        dim=fastembed_dimensions(text_embedding_type, DEFAULT_EMBEDDING_MODEL),
+        model_file=FASTEMBED_RUNTIME_MODEL_FILE,
+        description="TC-DN-HOFI3 explicit mean-pooling alias for the default multilingual FastEmbed model.",
+        license="apache-2.0",
+        size_in_gb=0.22,
+    )
+
+    return FASTEMBED_RUNTIME_MODEL
+
+
+def fastembed_model_exists(text_embedding_type: Any, model_name: str) -> bool:
+    return any(model.get("model") == model_name for model in text_embedding_type.list_supported_models())
 
 
 def normalized_embedding_model(provider_name: str, model_name: str) -> str:
@@ -631,10 +684,13 @@ def read_table_embedding_metadata(rows: list[dict[str, Any]]) -> dict[str, Any] 
         "embedding_dimensions": first.get("embedding_dimensions"),
         "embedding_package_version": first.get("embedding_package_version"),
         "embedding_package_pin": first.get("embedding_package_pin"),
+        "embedding_runtime_model": first.get("embedding_runtime_model"),
+        "embedding_pooling": first.get("embedding_pooling"),
         "embedding_pooling_baseline": first.get("embedding_pooling_baseline"),
         "embedding_baseline_status": first.get("embedding_baseline_status"),
         "embedding_baseline_eval_gate": first.get("embedding_baseline_eval_gate"),
         "embedding_baseline_change_policy": first.get("embedding_baseline_change_policy"),
+        "embedding_warning_policy": first.get("embedding_warning_policy"),
     }
 
 

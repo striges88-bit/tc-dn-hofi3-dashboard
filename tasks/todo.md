@@ -1260,3 +1260,76 @@ Current evidence:
 - Marker fix commit `3591a3c` passed `memory-refresh-all`, `memory status` (`needs_refresh=false`), and `memory-pre-push-check` with LanceDB eval `9/9`.
 - Final real clone-like recovery on `3591a3c` completed, deleted the temporary clone, and reported clone `needs_refresh=false` and `working_tree_dirty=false`.
 - Final post-commit gate for this todo evidence is reported in generated reports and the agent response, not committed back into `tasks/todo.md`; otherwise every evidence update would create a new `HEAD` that needs another refresh.
+
+## LanceDB Explicit Mean Pooling Baseline Todo
+
+- [x] Start branch `codex/lancedb-explicit-mean-pooling-baseline` from clean `main`.
+- [x] Add RED Python sidecar test proving FastEmbed mean-pooling warning is handled intentionally and does not leak to operator stderr.
+- [x] Implement targeted FastEmbed baseline handling without changing model, package pin, provider, dimensions, or retrieval ranking.
+- [x] Update LanceDB memory docs to distinguish explicit mean-pooling baseline handling from arbitrary warning suppression.
+- [x] Run Python sidecar tests, LanceDB cleanup/rebuild/eval, relevant .NET guardrails, solution build, and diff hygiene.
+- [x] Commit source slice, then run `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1`.
+
+## LanceDB Explicit Mean Pooling Baseline Results
+
+- RED confirmed: `test_fastembed_mean_pooling_warning_is_handled_as_explicit_baseline` failed because FastEmbed emitted `now uses mean pooling instead of CLS embedding`.
+- The initial targeted-warning policy was rejected before push as too close to suppression-based cleanup; the slice is being amended to use an explicit FastEmbed custom model alias instead.
+- The old real LanceDB cleanup/rebuild/eval evidence is historical for the rejected suppression approach and must not be treated as final evidence for this branch.
+- Relevant .NET guardrails passed: `LanceDbSidecarSpikeTests|MemoryRefreshAllTests|ManualMemoryGateTests` passed `25/25`; `tools/Memory.Tests` passed `9/9`.
+- Solution build passed with `0` warnings and `0` errors; `git diff --check` passed.
+- Source commit passed `memory-refresh-all`, `memory status` (`needs_refresh=false`), and `memory-pre-push-check` with LanceDB eval `9/9`; this todo evidence is amended into the slice, then the memory gate is rerun on the amended commit.
+
+## LanceDB FastEmbed Custom Alias Baseline Todo
+
+- [x] Replace production warning suppression with an explicit FastEmbed custom model alias using `PoolingType.MEAN`.
+- [x] Keep `embedding_model` as the logical upstream model and report `embedding_runtime_model` as the local alias.
+- [x] Record `pooling=mean`, `fastembed==0.8.0`, and `lancedb-eval-9-of-9` in Python, PowerShell, and docs.
+- [x] Keep suppression only in diagnostic comparison tests, not in the production provider path.
+- [x] Run Python sidecar tests, LanceDB cleanup/rebuild/eval, relevant .NET guardrails, solution build, and diff hygiene.
+- [x] Amend the unpushed slice commit, then run `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1`.
+
+## LanceDB FastEmbed Custom Alias Baseline Results
+
+- RED confirmed: `tools\MemorySemantic\lancedb_sidecar_tests.py` failed on missing `FASTEMBED_RUNTIME_MODEL`, proving the test requires a runtime alias rather than the old production warning-capture path.
+- GREEN confirmed so far: `tools\MemorySemantic\lancedb_sidecar_tests.py` passes after registering `tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean` through `TextEmbedding.add_custom_model(..., PoolingType.MEAN, normalization=False, ...)`.
+- The old production-module warning-capture helper was removed; suppression/capture logic remains only in the Python diagnostic test helper for upstream-baseline comparison.
+- Final alias verification passed before amend:
+  `tools\MemorySemantic\lancedb_sidecar_tests.py` returned `ok`;
+  `scripts\lancedb-sidecar.ps1 -Command cleanup` completed;
+  `scripts\lancedb-sidecar.ps1 -Command rebuild` indexed `419` records with `embedding_runtime_model=tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean`, `embedding_pooling=mean`, and `embedding_warning_policy=production-custom-alias-no-suppression`;
+  `scripts\lancedb-sidecar.ps1 -Command eval` passed `9/9`;
+  `LanceDbSidecarSpikeTests|MemoryRefreshAllTests|ManualMemoryGateTests` passed `25/25`;
+  `tools/Memory.Tests` passed `9/9`;
+  solution build completed with `0` warnings and `0` errors;
+  `git diff --check` passed.
+- The post-amend memory gate is intentionally run after the amended commit because `memory-refresh-all` indexes committed `HEAD`.
+- Previous post-amend gate passed before this compact handoff edit: `scripts\memory-refresh-all.ps1` completed, `memory status` reported `needs_refresh=false`, and `scripts\memory-pre-push-check.ps1` passed with LanceDB eval `9/9`.
+
+## Compact Handoff - Memory Architecture And Next Slices
+
+- [x] Confirm GitHub Actions `main` merge commit `a11000c` is green after rerunning failed jobs.
+- [x] Confirm local branch status before compact: `codex/lancedb-explicit-mean-pooling-baseline` is ahead of `main` with LanceDB FastEmbed alias commit `c74e1a4`.
+- [x] Confirm memory status before this handoff edit: indexed commit matched `HEAD c74e1a4`, `needs_refresh=false`, `marker_exists=false`, and `working_tree_dirty=false`.
+- [x] Record next sequence after compact.
+
+Current architecture:
+
+- Source of truth order stays: code/tests/config, then `AGENTS.md`/ADR/`TC-DN-HOFI3.md`/`docs/formulas.md`, then human-authored `docs/memory/*.md`, then generated SQLite/LanceDB evidence.
+- SQLite FTS5 is the canonical local generated memory store for status, source metadata, FTS retrieval, stale checks, retain lifecycle, and query logging.
+- LanceDB is the semantic sidecar below SQLite; it reads SQLite `search_documents`, carries SQLite source/status metadata, and is trusted only while eval is `9/9`.
+- LanceDB embedding baseline is explicit and clean: logical model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, runtime alias `tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean`, `pooling=mean`, `fastembed==0.8.0`, no production warning suppression.
+- Curated retain exists only as controlled local SQLite lifecycle and dry-run/report tooling; Codex auto-retain, Cloud retain, and post-commit rebuild remain disabled.
+- Optional automation remains marker-only or check-only: pre-push helper calls `memory-pre-push-check`; post-commit marker only writes a needs-refresh marker and does not rebuild.
+
+Optimal next slices:
+
+- [ ] After compact, verify `memory status` and `memory-pre-push-check` before push if no new source changes were made.
+- [ ] Push `codex/lancedb-explicit-mean-pooling-baseline` and create a draft PR.
+- [ ] Wait for CI; if green, move PR to ready, review diff, and merge.
+- [ ] From clean `main`, start a CI stability slice if script-test timeout repeats: serialize script-heavy memory tests or split CI test projects so `Infrastructure.Tests` and `Memory.Tests` do not contend.
+- [ ] After that, start the next memory polish slice only if needed: tighten LanceDB eval/report documentation or add operator troubleshooting docs. Do not add auto-retain or post-commit rebuild.
+
+Notes:
+
+- The previous failed `a11000c` run was a flaky timeout in script integration tests; rerun passed. Treat a repeat as CI architecture debt, not as a reason to increase timeouts blindly.
+- Before `/compact`, stop here after committing this handoff and rerunning memory gate; keep final gate evidence in the agent response to avoid creating another evidence-only source change.

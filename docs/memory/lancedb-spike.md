@@ -10,8 +10,11 @@ The current production-candidate semantic quality layer uses local FastEmbed/ONN
 
 - Provider: `fastembed`.
 - Model: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`.
+- Runtime model: `embedding_runtime_model=tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean`.
 - Package pin: `fastembed==0.8.0`.
+- Pooling: `embedding_pooling=mean`.
 - Pooling baseline: `embedding_pooling_baseline=mean-pooling`.
+- Warning policy: `embedding_warning_policy=production-custom-alias-no-suppression`.
 - Baseline gate: `embedding_baseline_eval_gate=lancedb-eval-9-of-9`.
 - Runtime: Python embedded through `uv`.
 - Cloud: disabled.
@@ -34,7 +37,7 @@ The sidecar now uses local FastEmbed/ONNX for semantic recall quality testing. T
 
 ## Embedding Baseline
 
-The accepted low-risk baseline is FastEmbed `0.8.0` with model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` and mean-pooling behavior. FastEmbed may warn that this model now uses mean pooling instead of older CLS behavior; this warning is not suppressed or ignored. It is recorded in reports as `embedding_pooling_baseline=mean-pooling`.
+The accepted low-risk baseline is FastEmbed `0.8.0` with logical model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` and explicit mean-pooling behavior. FastEmbed `TextEmbedding` emits a warning when the upstream model name is used directly because the package moved it from older CLS behavior to mean pooling. The production sidecar avoids warning suppression by registering a local FastEmbed custom-model alias, `tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean`, with `PoolingType.MEAN`. Reports keep the logical `embedding_model`, the actual `embedding_runtime_model`, `embedding_pooling=mean`, and `embedding_warning_policy=production-custom-alias-no-suppression`.
 
 This baseline is current only while LanceDB `eval` passes `9/9`. Changing the package pin, model, pooling behavior, dimensions, or provider requires rerun cleanup/rebuild/eval, updating the generated JSON/Markdown eval reports, and updating this document before relying on the new semantic results.
 
@@ -80,8 +83,8 @@ Date: 2026-06-29.
 Update 2026-06-29:
 
 - FastEmbed/ONNX candidate rebuild with `fastembed==0.8.0` and model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` indexes the current/proposed SQLite record set; the ignored generated report records the exact per-run count.
-- Indexed rows record `embedding_provider=fastembed`, `embedding_model=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, `embedding_dimensions=384`, and `embedding_package_version=0.8.0`.
-- Reports record `embedding_package_pin=fastembed==0.8.0`, `embedding_pooling_baseline=mean-pooling`, `embedding_baseline_status=accepted-if-eval-passes`, and `embedding_baseline_eval_gate=lancedb-eval-9-of-9`.
+- Indexed rows record `embedding_provider=fastembed`, `embedding_model=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, `embedding_runtime_model=tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean`, `embedding_pooling=mean`, `embedding_dimensions=384`, and `embedding_package_version=0.8.0`.
+- Reports record `embedding_package_pin=fastembed==0.8.0`, `embedding_pooling_baseline=mean-pooling`, `embedding_warning_policy=production-custom-alias-no-suppression`, `embedding_baseline_status=accepted-if-eval-passes`, and `embedding_baseline_eval_gate=lancedb-eval-9-of-9`.
 - `search "actual OFI formula"` returned `formula_version.tc-dn-hofi3.current` first.
 - `explain "actual OFI formula"` returned `KNNVectorDistance`, `LanceRead`, and `TopK`; the ignored generated report records the exact per-run scan count.
 - The first FastEmbed `eval` passed `4/4`: current OFI formula, funding-source ADR, exchange adapter impact, and superseded-rule exclusion. This was a smoke baseline, not enough evidence for durable trust.
@@ -116,11 +119,11 @@ Required eval report fields:
 - Matched confidence.
 - Gap notes for failed or incomplete cases.
 - FastEmbed provider/model/package metadata.
-- `embedding_pooling_baseline`, `embedding_baseline_status`, and `embedding_baseline_eval_gate`.
+- `embedding_runtime_model`, `embedding_pooling`, `embedding_pooling_baseline`, `embedding_warning_policy`, `embedding_baseline_status`, and `embedding_baseline_eval_gate`.
 
 ## Limitations
 
 - FastEmbed model files may need a first-run local download into the Python/model cache. This is still local embedded execution, but it is not zero-install.
-- FastEmbed `0.8.0` warns that this model now uses mean pooling instead of older CLS behavior. That behavior is accepted only as the documented `mean-pooling` baseline while eval remains `9/9`; changing it later requires a fresh eval baseline.
+- FastEmbed `0.8.0` warns when the upstream model name is used directly because this model now uses mean pooling instead of older CLS behavior. The production sidecar uses an explicit custom runtime alias with `PoolingType.MEAN` instead of suppressing the warning. The behavior is accepted only as the documented `mean-pooling` baseline while eval remains `9/9`, and changing it later requires a fresh eval baseline.
 - Raw vector distance alone ranked generic chunks above the current formula record during the first smoke. The sidecar keeps a small local reranker that prefers typed records such as `formula_version` and ADRs over generic chunks when exact-token overlap is present.
 - This does not replace SQLite FTS5 retrieval tests. It adds a semantic quality gate below SQLite status/source metadata.
