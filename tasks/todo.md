@@ -997,8 +997,8 @@
 - [x] Run `dotnet restore` once, then `dotnet build CryptoIndicatorApp.sln --no-restore`.
 - [x] Run relevant deterministic .NET tests, including `tools/Memory.Tests`, without LanceDB/FastEmbed.
 - [x] Verify locally with the project SDK and diff hygiene.
-- [ ] Commit, refresh memory from committed `HEAD`, run the manual pre-push gate, and push.
-- [ ] Check GitHub PR checks; if green, mark the PR ready for review and then merge only after review/merge conditions are clear.
+- [x] Commit, refresh memory from committed `HEAD`, run the manual pre-push gate, and push.
+- [x] Check GitHub PR checks; if green, mark the PR ready for review and then merge only after review/merge conditions are clear.
 - [x] Fix first GitHub Actions failure caused by PowerShell script hash portability.
 - [x] Update CI actions to Node.js 24-compatible major versions.
 
@@ -1038,3 +1038,23 @@
 - `memory status` reported `NeedsRefresh=False`, `WorkingTreeDirty=False`, and `MarkerExists=False`.
 - `memory-pre-push-check` passed with `passed_count=9`, `failed_count=0`, no Cloud, no Codex auto-retain, no post-commit refresh, and no hook installation.
 - Branch `codex/curated-retain-policy` was pushed and draft PR #2 was opened.
+
+## Curated Retain Dry-Run Todo
+
+- [x] Create branch `codex/curated-retain-dry-run` from clean `main`.
+- [x] Close stale Minimal GitHub Actions CI todo items after PR #2 merge.
+- [x] Add RED tests for a provider-neutral curated retain dry-run report.
+- [x] Implement `scripts/curated-retain-dry-run.ps1` with allowlist-only source enumeration and redaction-risk scanning.
+- [x] Write the ignored report under `docs/memory/generated/`.
+- [x] Verify the dry-run does not call Cloud, Hindsight, Codex retain, hooks, rebuild, or import denylisted sources.
+- [x] Run narrow tests, build, and diff hygiene before commit.
+- [x] After commit, run memory refresh/status/pre-push, then push/PR if clean.
+
+## Curated Retain Dry-Run Results
+
+- Added `scripts/curated-retain-dry-run.ps1` as a provider-neutral retain preflight. It writes only `docs/memory/generated/curated-retain-dry-run-report.json`, does not call Hindsight, Cloud, Codex retain, hooks, `memory-refresh-all`, or rebuild commands, and keeps external retain disabled.
+- Added `CuratedRetainDryRunTests` with a RED/GREEN path for allowlisted source enumeration, denylist exclusion, redaction-risk findings, and external automation guardrails.
+- Real dry-run on the repository produced an ignored report with `24` allowlisted files and `134` review findings across `16` files. Findings are review evidence only and do not import or retain data.
+- Updated memory and scripts docs with the dry-run command and scope.
+- Verification before commit: `CuratedRetainDryRunTests` passed `2/2`; expanded retain/memory guardrail tests passed `22/22`; full solution tests passed `106/106`; solution build passed with `0` warnings and `0` errors; `git diff --check` passed.
+- Post-commit memory gate completed before push: `memory-refresh-all` completed with SQLite stale-check `issues: []`, LanceDB indexed the committed metadata, LanceDB eval passed `9/9`, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed.

@@ -51,6 +51,8 @@ The denylist must stay excluded from all retain/import flows:
 
 The allowlist is not permission to retain automatically. Each retained item still needs a source path, source hash, redaction status, review status, and export/delete coverage.
 
+Use `scripts/curated-retain-dry-run.ps1` for the first provider-neutral retain preflight. It enumerates only the approved allowlist, excludes the denylist, scans for redaction risks, and writes an ignored report under `docs/memory/generated/`. It must not call Hindsight, Cloud services, Codex retain, hooks, `memory-refresh-all`, or memory rebuild commands.
+
 ## Node Schema
 
 Allowed node types:
@@ -193,6 +195,7 @@ Do not add post-commit auto-refresh for project memory. The allowed Git helpers 
 - Hindsight is a historical/failed spike. Its upstream Codex, CLI, MCP, and embedded-daemon surfaces are confirmed in `docs/memory/hindsight-spike.md`, but billing/auth, Rust CLI forwarding, retain/import, and operational complexity blocked MVP use.
 - Hindsight must stay below SQLite and generated indexes in source priority and must not become a WPF/.NET runtime dependency.
 - Codex auto-retain must stay disabled during MVP. Use `scripts/hindsight-curated-import.ps1` to generate a pre-install manifest for curated import sources: `AGENTS.md`, `docs/decisions/*.md`, `docs/formulas.md`, `TC-DN-HOFI3.md`, `docs/memory/*.md`, and `tasks/lessons.md`.
+- Use `scripts/curated-retain-dry-run.ps1` before any future retain implementation to produce a provider-neutral redaction report from the same allowlist. The report is generated evidence only and must not import, retain, rebuild, install hooks, or call external providers.
 - Do not import raw JSONL recordings, generated memory exports, `.hindsight/`, secrets, local proxy details, build artifacts, or raw experiment dumps into Hindsight or any external retained memory.
 - Python/uvx embedded daemon is the selected first Hindsight install-spike path. Track it through `docs/memory/hindsight-install-spike.md` and `scripts/hindsight-install-spike.ps1`; the install-spike report is generated under ignored `docs/memory/generated/`.
 - Store Hindsight LLM secrets only in ignored `.hindsight/` env files and load them into process environment. Do not pass secret values through Hindsight profile `--env`, `profile set-env`, shell history, or committed config.
