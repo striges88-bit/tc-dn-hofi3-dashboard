@@ -220,10 +220,17 @@ function Assert-ClonePathSafe {
     }
 }
 
+function Get-OwnershipMarkerPath {
+    param([string]$ClonePath)
+
+    $gitDirectory = Join-Path $ClonePath '.git'
+    return Join-Path $gitDirectory 'memory-clone-recovery-check.marker'
+}
+
 function Remove-OwnedClone {
     param([string]$ClonePath)
 
-    $markerPath = Join-Path $ClonePath '.memory-clone-recovery-check'
+    $markerPath = Get-OwnershipMarkerPath -ClonePath $ClonePath
     if (-not (Test-Path -LiteralPath $markerPath)) {
         throw "Refusing to remove clone without ownership marker: $ClonePath"
     }
@@ -321,7 +328,7 @@ if (-not $PlanOnly) {
             }
             else {
                 $cloneCreated = $true
-                Set-Content -LiteralPath (Join-Path $clonePath '.memory-clone-recovery-check') -Value $head -Encoding ASCII
+                Set-Content -LiteralPath (Get-OwnershipMarkerPath -ClonePath $clonePath) -Value $head -Encoding ASCII
 
                 $checkoutResult = Invoke-Process -FilePath 'git' -Arguments $checkoutArguments -WorkingDirectory $clonePath -TimeoutSeconds 120
                 if ([int]$checkoutResult.exit_code -ne 0) {

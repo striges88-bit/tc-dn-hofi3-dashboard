@@ -313,6 +313,16 @@ public sealed class MemoryRefreshAllTests
         Assert.DoesNotContain("secret", clonePath, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void CloneLikeRecoveryOwnershipMarkerDoesNotDirtyWorkingTree()
+    {
+        var script = ReadText("scripts/memory-clone-recovery-check.ps1");
+
+        Assert.Contains("Get-OwnershipMarkerPath", script, StringComparison.Ordinal);
+        Assert.Contains("Join-Path $gitDirectory 'memory-clone-recovery-check.marker'", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Join-Path $ClonePath '.memory-clone-recovery-check'", script, StringComparison.Ordinal);
+    }
+
     private static string ReadText(string relativePath)
     {
         var path = Path.Combine(Root, relativePath.Replace('/', Path.DirectorySeparatorChar));
