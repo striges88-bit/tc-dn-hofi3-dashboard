@@ -65,7 +65,7 @@ public sealed class ManualMemoryGateTests
         Assert.False(root.GetProperty("codex_auto_retain_enabled").GetBoolean());
         Assert.False(root.GetProperty("post_commit_auto_refresh_enabled").GetBoolean());
         Assert.False(root.GetProperty("commit_hook_installed").GetBoolean());
-        Assert.False(root.GetProperty("pre_push_hook_installed").GetBoolean());
+        Assert.Equal(IsManagedPrePushHookInstalled(Root), root.GetProperty("pre_push_hook_installed").GetBoolean());
         Assert.False(root.GetProperty("installs_hooks").GetBoolean());
         Assert.False(root.GetProperty("touches_raw_jsonl").GetBoolean());
         Assert.False(root.GetProperty("touches_hindsight_store").GetBoolean());
@@ -102,6 +102,45 @@ public sealed class ManualMemoryGateTests
             Assert.DoesNotContain("/obj/", description.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("publish/", description, StringComparison.OrdinalIgnoreCase);
         });
+    }
+
+    [Fact]
+    public async Task PrePushCheckPlanReportsManagedPrePushHookWithoutInstallingOrRebuilding()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "memory-pre-push-check.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        using var temp = TemporaryDirectory.Create();
+        File.WriteAllText(Path.Combine(temp.Path, "CryptoIndicatorApp.sln"), string.Empty);
+        var hookDirectory = Path.Combine(temp.Path, ".git", "hooks");
+        Directory.CreateDirectory(hookDirectory);
+        var hookPath = Path.Combine(hookDirectory, "pre-push");
+        WriteManagedPrePushHook(hookPath, temp.Path);
+        var reportPath = Path.Combine(temp.Path, "memory-pre-push-check-report.json");
+
+        var result = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(temp.Path)} -OutputPath {Quote(reportPath)} -PlanOnly");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal("planned", root.GetProperty("status").GetString());
+        Assert.True(root.GetProperty("manual_only").GetBoolean());
+        Assert.True(root.GetProperty("pre_push_hook_installed").GetBoolean());
+        Assert.False(root.GetProperty("runs_refresh_all").GetBoolean());
+        Assert.False(root.GetProperty("cloud_enabled").GetBoolean());
+        Assert.False(root.GetProperty("codex_auto_retain_enabled").GetBoolean());
+        Assert.False(root.GetProperty("post_commit_auto_refresh_enabled").GetBoolean());
+        Assert.False(root.GetProperty("commit_hook_installed").GetBoolean());
+        Assert.False(root.GetProperty("installs_hooks").GetBoolean());
+        Assert.False(root.GetProperty("touches_raw_jsonl").GetBoolean());
+        Assert.False(root.GetProperty("touches_hindsight_store").GetBoolean());
+        Assert.False(root.GetProperty("touches_secret_storage").GetBoolean());
+        Assert.False(root.GetProperty("uses_generated_exports_as_source").GetBoolean());
+        Assert.False(root.GetProperty("touches_build_artifacts").GetBoolean());
     }
 
     [Fact]
@@ -822,6 +861,35 @@ public sealed class ManualMemoryGateTests
     private static string Quote(string value)
     {
         return "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+    }
+
+    private static bool IsManagedPrePushHookInstalled(string root)
+    {
+        var hookPath = Path.Combine(root, ".git", "hooks", "pre-push");
+        if (!File.Exists(hookPath))
+        {
+            return false;
+        }
+
+        var hook = File.ReadAllText(hookPath);
+        return hook.Contains("TC-DN-HOFI3 managed memory pre-push hook", StringComparison.Ordinal) &&
+            hook.Contains("Managed-By: scripts/install-memory-pre-push-hook.ps1", StringComparison.Ordinal);
+    }
+
+    private static void WriteManagedPrePushHook(string hookPath, string projectRoot)
+    {
+        var normalizedRoot = projectRoot.Replace('\\', '/');
+        File.WriteAllText(
+            hookPath,
+            $"""
+            #!/bin/sh
+            # TC-DN-HOFI3 managed memory pre-push hook
+            # Managed-By: scripts/install-memory-pre-push-hook.ps1
+            # Validates existing memory refresh/eval reports only.
+            PROJECT_ROOT='{normalizedRoot}'
+            exec powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PROJECT_ROOT/scripts/memory-pre-push-check.ps1" -ProjectRoot "$PROJECT_ROOT"
+
+            """.Replace("\r\n", "\n", StringComparison.Ordinal));
     }
 
     private static string FindRepositoryRoot()

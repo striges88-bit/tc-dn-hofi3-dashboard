@@ -1333,3 +1333,18 @@ Notes:
 
 - The previous failed `a11000c` run was a flaky timeout in script integration tests; rerun passed. Treat a repeat as CI architecture debt, not as a reason to increase timeouts blindly.
 - Before `/compact`, stop here after committing this handoff and rerunning memory gate; keep final gate evidence in the agent response to avoid creating another evidence-only source change.
+
+## Memory Pre-Push Hook Diagnostics Todo
+
+- [x] Start branch `codex/memory-pre-push-hook-diagnostics` from clean `main`.
+- [x] Add RED regression test proving `memory-pre-push-check.ps1` reports an installed managed pre-push hook as installed.
+- [x] Implement hook detection without changing check-only behavior: no rebuild, no retain, no Cloud, no hook installation.
+- [x] Run `ManualMemoryGateTests`, solution build, and `git diff --check`.
+- [x] Commit source, then run `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1`.
+
+## Memory Pre-Push Hook Diagnostics Results
+
+- RED confirmed: `PrePushCheckPlanReportsManagedPrePushHookWithoutInstallingOrRebuilding` failed because `pre_push_hook_installed` stayed `false` for a managed temporary hook.
+- GREEN confirmed: the new regression test passed after adding read-only managed pre-push hook detection to `scripts/memory-pre-push-check.ps1`.
+- Verification before commit passed: `ManualMemoryGateTests` `18/18`, solution build `0` warnings/errors, and `git diff --check` clean.
+- Source commit `078f834` passed `memory-refresh-all`, `memory status` (`needs_refresh=false`), and `memory-pre-push-check` with LanceDB eval `9/9`.
