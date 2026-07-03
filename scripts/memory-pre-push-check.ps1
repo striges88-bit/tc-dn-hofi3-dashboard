@@ -166,6 +166,19 @@ function Read-JsonFile {
     return (Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json)
 }
 
+function Test-ManagedPrePushHookInstalled {
+    param([string]$Root)
+
+    $hookPath = Join-Path $Root '.git\hooks\pre-push'
+    if (-not (Test-Path -LiteralPath $hookPath)) {
+        return $false
+    }
+
+    $hook = Get-Content -Raw -LiteralPath $hookPath
+    return $hook.Contains('TC-DN-HOFI3 managed memory pre-push hook') -and
+        $hook.Contains('Managed-By: scripts/install-memory-pre-push-hook.ps1')
+}
+
 function Get-ExpectedChecks {
     return @(
         (New-CheckPlan -Name 'refresh-all-report-exists' -Description 'Find the refresh-all report'),
@@ -251,6 +264,8 @@ $root = Resolve-ProjectRoot -Candidate $ProjectRoot
 if (-not (Test-Path -LiteralPath (Join-Path $root 'CryptoIndicatorApp.sln'))) {
     throw "ProjectRoot does not look like the repository root: $root"
 }
+
+$managedPrePushHookInstalled = Test-ManagedPrePushHookInstalled -Root $root
 
 $reportPath = Resolve-RootedOrRelativePath `
     -Root $root `
@@ -397,7 +412,7 @@ $report = [ordered]@{
     codex_auto_retain_enabled = $false
     post_commit_auto_refresh_enabled = $false
     commit_hook_installed = $false
-    pre_push_hook_installed = $false
+    pre_push_hook_installed = $managedPrePushHookInstalled
     installs_hooks = $false
     touches_raw_jsonl = $false
     touches_hindsight_store = $false
