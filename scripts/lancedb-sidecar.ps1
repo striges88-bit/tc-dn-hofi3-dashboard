@@ -92,6 +92,25 @@ function Resolve-RootedOrRelativePath {
     return [System.IO.Path]::GetFullPath((Join-Path $Root $Path))
 }
 
+function Get-DefaultOutputPath {
+    param(
+        [string]$Root,
+        [string]$Command
+    )
+
+    $fileName = switch ($Command) {
+        'probe' { 'lancedb-probe-report.json' }
+        'search' { 'lancedb-search-report.json' }
+        'explain' { 'lancedb-explain-report.json' }
+        'cleanup' { 'lancedb-cleanup-report.json' }
+        'rebuild' { 'lancedb-rebuild-report.json' }
+        'eval' { 'lancedb-sidecar-report.json' }
+        default { 'lancedb-sidecar-report.json' }
+    }
+
+    return (Join-Path $Root (Join-Path 'docs\memory\generated' $fileName))
+}
+
 function Write-JsonReport {
     param(
         [string]$Path,
@@ -111,7 +130,8 @@ function Write-JsonReport {
 $root = Resolve-ProjectRoot -Candidate $ProjectRoot
 $database = Resolve-RootedOrRelativePath -Root $root -Path $DatabasePath -DefaultPath (Join-Path $root 'docs\memory\generated\project-memory.sqlite')
 $store = Resolve-RootedOrRelativePath -Root $root -Path $StorePath -DefaultPath (Join-Path $root 'docs\memory\generated\lancedb')
-$output = Resolve-RootedOrRelativePath -Root $root -Path $OutputPath -DefaultPath (Join-Path $root 'docs\memory\generated\lancedb-sidecar-report.json')
+$output = Resolve-RootedOrRelativePath -Root $root -Path $OutputPath -DefaultPath (Get-DefaultOutputPath -Root $root -Command $Command)
+$evalJsonReport = Resolve-RootedOrRelativePath -Root $root -Path '' -DefaultPath (Get-DefaultOutputPath -Root $root -Command 'eval')
 $evalMarkdownOutput = Resolve-RootedOrRelativePath -Root $root -Path $EvalMarkdownOutputPath -DefaultPath (Join-Path $root 'docs\memory\generated\lancedb-eval-report.md')
 
 $scriptPath = Join-Path $root 'tools\MemorySemantic\lancedb_sidecar.py'
@@ -151,7 +171,8 @@ if ($Command -eq 'probe') {
         source_store = 'sqlite-fts5'
         lancedb_store_path = Convert-ToRepoPath -Root $root -Path $store
         sqlite_database_path = Convert-ToRepoPath -Root $root -Path $database
-        eval_json_report_path = Convert-ToRepoPath -Root $root -Path $output
+        report_path = Convert-ToRepoPath -Root $root -Path $output
+        eval_json_report_path = Convert-ToRepoPath -Root $root -Path $evalJsonReport
         eval_markdown_report_path = Convert-ToRepoPath -Root $root -Path $evalMarkdownOutput
         python_script = 'tools/MemorySemantic/lancedb_sidecar.py'
         uv_path = $uvPath

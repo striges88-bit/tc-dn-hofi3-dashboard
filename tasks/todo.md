@@ -1348,3 +1348,19 @@ Notes:
 - GREEN confirmed: the new regression test passed after adding read-only managed pre-push hook detection to `scripts/memory-pre-push-check.ps1`.
 - Verification before commit passed: `ManualMemoryGateTests` `18/18`, solution build `0` warnings/errors, and `git diff --check` clean.
 - Source commit `078f834` passed `memory-refresh-all`, `memory status` (`needs_refresh=false`), and `memory-pre-push-check` with LanceDB eval `9/9`.
+
+## LanceDB Report Isolation Todo
+
+- [x] Add RED regression test proving `probe` no longer writes to the eval JSON report by default.
+- [x] Change `scripts/lancedb-sidecar.ps1` default output paths so diagnostic commands write separate generated reports and `eval` remains the pre-push evidence report.
+- [x] Update docs/tests that name the default probe/eval report paths.
+- [x] Run LanceDB sidecar tests, manual memory gate tests, solution build, and `git diff --check`.
+- [x] Commit source, then run `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1`.
+
+## LanceDB Report Isolation Results
+
+- RED confirmed: `SidecarProbeWritesSafeGeneratedReportWithoutCloudOrAutoRefresh` failed because `lancedb-probe-report.json` was missing; current `probe` default still wrote to the eval JSON path.
+- GREEN confirmed: `probe` now writes `docs/memory/generated/lancedb-probe-report.json` by default and leaves `docs/memory/generated/lancedb-sidecar-report.json` untouched.
+- Narrow guardrails passed so far: `LanceDbSidecarSpikeTests` `3/3`, `ManualMemoryGateTests` `18/18`, and `MemoryRefreshAllTests` `5/5`.
+- Solution build passed with `0` warnings/errors, and `git diff --check` passed.
+- Final source commit passed `memory-refresh-all`, `memory status` (`needs_refresh=false`), and `memory-pre-push-check` with LanceDB eval `9/9`.
