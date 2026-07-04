@@ -28,7 +28,9 @@ Use `curated-retain-export-dry-run.ps1` after the curated retain dry-run to gene
 
 Use `curated-retain-delete-dry-run.ps1` after the export dry-run to generate ignored deletion-plan reports. It validates export metadata and planned selectors, but does not delete files, retained items, provider data, hooks, local stores, or generated reports.
 
-Use `curated-retain-import.ps1` only after reviewing the curated retain dry-run report. It wraps local SQLite `retain-import`, reads source text from the selected Git commit tree, defaults to `HEAD`, and writes `docs/memory/generated/curated-retain-import-report.json`. It imports only allowlisted redaction-clean sources and keeps external retain, Codex auto-retain, Cloud, hooks, refresh wrappers, rebuilds, raw JSONL, generated exports, secrets, and build artifacts disabled.
+Use `curated-retain-redacted-subset.ps1 -SourcePath <repo/path.md>` after reviewing dry-run findings for selected allowlisted sources. It rejects sources changed since the dry-run report, writes an ignored local redacted subset report with original source hashes, reviewed `redacted_text`, and `[REDACTED:<finding-types>]` markers. It does not import, retain, rebuild memory, install hooks, call Cloud, call Hindsight, or call Codex retain.
+
+Use `curated-retain-import.ps1` only after reviewing the curated retain dry-run report or generating a reviewed redacted subset report. It wraps local SQLite `retain-import`, reads clean candidate text from the selected Git commit tree, stores reviewed `redacted_text` for redacted entries, defaults to `HEAD`, and writes `docs/memory/generated/curated-retain-import-report.json`. It imports only allowlisted clean or reviewed-redacted sources and keeps external retain, Codex auto-retain, Cloud, hooks, refresh wrappers, rebuilds, raw JSONL, generated exports, secrets, and build artifacts disabled.
 
 Use `curated-retain-export.ps1` to export local SQLite retained rows into `docs/memory/generated/curated-retain-export-report.json`. This is local lifecycle evidence for reviewed retained rows; it does not call external providers, install hooks, or rebuild memory.
 

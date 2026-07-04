@@ -72,9 +72,9 @@ At minimum, export must provide:
 
 The export must be reviewable without calling Cloud services.
 
-MVP implementation is `scripts/curated-retain-export-dry-run.ps1`. It reads the curated retain dry-run report plus allowlisted source metadata, validates source hashes, rejects denylisted paths even if an input report contains them, and writes JSON/Markdown reports under `docs/memory/generated/`.
+MVP dry-run implementation is `scripts/curated-retain-export-dry-run.ps1`. It reads the curated retain dry-run report plus allowlisted source metadata, validates source hashes, rejects denylisted paths even if an input report contains them, and writes JSON/Markdown reports under `docs/memory/generated/`.
 
-The MVP export dry-run does not include retained text because redaction is not implemented yet. This is intentional: exporting source text before redaction would create another leak surface. Real retained-text export remains blocked until redaction is implemented and tested.
+The export dry-run does not include source text. This is intentional: exporting source text before redaction would create another leak surface. Reviewed local retained-text export is allowed only after a redacted subset report is produced and imported into local SQLite.
 
 ## Delete Policy
 
@@ -90,7 +90,7 @@ At minimum, delete must support:
 
 If delete cannot be verified, external retain and Codex auto-retain must not be enabled.
 
-MVP implementation is `scripts/curated-retain-delete-dry-run.ps1`. It reads the export dry-run report, validates that sources are still allowlisted and current, and writes a deletion plan report only. It does not delete retained items, source files, generated reports, provider data, hooks, or local stores.
+MVP dry-run implementation is `scripts/curated-retain-delete-dry-run.ps1`. It reads the export dry-run report, validates that sources are still allowlisted and current, and writes a deletion plan report only. It does not delete retained items, source files, generated reports, provider data, hooks, or local stores.
 
 ## Enablement Gate
 
@@ -115,7 +115,9 @@ The first non-dry-run retain implementation is controlled local import into SQLi
 
 Controlled local import uses `scripts/curated-retain-import.ps1`, which wraps `tools/Memory` command `retain-import`. Import reads source text from the requested Git commit tree, default `HEAD`, and uses the curated dry-run report as review metadata. A dirty working tree must not change imported text.
 
-Import is allowed only when every source is allowlisted, current for the selected commit, and redaction-clean. Denylisted paths, stale hashes, missing source metadata, or redaction review findings block the whole batch. The generated report is `docs/memory/generated/curated-retain-import-report.json`.
+Use `scripts/curated-retain-redacted-subset.ps1 -SourcePath <repo/path.md>` to turn explicitly selected, reviewed dry-run entries into a local redacted subset report. The script rejects sources changed since the dry-run report, replaces risky lines with `[REDACTED:<finding-types>]`, preserves the original source hash for commit verification, records `original_finding_count`, and writes ignored JSON/Markdown reports under `docs/memory/generated/`. It does not import, retain, rebuild, install hooks, call Cloud, or call Codex retain.
+
+Import is allowed only when every source is allowlisted, current for the selected commit, and either a redaction-clean `candidate` with zero findings or reviewed `redacted` with `redacted_text`. Denylisted paths, stale hashes, missing source metadata, missing redacted text, or redaction review findings block the whole batch. The generated report is `docs/memory/generated/curated-retain-import-report.json`.
 
 Controlled local import does not enable external retain, Codex auto-retain, Cloud, Hindsight, hooks, refresh wrappers, LanceDB rebuild, raw JSONL import, generated export import, or build-artifact import.
 

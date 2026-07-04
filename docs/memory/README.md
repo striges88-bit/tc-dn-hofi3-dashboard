@@ -201,21 +201,31 @@ These reports are written to ignored generated files:
 - `docs/memory/generated/curated-retain-delete-dry-run-report.json`
 - `docs/memory/generated/curated-retain-delete-dry-run-report.md`
 
-The export dry-run records source metadata and hash freshness only; it does not include source text until redaction is implemented. The delete dry-run writes a deletion plan only; it does not remove source files, generated reports, local stores, hooks, provider data, or retained items. Missing, stale, denylisted, or redaction-review reports keep external retain and Codex auto-retain disabled.
+The export dry-run records source metadata and hash freshness only; it does not include source text. The delete dry-run writes a deletion plan only; it does not remove source files, generated reports, local stores, hooks, provider data, or retained items. Missing, stale, denylisted, or redaction-review reports keep external retain and Codex auto-retain disabled.
+
+Generate a reviewed local redacted subset for explicitly selected allowlisted sources:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-redacted-subset.ps1 -SourcePath docs/memory/retain-policy.md
+```
+
+This reads the dry-run report, rejects sources changed since that dry-run, keeps the original source hash for Git commit verification, replaces risky lines with `[REDACTED:<finding-types>]`, and writes ignored JSON/Markdown reports under `docs/memory/generated/`. It does not import, retain, rebuild, install hooks, call Cloud, or call Codex retain.
 
 Run controlled local retain import only after reviewing the dry-run report:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-import.ps1 -Commit HEAD
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-import.ps1 -InputReportPath docs\memory\generated\curated-retain-redacted-subset-report.json -Commit HEAD
 ```
 
-This writes `docs/memory/generated/curated-retain-import-report.json` and imports only allowlisted redaction-clean sources into local SQLite. The imported text is read from the selected Git commit tree, not from dirty working-tree files. A blocked report is expected while redaction findings remain.
+This writes `docs/memory/generated/curated-retain-import-report.json` and imports only allowlisted clean candidates or reviewed redacted entries into local SQLite. Candidate text is read from the selected Git commit tree, and redacted entries store reviewed `redacted_text` while verifying the original source hash against the selected commit. A blocked report is expected while unreviewed redaction findings remain.
 
 Export or delete locally retained rows for lifecycle proof:
 
 ```powershell
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- retain-search --project-root . --query "controlled local import into SQLite" --json
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-export.ps1
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-delete.ps1 -SourcePath docs/memory/example.md
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-delete.ps1 -SourcePath docs/memory/retain-policy.md
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- retain-search --project-root . --query "controlled local import into SQLite" --json
 ```
 
 Delete removes only local SQLite retained rows for the selected source path. It does not remove repository files.

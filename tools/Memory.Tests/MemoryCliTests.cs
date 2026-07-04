@@ -595,6 +595,72 @@ public sealed class MemoryCliTests
         Assert.Empty(searchAfterDeleteJson.RootElement.GetProperty("results").EnumerateArray());
     }
 
+    [Fact]
+    public void RetainImportUsesReviewedRedactedTextAndLifecycleDeletesIt()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        var sourceText = "# Reviewed Retain Source\n\nOPENAI_API_KEY=sk-testtoken1234567890 originalonlyretain phrase must never be retained.\n";
+        var redactedText = "# Reviewed Retain Source\n\n[REDACTED:secret_reference]\n\nredactedonlyretain phrase is safe for local sqlite retain.\n";
+        fixture.Write("docs/memory/reviewed-retain.md", sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                "docs/memory/reviewed-retain.md",
+                HashText(sourceText),
+                sourceText.Length,
+                "redacted",
+                0,
+                redactedText));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(0, import.ExitCode);
+        using (var importJson = JsonDocument.Parse(import.StandardOutput))
+        {
+            var root = importJson.RootElement;
+            Assert.Equal("imported", root.GetProperty("status").GetString());
+            Assert.Equal(1, root.GetProperty("imported_count").GetInt32());
+            Assert.Equal("redacted", root.GetProperty("items")[0].GetProperty("redaction_status").GetString());
+            Assert.False(root.GetProperty("external_retain_enabled").GetBoolean());
+            Assert.False(root.GetProperty("calls_codex_retain").GetBoolean());
+            Assert.False(root.GetProperty("calls_hindsight").GetBoolean());
+        }
+
+        using var redactedSearch = fixture.RunMemoryCli("retain-search", "--query", "redactedonlyretain", "--json");
+        Assert.Equal(0, redactedSearch.ExitCode);
+        using (var redactedSearchJson = JsonDocument.Parse(redactedSearch.StandardOutput))
+        {
+            Assert.Single(redactedSearchJson.RootElement.GetProperty("results").EnumerateArray());
+        }
+
+        using var rawSearch = fixture.RunMemoryCli("retain-search", "--query", "originalonlyretain", "--json");
+        Assert.Equal(0, rawSearch.ExitCode);
+        using (var rawSearchJson = JsonDocument.Parse(rawSearch.StandardOutput))
+        {
+            Assert.Empty(rawSearchJson.RootElement.GetProperty("results").EnumerateArray());
+        }
+
+        var exportPath = Path.Combine(fixture.Root, "docs", "memory", "generated", "curated-retain-export-report.json");
+        using var export = fixture.RunMemoryCli("retain-export", "--output", exportPath, "--json");
+        Assert.Equal(0, export.ExitCode);
+        using (var exportJson = JsonDocument.Parse(export.StandardOutput))
+        {
+            var text = exportJson.RootElement.GetProperty("items")[0].GetProperty("text").GetString();
+            Assert.Contains("redactedonlyretain", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("originalonlyretain", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("OPENAI_API_KEY", text, StringComparison.Ordinal);
+        }
+
+        using var delete = fixture.RunMemoryCli("retain-delete", "--source-path", "docs/memory/reviewed-retain.md", "--json");
+        Assert.Equal(0, delete.ExitCode);
+        Assert.True(File.Exists(Path.Combine(fixture.Root, "docs", "memory", "reviewed-retain.md")), "Retain delete must not remove source files.");
+
+        using var searchAfterDelete = fixture.RunMemoryCli("retain-search", "--query", "redactedonlyretain", "--json");
+        Assert.Equal(0, searchAfterDelete.ExitCode);
+        using var searchAfterDeleteJson = JsonDocument.Parse(searchAfterDelete.StandardOutput);
+        Assert.Empty(searchAfterDeleteJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
     private static CliResult RunMemoryCli(params string[] arguments)
     {
         var projectPath = Path.Combine(RepositoryRoot, "tools", "Memory", "CryptoIndicatorApp.Memory.csproj");
@@ -831,6 +897,9 @@ public sealed class MemoryCliTests
                     size_bytes = file.SizeBytes,
                     redaction_status = file.RedactionStatus,
                     finding_count = file.FindingCount,
+                    original_finding_count = file.OriginalFindingCount,
+                    redacted_text = file.RedactedText,
+                    redacted_hash = string.IsNullOrEmpty(file.RedactedText) ? null : HashText(file.RedactedText),
                 }).ToArray(),
                 findings = files
                     .Where(file => file.FindingCount > 0)
@@ -849,7 +918,14 @@ public sealed class MemoryCliTests
             return reportPath;
         }
 
-        public sealed record RetainReportFile(string Path, string Hash, long SizeBytes, string RedactionStatus, int FindingCount);
+        public sealed record RetainReportFile(
+            string Path,
+            string Hash,
+            long SizeBytes,
+            string RedactionStatus,
+            int FindingCount,
+            string? RedactedText = null,
+            int OriginalFindingCount = 0);
 
         public CliResult RunMemoryCli(params string[] arguments)
         {

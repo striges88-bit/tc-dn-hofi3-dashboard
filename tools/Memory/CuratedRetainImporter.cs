@@ -77,9 +77,18 @@ internal sealed class CuratedRetainImporter
 
             var redactionStatus = ReadString(fileElement, "redaction_status");
             var findingCount = ReadInt(fileElement, "finding_count");
-            if (!redactionStatus.Equals("candidate", StringComparison.OrdinalIgnoreCase) || findingCount > 0)
+            var isCandidate = redactionStatus.Equals("candidate", StringComparison.OrdinalIgnoreCase);
+            var isRedacted = redactionStatus.Equals("redacted", StringComparison.OrdinalIgnoreCase);
+            if ((!isCandidate && !isRedacted) || findingCount > 0)
             {
                 AddBlockingReason(blockingReasons, "redaction_review_required");
+                continue;
+            }
+
+            var redactedText = ReadString(fileElement, "redacted_text");
+            if (isRedacted && string.IsNullOrWhiteSpace(redactedText))
+            {
+                AddBlockingReason(blockingReasons, "missing_redacted_text");
                 continue;
             }
 
@@ -110,7 +119,7 @@ internal sealed class CuratedRetainImporter
                 continue;
             }
 
-            var text = Encoding.UTF8.GetString(bytes);
+            var text = isRedacted ? redactedText : Encoding.UTF8.GetString(bytes);
             items.Add(new RetainedMemoryItem(
                 $"retained.local.{Slug(sourcePath)}.{commitSha[..12]}",
                 sourcePath,
@@ -119,7 +128,7 @@ internal sealed class CuratedRetainImporter
                 commitSha,
                 treeSha,
                 "local-sqlite",
-                "candidate",
+                isRedacted ? "redacted" : "candidate",
                 retainedAt,
                 text));
         }

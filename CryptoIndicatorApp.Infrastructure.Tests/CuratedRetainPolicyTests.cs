@@ -229,6 +229,86 @@ public sealed class CuratedRetainPolicyTests
     }
 
     [Fact]
+    public async Task RedactedSubsetScriptBuildsReviewedLocalReportOnly()
+    {
+        using var temp = TemporaryDirectory.Create();
+        WriteMinimumCuratedSources(temp);
+        temp.Write(
+            "AGENTS.md",
+            "# Agents\n\nOPENAI_API_KEY=sk-testtoken1234567890 must be redacted before retain.\n\nredacted subset safe phrase should survive.\n");
+
+        await RunCuratedDryRunAsync(temp.Path);
+
+        var result = await RunProjectScriptAsync(
+            "curated-retain-redacted-subset.ps1",
+            $"-ProjectRoot {Quote(temp.Path)} -SourcePath AGENTS.md");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-redacted-subset-report.json");
+        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal("redacted-subset", root.GetProperty("mode").GetString());
+        Assert.Equal("scripts/curated-retain-redacted-subset.ps1", root.GetProperty("generator").GetString());
+        Assert.Equal("ready_for_import", root.GetProperty("status").GetString());
+        Assert.True(root.GetProperty("writes_report_only").GetBoolean());
+        Assert.False(root.GetProperty("external_retain_enabled").GetBoolean());
+        Assert.False(root.GetProperty("codex_auto_retain_enabled").GetBoolean());
+        Assert.False(root.GetProperty("cloud_enabled").GetBoolean());
+        Assert.False(root.GetProperty("calls_hindsight").GetBoolean());
+        Assert.False(root.GetProperty("calls_codex_retain").GetBoolean());
+        Assert.False(root.GetProperty("installs_hooks").GetBoolean());
+        Assert.False(root.GetProperty("runs_refresh_all").GetBoolean());
+        Assert.False(root.GetProperty("rebuilds_memory").GetBoolean());
+
+        var file = Assert.Single(root.GetProperty("files").EnumerateArray());
+        Assert.Equal("AGENTS.md", file.GetProperty("path").GetString());
+        Assert.Equal("redacted", file.GetProperty("redaction_status").GetString());
+        Assert.Equal(0, file.GetProperty("finding_count").GetInt32());
+        Assert.True(file.GetProperty("original_finding_count").GetInt32() > 0);
+        Assert.True(file.TryGetProperty("hash", out _));
+        Assert.True(file.TryGetProperty("redacted_hash", out _));
+
+        var redactedText = file.GetProperty("redacted_text").GetString();
+        Assert.Contains("[REDACTED:", redactedText, StringComparison.Ordinal);
+        Assert.Contains("redacted subset safe phrase", redactedText, StringComparison.Ordinal);
+        Assert.DoesNotContain("OPENAI_API_KEY", redactedText, StringComparison.Ordinal);
+        Assert.DoesNotContain("sk-testtoken", redactedText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RedactedSubsetScriptRejectsSourcesChangedAfterDryRun()
+    {
+        using var temp = TemporaryDirectory.Create();
+        WriteMinimumCuratedSources(temp);
+        temp.Write(
+            "AGENTS.md",
+            "# Agents\n\nOPENAI_API_KEY=sk-testtoken1234567890 must be redacted before retain.\n\nredacted subset safe phrase should survive.\n");
+
+        await RunCuratedDryRunAsync(temp.Path);
+        temp.Write(
+            "AGENTS.md",
+            "# Agents\n\nOPENAI_API_KEY=sk-testtoken1234567890 must be redacted before retain.\n\nchanged after dry-run should block retain.\n");
+
+        var result = await RunProjectScriptAsync(
+            "curated-retain-redacted-subset.ps1",
+            $"-ProjectRoot {Quote(temp.Path)} -SourcePath AGENTS.md");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-redacted-subset-report.json");
+        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "stale_source_metadata");
+        Assert.Empty(root.GetProperty("files").EnumerateArray());
+    }
+
+    [Fact]
     public void ControlledRetainLifecycleScriptsAndDocsStayLocalOnly()
     {
         var exportScript = ReadText("scripts/curated-retain-export.ps1");

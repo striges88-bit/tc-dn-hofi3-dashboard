@@ -55,7 +55,9 @@ Use `scripts/curated-retain-dry-run.ps1` for the first provider-neutral retain p
 
 Use `scripts/curated-retain-export-dry-run.ps1` and `scripts/curated-retain-delete-dry-run.ps1` for provider-neutral lifecycle proof before any external/Codex retain path is enabled. They read generated dry-run metadata, validate allowlist/denylist and source hashes, and write ignored JSON/Markdown reports only. They must not include source text before redaction, delete files or provider data, call Cloud or retain APIs, install hooks, run `memory-refresh-all`, or rebuild memory. Missing, stale, denylisted, or redaction-review reports keep external retain and Codex auto-retain disabled.
 
-Use `scripts/curated-retain-import.ps1` only for controlled local import after dry-run review. It wraps SQLite `retain-import`, reads source text from the selected Git commit tree, and imports only redaction-clean allowlisted sources. It writes an ignored generated report and must not call external retain providers, Codex memory, Cloud, hooks, LanceDB rebuild, raw JSONL, generated exports, secrets, or build artifacts.
+Use `scripts/curated-retain-redacted-subset.ps1 -SourcePath <repo/path.md>` only after reviewing the dry-run findings for selected allowlisted sources. It rejects files whose current hash no longer matches the dry-run source hash, writes a local generated report with `redaction_status=redacted`, original source hashes, and reviewed `redacted_text`; it does not import, retain, rebuild, install hooks, call Cloud, or call Codex retain.
+
+Use `scripts/curated-retain-import.ps1` only for controlled local import after dry-run review or reviewed redacted-subset generation. It wraps SQLite `retain-import`, reads clean candidates from the selected Git commit tree, and stores reviewed redacted text for redacted entries while preserving commit/source metadata. It writes an ignored generated report and must not call external retain providers, Codex memory, Cloud, hooks, LanceDB rebuild, raw JSONL, generated exports, secrets, or build artifacts.
 
 ## Node Schema
 
