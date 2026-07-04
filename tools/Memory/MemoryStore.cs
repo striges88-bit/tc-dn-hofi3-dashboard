@@ -139,16 +139,59 @@ public sealed class MemoryStore : IDisposable
         {
             Execute(
                 """
-                INSERT INTO symbols(symbol, source_path, source_hash, commit_sha, tree_sha, source_blob_sha, indexed_at, updated_at)
-                VALUES ($symbol, $source, $hash, $commit, $tree, $blob, $indexed, $updated)
+                INSERT INTO symbols(symbol, kind, display_name, parent_symbol, source_path, source_hash, commit_sha, tree_sha, source_blob_sha, indexed_at, updated_at)
+                VALUES ($symbol, $kind, $display, $parent, $source, $hash, $commit, $tree, $blob, $indexed, $updated)
                 """,
                 transaction,
                 ("$symbol", symbol.Symbol),
+                ("$kind", symbol.Kind),
+                ("$display", symbol.DisplayName),
+                ("$parent", symbol.ParentSymbol),
                 ("$source", symbol.SourcePath),
                 ("$hash", symbol.SourceHash),
                 ("$commit", metadata.CommitSha),
                 ("$tree", metadata.TreeSha),
                 ("$blob", SourceBlobSha(metadata, symbol.SourcePath)),
+                ("$indexed", metadata.IndexedAt),
+                ("$updated", metadata.IndexedAt));
+        }
+
+        foreach (var experiment in snapshot.Experiments)
+        {
+            Execute(
+                """
+                INSERT INTO experiments(id, status, outcome, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, indexed_at, updated_at)
+                VALUES ($id, $status, $outcome, $source, $hash, $blob, $commit, $tree, $indexed, $updated)
+                """,
+                transaction,
+                ("$id", experiment.Id),
+                ("$status", experiment.Status),
+                ("$outcome", experiment.Outcome),
+                ("$source", experiment.SourcePath),
+                ("$hash", experiment.SourceHash),
+                ("$blob", SourceBlobSha(metadata, experiment.SourcePath)),
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
+                ("$indexed", metadata.IndexedAt),
+                ("$updated", metadata.IndexedAt));
+        }
+
+        foreach (var todo in snapshot.Todos)
+        {
+            Execute(
+                """
+                INSERT INTO todos(id, status, text, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, indexed_at, updated_at)
+                VALUES ($id, $status, $text, $source, $hash, $blob, $commit, $tree, $indexed, $updated)
+                """,
+                transaction,
+                ("$id", todo.Id),
+                ("$status", todo.Status),
+                ("$text", todo.Text),
+                ("$source", todo.SourcePath),
+                ("$hash", todo.SourceHash),
+                ("$blob", SourceBlobSha(metadata, todo.SourcePath)),
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
                 ("$indexed", metadata.IndexedAt),
                 ("$updated", metadata.IndexedAt));
         }
@@ -559,27 +602,37 @@ public sealed class MemoryStore : IDisposable
 
     private void InsertSearchDocument(SearchDocument document, MemorySnapshotMetadata metadata, SqliteTransaction transaction)
     {
-        Execute(
-            """
-            INSERT INTO search_documents(id, type, status, title, body, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, confidence, valid_from, valid_until, indexed_at, updated_at)
-            VALUES ($id, $type, $status, $title, $body, $source, $hash, $blob, $commit, $tree, $confidence, $validFrom, $validUntil, $indexed, $updated)
-            """,
-            transaction,
-            ("$id", document.Id),
-            ("$type", document.Type),
-            ("$status", document.Status),
-            ("$title", document.Title),
-            ("$body", document.Body),
-            ("$source", document.SourcePath),
-            ("$hash", document.SourceHash),
-            ("$blob", SourceBlobSha(metadata, document.SourcePath)),
-            ("$commit", metadata.CommitSha),
-            ("$tree", metadata.TreeSha),
-            ("$confidence", document.Confidence),
-            ("$validFrom", document.ValidFrom),
-            ("$validUntil", document.ValidUntil),
-            ("$indexed", metadata.IndexedAt),
-            ("$updated", metadata.IndexedAt));
+        try
+        {
+            Execute(
+                """
+                INSERT INTO search_documents(id, type, status, title, body, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, confidence, valid_from, valid_until, indexed_at, updated_at)
+                VALUES ($id, $type, $status, $title, $body, $source, $hash, $blob, $commit, $tree, $confidence, $validFrom, $validUntil, $indexed, $updated)
+                """,
+                transaction,
+                ("$id", document.Id),
+                ("$type", document.Type),
+                ("$status", document.Status),
+                ("$title", document.Title),
+                ("$body", document.Body),
+                ("$source", document.SourcePath),
+                ("$hash", document.SourceHash),
+                ("$blob", SourceBlobSha(metadata, document.SourcePath)),
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
+                ("$confidence", document.Confidence),
+                ("$validFrom", document.ValidFrom),
+                ("$validUntil", document.ValidUntil),
+                ("$indexed", metadata.IndexedAt),
+                ("$updated", metadata.IndexedAt));
+        }
+        catch (SqliteException exception) when (exception.SqliteErrorCode == 19)
+        {
+            throw new InvalidOperationException(
+                $"Duplicate search document id '{document.Id}' from '{document.SourcePath}'.",
+                exception);
+        }
+
         Execute(
             """
             INSERT INTO search_documents_fts(id, title, body, type, status, source_path)

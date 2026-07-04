@@ -22,6 +22,8 @@ The application runtime must not depend on these files or generated stores.
 
 Generated graph, SQLite, or memory exports belong in `docs/memory/generated/`, which is ignored by Git. Use `docs/memory/operations-runbook.md` for the short operator flow, `scripts/memory-refresh-all.ps1` for a full local rebuild from `HEAD`, `scripts/memory-rebuild-from-head.ps1` when local generated memory artifacts must be deleted and recreated from committed sources, `tools/Memory` for the canonical local SQLite store, and `scripts/memory-refresh.ps1` only for the legacy JSON refresh report.
 
+The SQLite code-memory layer indexes C# source as typed facts in addition to generic chunks. It extracts namespace/type/method symbols, `owns` relations, xUnit test-method events, `requires_symbol=` references for stale-check, `TODO` markers, and `experiment_outcome=` notes. This stays tooling-only; it does not add a WPF runtime dependency or require MSBuild workspace loading.
+
 ## Commands
 
 Memory CLI examples use `dotnet run --no-restore`. Run a normal restore/build first on a fresh checkout; operator checks should not hide NuGet restore or lock problems inside memory status.

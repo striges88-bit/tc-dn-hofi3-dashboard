@@ -189,6 +189,224 @@ public sealed class MemoryCliTests
     }
 
     [Fact]
+    public void RefreshExtractsCSharpSymbolsRelationsEventsTodosAndExperiments()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.WriteStandardMemoryFiles();
+        fixture.Write(
+            "CryptoIndicatorApp.Infrastructure/Binance/DepthTracker.cs",
+            """
+            namespace CryptoIndicatorApp.Infrastructure.Binance;
+
+            public sealed class DepthTracker
+            {
+                // TODO memorycodedepthtodo: tighten depth gap telemetry.
+                public int CalculateDepthSkew(int bid, int ask) => bid - ask;
+            }
+
+            // memory: experiment_outcome=failed | memorycodedepth_experiment rejected raw stream import
+            """);
+        fixture.Write(
+            "CryptoIndicatorApp.Infrastructure.Tests/DepthTrackerTests.cs",
+            """
+            namespace CryptoIndicatorApp.Infrastructure.Tests;
+
+            public sealed class DepthTrackerTests
+            {
+                // memory: requires_symbol=CryptoIndicatorApp.Infrastructure.Binance.DepthTracker
+                public void Helper_before_fact_should_not_be_test_event()
+                {
+                }
+
+                [Fact]
+                public void Index_depth_pipeline_records_symbol_reference()
+                {
+                }
+            }
+            """);
+        fixture.Refresh();
+
+        AssertFirstSearchHit(fixture, "DepthTracker", "symbol", "CryptoIndicatorApp.Infrastructure/Binance/DepthTracker.cs");
+        AssertSearchContains(fixture, "CalculateDepthSkew", "symbol", "CryptoIndicatorApp.Infrastructure/Binance/DepthTracker.cs");
+        AssertSearchContains(fixture, "owns DepthTracker", "relation", "CryptoIndicatorApp.Infrastructure/Binance/DepthTracker.cs");
+        AssertSearchContains(fixture, "Index_depth_pipeline_records_symbol_reference", "event", "CryptoIndicatorApp.Infrastructure.Tests/DepthTrackerTests.cs");
+        AssertSearchDoesNotContain(fixture, "Helper_before_fact_should_not_be_test_event", "event", "CryptoIndicatorApp.Infrastructure.Tests/DepthTrackerTests.cs");
+        AssertSearchContains(fixture, "memorycodedepthtodo", "todo", "CryptoIndicatorApp.Infrastructure/Binance/DepthTracker.cs");
+        AssertSearchContains(fixture, "memorycodedepth_experiment", "experiment", "CryptoIndicatorApp.Infrastructure/Binance/DepthTracker.cs");
+    }
+
+    [Fact]
+    public void StaleCheckUsesCSharpSymbolsForCodeTestReferences()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.WriteStandardMemoryFiles();
+        fixture.Write(
+            "CryptoIndicatorApp.Infrastructure/Binance/DepthTracker.cs",
+            """
+            namespace CryptoIndicatorApp.Infrastructure.Binance;
+
+            public sealed class DepthTracker
+            {
+            }
+            """);
+        fixture.Write(
+            "CryptoIndicatorApp.Infrastructure.Tests/DepthTrackerTests.cs",
+            """
+            namespace CryptoIndicatorApp.Infrastructure.Tests;
+
+            public sealed class DepthTrackerTests
+            {
+                // memory: requires_symbol=CryptoIndicatorApp.Infrastructure.Binance.DepthTracker
+                // memory: requires_symbol=CryptoIndicatorApp.Infrastructure.Binance.MissingDepthTracker
+                [Fact]
+                public void References_depth_tracker_symbols()
+                {
+                }
+            }
+            """);
+        fixture.Refresh();
+
+        using var stale = fixture.RunMemoryCli("stale-check", "--json");
+        Assert.Equal(2, stale.ExitCode);
+        using var document = JsonDocument.Parse(stale.StandardOutput);
+        var issues = document.RootElement.GetProperty("issues").EnumerateArray().ToArray();
+
+        Assert.Contains(
+            issues,
+            issue => issue.GetProperty("code").GetString() == "unknown_symbol_reference"
+                && issue.GetProperty("id").GetString()!.Contains("missingdepthtracker", StringComparison.OrdinalIgnoreCase)
+                && issue.GetProperty("source_path").GetString() == "CryptoIndicatorApp.Infrastructure.Tests/DepthTrackerTests.cs");
+        Assert.DoesNotContain(
+            issues,
+            issue => issue.GetProperty("code").GetString() == "unknown_symbol_reference"
+                && issue.GetProperty("id").GetString()!.Contains("depthtracker", StringComparison.OrdinalIgnoreCase)
+                && !issue.GetProperty("id").GetString()!.Contains("missingdepthtracker", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void RefreshIgnoresCSharpSyntaxAndMemoryMarkersInsideStringLiterals()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.WriteStandardMemoryFiles();
+        fixture.Write(
+            "CryptoIndicatorApp.Infrastructure.Tests/StringFixtureTests.cs",
+            """"
+            namespace CryptoIndicatorApp.Infrastructure.Tests;
+
+            public sealed class StringFixtureTests
+            {
+                private const string FixtureSource = """
+                    namespace CryptoIndicatorApp.Infrastructure.Binance;
+
+                    public sealed class GhostDepthTracker
+                    {
+                    }
+
+                    // memory: requires_symbol=CryptoIndicatorApp.Infrastructure.Binance.MissingGhostDepthTracker
+                    """;
+
+                [Fact]
+                public void Real_test_method_is_still_indexed()
+                {
+                }
+            }
+            """");
+        fixture.Refresh();
+
+        AssertSearchContains(fixture, "Real_test_method_is_still_indexed", "event", "CryptoIndicatorApp.Infrastructure.Tests/StringFixtureTests.cs");
+        AssertSearchDoesNotContain(fixture, "GhostDepthTracker", "symbol", "CryptoIndicatorApp.Infrastructure.Tests/StringFixtureTests.cs");
+        AssertSearchDoesNotContain(fixture, "MissingGhostDepthTracker", "event", "CryptoIndicatorApp.Infrastructure.Tests/StringFixtureTests.cs");
+
+        using var stale = fixture.RunMemoryCli("stale-check", "--json");
+        Assert.Equal(0, stale.ExitCode);
+        Assert.DoesNotContain("MissingGhostDepthTracker", stale.StandardOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RefreshSupportsOverloadedCSharpMethodsWithDistinctSymbolIds()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.WriteStandardMemoryFiles();
+        fixture.Write(
+            "CryptoIndicatorApp.Desktop/Rendering/OverloadedChartGeometryBuilder.cs",
+            """
+            namespace CryptoIndicatorApp.Desktop.Rendering;
+
+            public static class OverloadedChartGeometryBuilder
+            {
+                public static int BuildPoints(int width)
+                {
+                    return BuildPoints(width, 1);
+                }
+
+                public static int BuildPoints(int width, int height)
+                {
+                    return width + height;
+                }
+            }
+            """);
+        fixture.Refresh();
+
+        using var result = fixture.RunMemoryCli("search", "--query", "OverloadedChartGeometryBuilder BuildPoints", "--json");
+        Assert.Equal(0, result.ExitCode);
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var symbols = document.RootElement.GetProperty("results")
+            .EnumerateArray()
+            .Where(hit => hit.GetProperty("type").GetString() == "symbol")
+            .Select(hit => hit.GetProperty("id").GetString())
+            .Where(id => id is not null && id.Contains("buildpoints", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        Assert.Contains(symbols, id => id!.EndsWith("buildpoints-int", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(symbols, id => id!.EndsWith("buildpoints-int-int", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void RefreshScopesNestedCSharpTypesByContainingType()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.WriteStandardMemoryFiles();
+        fixture.Write(
+            "CryptoIndicatorApp.Infrastructure.Tests/FirstFixtureTests.cs",
+            """
+            namespace CryptoIndicatorApp.Infrastructure.Tests;
+
+            public sealed class FirstFixtureTests
+            {
+                private sealed class TemporaryProjectFixture
+                {
+                }
+            }
+            """);
+        fixture.Write(
+            "CryptoIndicatorApp.Infrastructure.Tests/SecondFixtureTests.cs",
+            """
+            namespace CryptoIndicatorApp.Infrastructure.Tests;
+
+            public sealed class SecondFixtureTests
+            {
+                private sealed class TemporaryProjectFixture
+                {
+                }
+            }
+            """);
+        fixture.Refresh();
+
+        using var result = fixture.RunMemoryCli("search", "--query", "TemporaryProjectFixture", "--json");
+        Assert.Equal(0, result.ExitCode);
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var symbols = document.RootElement.GetProperty("results")
+            .EnumerateArray()
+            .Where(hit => hit.GetProperty("type").GetString() == "symbol")
+            .Select(hit => hit.GetProperty("id").GetString())
+            .Where(id => id is not null && id.Contains("temporaryprojectfixture", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        Assert.Contains(symbols, id => id!.Contains("firstfixturetests-temporaryprojectfixture", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(symbols, id => id!.Contains("secondfixturetests-temporaryprojectfixture", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void ExplainUsesSqliteQueryPlanAndWritesQueryLog()
     {
         using var fixture = MemoryProjectFixture.Create();
@@ -400,8 +618,62 @@ public sealed class MemoryCliTests
 
         using var process = Process.Start(startInfo);
         Assert.NotNull(process);
-        Assert.True(process!.WaitForExit(TimeSpan.FromSeconds(120)), "memory CLI timed out.");
-        return new CliResult(process.ExitCode, process.StandardOutput.ReadToEnd(), process.StandardError.ReadToEnd());
+        var stdoutTask = process!.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(TimeSpan.FromSeconds(120)))
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+
+            Assert.Fail("memory CLI timed out.");
+        }
+
+        var stdout = stdoutTask.GetAwaiter().GetResult();
+        var stderr = stderrTask.GetAwaiter().GetResult();
+        return new CliResult(process.ExitCode, stdout, stderr);
+    }
+
+    private static void AssertFirstSearchHit(MemoryProjectFixture fixture, string query, string expectedType, string expectedSourcePath)
+    {
+        using var result = fixture.RunMemoryCli("search", "--query", query, "--json");
+        Assert.Equal(0, result.ExitCode);
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var results = document.RootElement.GetProperty("results").EnumerateArray().ToArray();
+
+        Assert.NotEmpty(results);
+        Assert.Equal(expectedType, results[0].GetProperty("type").GetString());
+        Assert.Equal(expectedSourcePath, results[0].GetProperty("source_path").GetString());
+    }
+
+    private static void AssertSearchContains(MemoryProjectFixture fixture, string query, string expectedType, string expectedSourcePath)
+    {
+        using var result = fixture.RunMemoryCli("search", "--query", query, "--json");
+        Assert.Equal(0, result.ExitCode);
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var results = document.RootElement.GetProperty("results").EnumerateArray().ToArray();
+
+        Assert.Contains(
+            results,
+            hit => hit.GetProperty("type").GetString() == expectedType
+                && hit.GetProperty("source_path").GetString() == expectedSourcePath);
+    }
+
+    private static void AssertSearchDoesNotContain(MemoryProjectFixture fixture, string query, string unexpectedType, string unexpectedSourcePath)
+    {
+        using var result = fixture.RunMemoryCli("search", "--query", query, "--json");
+        Assert.Equal(0, result.ExitCode);
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var results = document.RootElement.GetProperty("results").EnumerateArray().ToArray();
+
+        Assert.DoesNotContain(
+            results,
+            hit => hit.GetProperty("type").GetString() == unexpectedType
+                && hit.GetProperty("source_path").GetString() == unexpectedSourcePath);
     }
 
     private static void AssertJsonArrayContainsAll(JsonElement array, params string[] expectedValues)
@@ -609,7 +881,7 @@ public sealed class MemoryCliTests
             if (Directory.Exists(Root))
             {
                 ClearReadOnlyAttributes(Root);
-                Directory.Delete(Root, recursive: true);
+                DeleteDirectoryWithRetry(Root);
             }
         }
 
@@ -624,6 +896,28 @@ public sealed class MemoryCliTests
             {
                 File.SetAttributes(directory, FileAttributes.Directory);
             }
+        }
+
+        private static void DeleteDirectoryWithRetry(string root)
+        {
+            for (var attempt = 1; attempt <= 5; attempt++)
+            {
+                try
+                {
+                    Directory.Delete(root, recursive: true);
+                    return;
+                }
+                catch (IOException) when (attempt < 5)
+                {
+                    Thread.Sleep(200);
+                }
+                catch (UnauthorizedAccessException) when (attempt < 5)
+                {
+                    Thread.Sleep(200);
+                }
+            }
+
+            Directory.Delete(root, recursive: true);
         }
     }
 
