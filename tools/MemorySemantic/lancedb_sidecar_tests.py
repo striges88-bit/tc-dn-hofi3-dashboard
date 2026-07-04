@@ -51,6 +51,12 @@ def test_fastembed_baseline_metadata_is_explicit_and_eval_gated():
     assert "rerun cleanup/rebuild/eval" in baseline["embedding_baseline_change_policy"]
 
 
+def test_semantic_dependency_pins_are_explicit():
+    assert lancedb_sidecar.LANCEDB_PACKAGE_PIN == "lancedb==0.34.0"
+    assert lancedb_sidecar.PYARROW_PACKAGE_PIN == "pyarrow==24.0.0"
+    assert lancedb_sidecar.FASTEMBED_PACKAGE_PIN == "fastembed==0.8.0"
+
+
 def test_fastembed_mean_pooling_baseline_uses_custom_runtime_alias_without_production_suppression():
     with warnings.catch_warnings(record=True) as seen:
         warnings.simplefilter("always")
@@ -441,6 +447,7 @@ def test_store_path_guard_allows_only_generated_child_paths():
 if __name__ == "__main__":
     test_default_embedding_provider_is_local_fastembed_multilingual_onnx()
     test_fastembed_baseline_metadata_is_explicit_and_eval_gated()
+    test_semantic_dependency_pins_are_explicit()
     test_fastembed_mean_pooling_baseline_uses_custom_runtime_alias_without_production_suppression()
     test_fastembed_diagnostic_warning_capture_keeps_unrelated_warnings_visible()
     test_token_hash_fallback_can_embed_text()

@@ -11,6 +11,8 @@ The current production-candidate semantic quality layer uses local FastEmbed/ONN
 - Provider: `fastembed`.
 - Model: `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`.
 - Runtime model: `embedding_runtime_model=tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean`.
+- LanceDB package pin: `lancedb==0.34.0`.
+- PyArrow package pin: `pyarrow==24.0.0`.
 - Package pin: `fastembed==0.8.0`.
 - Pooling: `embedding_pooling=mean`.
 - Pooling baseline: `embedding_pooling_baseline=mean-pooling`.
@@ -33,8 +35,13 @@ SQLite remains authoritative for `current`, `proposed`, `superseded`, `failed`, 
 - Diagnostic JSON report paths: `docs/memory/generated/lancedb-probe-report.json`, `lancedb-search-report.json`, `lancedb-explain-report.json`, `lancedb-cleanup-report.json`, and `lancedb-rebuild-report.json`.
 - Commands: `probe`, `rebuild`, `search`, `explain`, `eval`, and `cleanup`.
 - Runtime mode: local Python embedded through `uv`; no Cloud, no service account, no OpenAI key, no Codex auto-retain.
+- Dependency doctor: `scripts/memory-semantic-doctor.ps1`.
 
 The sidecar now uses local FastEmbed/ONNX for semantic recall quality testing. The quality gate is explicit: `eval` must pass the required retrieval cases before any hook or background automation is considered. `eval` writes compact generated JSON and Markdown reports with query, expected ids/types, matched rank, source_path, confidence, and gap notes. Diagnostic commands write command-specific reports and must not overwrite the eval JSON evidence used by `memory-pre-push-check`.
+
+`scripts/memory-semantic-doctor.ps1` is the dependency preflight. It reports the `uv` discovery path, dependency pins, cache policy, and whether the local offline runtime can import the pinned packages. The gate path uses `uv --offline`; hidden network downloads are blocked. Any dependency/model download must happen through an explicit preflight, never as a surprise inside `memory-refresh-all`, `memory-pre-push-check`, or a hook.
+
+The local cache/venv policy is deliberately plain: `uv` may be discovered from `PATH`, `%APPDATA%/Python/Python312/Scripts/uv.exe`, or `%LOCALAPPDATA%/Microsoft/WinGet/Packages/**/uv.exe`; dependency and model caches must stay outside the repo; no project `.venv` is required for memory gates.
 
 ## Embedding Baseline
 
@@ -84,6 +91,7 @@ Date: 2026-06-29.
 Update 2026-06-29:
 
 - FastEmbed/ONNX candidate rebuild with `fastembed==0.8.0` and model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` indexes the current/proposed SQLite record set; the ignored generated report records the exact per-run count.
+- The dependency-stability baseline pins `lancedb==0.34.0`, `pyarrow==24.0.0`, and `fastembed==0.8.0`; the LanceDB gate path runs `uv --offline` so missing local cache is reported as a preflight problem instead of downloading during a gate.
 - Indexed rows record `embedding_provider=fastembed`, `embedding_model=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, `embedding_runtime_model=tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean`, `embedding_pooling=mean`, `embedding_dimensions=384`, and `embedding_package_version=0.8.0`.
 - Reports record `embedding_package_pin=fastembed==0.8.0`, `embedding_pooling_baseline=mean-pooling`, `embedding_warning_policy=production-custom-alias-no-suppression`, `embedding_baseline_status=accepted-if-eval-passes`, and `embedding_baseline_eval_gate=lancedb-eval-9-of-9`.
 - `search "actual OFI formula"` returned `formula_version.tc-dn-hofi3.current` first.

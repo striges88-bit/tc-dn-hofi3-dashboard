@@ -72,12 +72,92 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Equal("fastembed", root.GetProperty("embedding_provider").GetString());
         Assert.Equal("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", root.GetProperty("embedding_model").GetString());
         Assert.Equal("fastembed==0.8.0", root.GetProperty("embedding_package_pin").GetString());
+        Assert.Equal("lancedb==0.34.0", root.GetProperty("lancedb_package_pin").GetString());
+        Assert.Equal("pyarrow==24.0.0", root.GetProperty("pyarrow_package_pin").GetString());
         Assert.Equal("tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean", root.GetProperty("embedding_runtime_model").GetString());
         Assert.Equal("mean", root.GetProperty("embedding_pooling").GetString());
         Assert.Equal("mean-pooling", root.GetProperty("embedding_pooling_baseline").GetString());
         Assert.Equal("accepted-if-eval-passes", root.GetProperty("embedding_baseline_status").GetString());
         Assert.Equal("lancedb-eval-9-of-9", root.GetProperty("embedding_baseline_eval_gate").GetString());
         Assert.Equal("production-custom-alias-no-suppression", root.GetProperty("embedding_warning_policy").GetString());
+        Assert.True(root.GetProperty("hidden_network_downloads_blocked").GetBoolean());
+        Assert.True(root.GetProperty("uv_offline_required_for_gate").GetBoolean());
+        Assert.True(root.GetProperty("explicit_preflight_required_for_downloads").GetBoolean());
+    }
+
+    [Fact]
+    public async Task SemanticDoctorPlanWritesReadOnlyDependencyPolicyReport()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "memory-semantic-doctor.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        using var temp = TemporaryDirectory.Create();
+        File.WriteAllText(Path.Combine(temp.Path, "CryptoIndicatorApp.sln"), string.Empty);
+        var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "memory-semantic-doctor-report.json");
+
+        var result = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(temp.Path)} -OutputPath {Quote(reportPath)} -PlanOnly");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+
+        Assert.Equal(1, root.GetProperty("schema_version").GetInt32());
+        Assert.Equal("scripts/memory-semantic-doctor.ps1", root.GetProperty("generator").GetString());
+        Assert.Equal("plan-only", root.GetProperty("mode").GetString());
+        Assert.Equal("planned", root.GetProperty("status").GetString());
+        Assert.True(root.GetProperty("manual_only").GetBoolean());
+        Assert.True(root.GetProperty("read_only").GetBoolean());
+        Assert.False(root.GetProperty("runs_refresh_all").GetBoolean());
+        Assert.False(root.GetProperty("rebuilds_memory").GetBoolean());
+        Assert.False(root.GetProperty("imports_curated_retain").GetBoolean());
+        Assert.False(root.GetProperty("installs_hooks").GetBoolean());
+        Assert.False(root.GetProperty("cloud_enabled").GetBoolean());
+        Assert.False(root.GetProperty("codex_auto_retain_enabled").GetBoolean());
+        Assert.False(root.GetProperty("touches_raw_jsonl").GetBoolean());
+        Assert.False(root.GetProperty("touches_hindsight_store").GetBoolean());
+        Assert.False(root.GetProperty("touches_secret_storage").GetBoolean());
+        Assert.False(root.GetProperty("uses_generated_exports_as_source").GetBoolean());
+        Assert.False(root.GetProperty("touches_build_artifacts").GetBoolean());
+        Assert.True(root.GetProperty("hidden_network_downloads_blocked").GetBoolean());
+        Assert.True(root.GetProperty("uv_offline_required_for_gate").GetBoolean());
+        Assert.True(root.GetProperty("explicit_preflight_required_for_downloads").GetBoolean());
+
+        var pins = root.GetProperty("dependency_pins");
+        Assert.Equal("lancedb==0.34.0", pins.GetProperty("lancedb").GetString());
+        Assert.Equal("pyarrow==24.0.0", pins.GetProperty("pyarrow").GetString());
+        Assert.Equal("fastembed==0.8.0", pins.GetProperty("fastembed").GetString());
+
+        var uvPolicy = root.GetProperty("uv_policy");
+        Assert.Equal("outside-repo-user-cache", uvPolicy.GetProperty("cache_scope").GetString());
+        Assert.Equal("no-project-venv", uvPolicy.GetProperty("repo_venv_policy").GetString());
+        Assert.True(uvPolicy.GetProperty("cache_must_stay_outside_repo").GetBoolean());
+        Assert.True(uvPolicy.GetProperty("model_cache_must_stay_outside_repo").GetBoolean());
+
+        var discoveryOrder = uvPolicy.GetProperty("executable_discovery_order")
+            .EnumerateArray()
+            .Select(item => item.GetString())
+            .ToArray();
+        Assert.Contains("PATH", discoveryOrder);
+        Assert.Contains("%APPDATA%/Python/Python312/Scripts/uv.exe", discoveryOrder);
+        Assert.Contains("%LOCALAPPDATA%/Microsoft/WinGet/Packages/**/uv.exe", discoveryOrder);
+    }
+
+    [Fact]
+    public void SidecarWrapperPinsDependenciesAndUsesOfflineUvForGateCommands()
+    {
+        var script = ReadText("scripts/lancedb-sidecar.ps1");
+
+        Assert.Contains("$lanceDbPackagePin = 'lancedb==0.34.0'", script, StringComparison.Ordinal);
+        Assert.Contains("$pyArrowPackagePin = 'pyarrow==24.0.0'", script, StringComparison.Ordinal);
+        Assert.Contains("'--offline'", script, StringComparison.Ordinal);
+        Assert.Contains("hidden_network_downloads_blocked", script, StringComparison.Ordinal);
+        Assert.Contains("explicit_preflight_required_for_downloads", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("'--with', 'lancedb'", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("'--with', 'pyarrow'", script, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -99,6 +179,8 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("not a canonical store", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("production-candidate semantic quality layer", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("FastEmbed", spike, StringComparison.Ordinal);
+        Assert.Contains("lancedb==0.34.0", spike, StringComparison.Ordinal);
+        Assert.Contains("pyarrow==24.0.0", spike, StringComparison.Ordinal);
         Assert.Contains("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", spike, StringComparison.Ordinal);
         Assert.Contains("embedding_runtime_model", spike, StringComparison.Ordinal);
         Assert.Contains("tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean", spike, StringComparison.Ordinal);
@@ -112,6 +194,10 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("lancedb-eval-report.md", spike, StringComparison.Ordinal);
         Assert.Contains("lancedb-probe-report.json", spike, StringComparison.Ordinal);
         Assert.Contains("command-specific reports", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("memory-semantic-doctor.ps1", spike, StringComparison.Ordinal);
+        Assert.Contains("offline", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("hidden network downloads", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("outside the repo", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("query", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("expected ids", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("source_path", spike, StringComparison.Ordinal);
@@ -128,8 +214,13 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("embedding_runtime_model", contract, StringComparison.Ordinal);
         Assert.Contains("production-custom-alias-no-suppression", contract, StringComparison.Ordinal);
         Assert.Contains("embedding_pooling_baseline", contract, StringComparison.Ordinal);
+        Assert.Contains("lancedb==0.34.0", contract, StringComparison.Ordinal);
+        Assert.Contains("pyarrow==24.0.0", contract, StringComparison.Ordinal);
+        Assert.Contains("memory-semantic-doctor.ps1", contract, StringComparison.Ordinal);
+        Assert.Contains("offline", contract, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("rerun cleanup/rebuild/eval", contract, StringComparison.Ordinal);
         Assert.Contains("scripts/lancedb-sidecar.ps1", readme, StringComparison.Ordinal);
+        Assert.Contains("memory-semantic-doctor.ps1", readme, StringComparison.Ordinal);
         Assert.Contains("lancedb-eval-report.md", readme, StringComparison.Ordinal);
         Assert.Contains("lancedb-probe-report.json", readme, StringComparison.Ordinal);
         Assert.Contains("must not overwrite", readme, StringComparison.OrdinalIgnoreCase);
@@ -162,6 +253,48 @@ public sealed class LanceDbSidecarSpikeTests
         return File.ReadAllText(path);
     }
 
+    private static async Task<ProcessResult> RunPowerShellAsync(string scriptPath, string arguments)
+    {
+        var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        });
+
+        Assert.NotNull(process);
+        var outputTask = process!.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        try
+        {
+            await process.WaitForExitAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                process.Kill();
+            }
+            catch
+            {
+                // The assertion below is the useful failure; cleanup is best effort.
+            }
+
+            Assert.Fail($"{Path.GetFileName(scriptPath)} timed out.");
+        }
+
+        return new ProcessResult(process.ExitCode, await outputTask, await errorTask);
+    }
+
+    private static string Quote(string value)
+    {
+        return "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -172,6 +305,14 @@ public sealed class LanceDbSidecarSpikeTests
         }
 
         return directory?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
+    }
+
+    private sealed record ProcessResult(int ExitCode, string Output, string Error)
+    {
+        public override string ToString()
+        {
+            return $"Exit {ExitCode}\nSTDOUT:\n{Output}\nSTDERR:\n{Error}";
+        }
     }
 
     private sealed class TemporaryDirectory : IDisposable
