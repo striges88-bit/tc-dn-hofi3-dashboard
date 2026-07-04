@@ -1384,3 +1384,38 @@ Notes:
 - Real LanceDB cleanup/rebuild/eval passed through the pinned offline path; eval reported `9/9`.
 - Verification passed: `LanceDbSidecarSpikeTests` `5/5`, Python sidecar tests returned `ok`, related Infrastructure guardrails `28/28`, `tools/Memory.Tests` `9/9`, solution build passed with `0` warnings/errors, and `git diff --check` passed.
 - Final gate passed after commit: `scripts\memory-refresh-all.ps1` completed, `memory status` reported `needs_refresh=false` with `indexed_commit=HEAD`, and `scripts\memory-pre-push-check.ps1` passed with LanceDB eval `9/9`.
+
+## Memory CLI Stability Todo
+
+- [x] Add RED guardrails proving Memory CLI wrappers use `dotnet run --no-restore`, report a Memory CLI lock, and keep daily-check `needs_refresh` unknown instead of true when the CLI is unavailable.
+- [x] Update PowerShell wrappers that invoke `tools/Memory` so they skip implicit restore and serialize Memory CLI process calls with a generated lock.
+- [x] Update memory docs/runbook to state the restore/build prerequisite and the daily-check `unknown` status behavior.
+- [x] Run narrow guardrail tests, Memory CLI tests, solution build, `git diff --check`, then commit and rerun the memory gate.
+
+Review / Results:
+
+- PowerShell review finished: Memory CLI status/refresh steps now use `dotnet run --no-restore`, SQLite refresh/status checks share `docs/memory/generated/memory-cli.lock`, and daily-check reports CLI-unavailable as unknown freshness instead of stale.
+- Wrapper consistency pass updated recovery and curated retain wrappers to use `--no-restore`; no post-commit rebuild, retain, Cloud, Hindsight, or Codex auto-retain automation was added.
+- Verification passed: narrow GREEN guardrails `3/3`; related `MemoryRefreshAllTests|ManualMemoryGateTests` `24/24`; `tools/Memory.Tests` `9/9`; solution build `0` warnings/errors; `git diff --check` passed.
+- Note: `tools/Memory.Tests` and solution build needed an outside-sandbox run because sandboxed MSBuild hit `C:\Users\MECHREVO\AppData\Local\Temp\MSBuildTemp` access denied. The same commands passed outside sandbox.
+
+## Compact Handoff - Memory CLI Stability
+
+- Branch: `codex/memory-cli-stability`.
+- Current state: source verification passed; commit source first, then run `memory-refresh-all` because the generated store indexes committed `HEAD`.
+- Changed so far:
+  - `CryptoIndicatorApp.Infrastructure.Tests/MemoryRefreshAllTests.cs` has RED assertions for `dotnet run --no-restore`, Memory CLI lock metadata, and serialized SQLite CLI steps.
+  - `CryptoIndicatorApp.Infrastructure.Tests/ManualMemoryGateTests.cs` has RED assertions for daily-check lock metadata and a regression where CLI-unavailable must report `needs_refresh=null` / unknown instead of `true`.
+  - `scripts/memory-refresh-all.ps1` has a partial GREEN implementation: SQLite CLI steps use `--no-restore`, acquire `docs/memory/generated/memory-cli.lock`, and report lock metadata.
+  - `scripts/memory-daily-check.ps1` has a partial GREEN implementation: Memory CLI status uses `--no-restore`, a lock, and `cli-unavailable`/`store-missing` status fields.
+- RED evidence before implementation:
+  - `MemoryRefreshAllTests.RefreshAllPlanWritesSafeReportWithExpectedStepOrder` failed on missing lock metadata.
+  - `ManualMemoryGateTests.MemoryDailyCheckDoesNotReportNeedsRefreshWhenMemoryCliIsUnavailable` failed on missing `status`/unknown fields.
+  - `ManualMemoryGateTests.MemoryDailyCheckDocsDescribeReadOnlyRoutine` failed because docs do not yet mention `CLI unavailable` / `needs_refresh unknown`.
+- Caution: an earlier parallel `dotnet test` run hit an MSBuild temp file access collision, confirming this slice should use serialized test/script execution.
+- Pre-compact memory status: `HEAD=f7b9c713f4f89f9642be99047ad03019461be37d`, `indexed_commit=f7b9c713f4f89f9642be99047ad03019461be37d`, `needs_refresh=false`, `marker_exists=false`, `working_tree_dirty=true`.
+- Next exact steps if interrupted:
+  1. Commit this source slice.
+  2. Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
+  3. Run `.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- status --project-root . --json`.
+  4. Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-pre-push-check.ps1`.

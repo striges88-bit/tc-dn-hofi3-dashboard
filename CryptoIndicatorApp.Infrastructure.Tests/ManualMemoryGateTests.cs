@@ -281,15 +281,19 @@ public sealed class ManualMemoryGateTests
         Assert.False(root.GetProperty("touches_secret_storage").GetBoolean());
         Assert.False(root.GetProperty("uses_generated_exports_as_source").GetBoolean());
         Assert.False(root.GetProperty("touches_build_artifacts").GetBoolean());
+        Assert.True(root.GetProperty("memory_cli_checks_serialized").GetBoolean());
+        Assert.Equal("docs/memory/generated/memory-cli.lock", root.GetProperty("memory_cli_lock_path").GetString());
 
         var git = root.GetProperty("git");
         Assert.True(git.TryGetProperty("branch", out _));
         Assert.False(string.IsNullOrWhiteSpace(git.GetProperty("head").GetString()));
 
         var memoryStatus = root.GetProperty("memory_status");
+        Assert.True(memoryStatus.TryGetProperty("status", out _));
         Assert.True(memoryStatus.TryGetProperty("head", out _));
         Assert.True(memoryStatus.TryGetProperty("indexed_commit", out _));
         Assert.True(memoryStatus.TryGetProperty("needs_refresh", out _));
+        Assert.True(memoryStatus.TryGetProperty("needs_refresh_is_known", out _));
         Assert.True(memoryStatus.TryGetProperty("marker_exists", out _));
         Assert.True(memoryStatus.TryGetProperty("working_tree_dirty", out _));
 
@@ -325,6 +329,40 @@ public sealed class ManualMemoryGateTests
     }
 
     [Fact]
+    public async Task MemoryDailyCheckDoesNotReportNeedsRefreshWhenMemoryCliIsUnavailable()
+    {
+        var scriptPath = Path.Combine(Root, "scripts", "memory-daily-check.ps1");
+        Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+
+        using var temp = TemporaryDirectory.Create();
+        File.WriteAllText(Path.Combine(temp.Path, "CryptoIndicatorApp.sln"), string.Empty);
+        var generated = Path.Combine(temp.Path, "docs", "memory", "generated");
+        Directory.CreateDirectory(generated);
+        File.WriteAllText(Path.Combine(generated, "project-memory.sqlite"), string.Empty);
+
+        var reportPath = Path.Combine(temp.Path, "memory-daily-check-report.json");
+
+        var result = await RunPowerShellAsync(
+            scriptPath,
+            $"-ProjectRoot {Quote(temp.Path)} -OutputPath {Quote(reportPath)}");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal("reported", root.GetProperty("status").GetString());
+
+        var memoryStatus = root.GetProperty("memory_status");
+        Assert.False(memoryStatus.GetProperty("available").GetBoolean());
+        Assert.Equal("cli-unavailable", memoryStatus.GetProperty("status").GetString());
+        Assert.False(memoryStatus.GetProperty("needs_refresh_is_known").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, memoryStatus.GetProperty("needs_refresh").ValueKind);
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("summary").GetProperty("needs_refresh").ValueKind);
+        Assert.NotEqual(string.Empty, memoryStatus.GetProperty("error_message").GetString());
+    }
+
+    [Fact]
     public void MemoryDailyCheckDocsDescribeReadOnlyRoutine()
     {
         var memoryReadme = ReadText("docs/memory/README.md");
@@ -334,9 +372,12 @@ public sealed class ManualMemoryGateTests
         Assert.Contains("memory-daily-check.ps1", memoryReadme, StringComparison.Ordinal);
         Assert.Contains("read-only", memoryReadme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("does not run `memory-refresh-all`", memoryReadme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CLI unavailable", memoryReadme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("needs_refresh unknown", memoryReadme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("memory-daily-check.ps1", scriptsReadme, StringComparison.Ordinal);
         Assert.Contains("operator", scriptsReadme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("does not rebuild", scriptsReadme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("dotnet run --no-restore", scriptsReadme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Memory Operator UX", roadmap, StringComparison.Ordinal);
         Assert.Contains("memory-daily-check.ps1", roadmap, StringComparison.Ordinal);
     }

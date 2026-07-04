@@ -87,13 +87,54 @@ function Join-ProcessArguments {
     return [string]::Join(' ', $quoted)
 }
 
+function Acquire-DirectoryLock {
+    param(
+        [string]$Path,
+        [int]$TimeoutSeconds
+    )
+
+    $directory = Split-Path -Parent $Path
+    if (-not [string]::IsNullOrWhiteSpace($directory)) {
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    }
+
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($timer.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+        try {
+            New-Item -ItemType Directory -Path $Path -ErrorAction Stop | Out-Null
+            return $true
+        }
+        catch {
+            Start-Sleep -Milliseconds 200
+        }
+    }
+
+    return $false
+}
+
 function Invoke-ProcessText {
     param(
         [string]$FilePath,
         [string[]]$Arguments,
         [string]$WorkingDirectory,
-        [int]$TimeoutSeconds = 30
+        [int]$TimeoutSeconds = 30,
+        [string]$LockPath = '',
+        [int]$LockTimeoutSeconds = 30
     )
+
+    $lockAcquired = $false
+    if (-not [string]::IsNullOrWhiteSpace($LockPath)) {
+        $lockAcquired = Acquire-DirectoryLock -Path $LockPath -TimeoutSeconds $LockTimeoutSeconds
+        if (-not $lockAcquired) {
+            return [ordered]@{
+                exit_code = 124
+                stdout = ''
+                stderr = "Timed out waiting for Memory CLI lock: $LockPath"
+                timed_out = $true
+                lock_timed_out = $true
+            }
+        }
+    }
 
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $FilePath
@@ -129,6 +170,7 @@ function Invoke-ProcessText {
                 stdout = $stdoutTask.Result
                 stderr = $stderrTask.Result
                 timed_out = $true
+                lock_timed_out = $false
             }
         }
 
@@ -138,10 +180,14 @@ function Invoke-ProcessText {
             stdout = $stdoutTask.Result
             stderr = $stderrTask.Result
             timed_out = $false
+            lock_timed_out = $false
         }
     }
     finally {
         $process.Dispose()
+        if ($lockAcquired) {
+            Remove-Item -LiteralPath $LockPath -Force -Recurse -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -257,6 +303,7 @@ $reportPath = Resolve-RootedOrRelativePath `
 $generatedRoot = Join-Path $root 'docs\memory\generated'
 $sqlitePath = Join-Path $generatedRoot 'project-memory.sqlite'
 $markerPath = Join-Path $generatedRoot 'memory-needs-refresh.marker.json'
+$memoryCliLockPath = Join-Path $generatedRoot 'memory-cli.lock'
 $memoryProject = Join-Path $root 'tools\Memory\CryptoIndicatorApp.Memory.csproj'
 
 $gitBranchResult = Invoke-ProcessText -FilePath 'git' -Arguments @('branch', '--show-current') -WorkingDirectory $root
@@ -269,55 +316,82 @@ $workingTreeDirty = $gitDirtyResult.exit_code -eq 0 -and -not [string]::IsNullOr
 
 $memoryStatus = [ordered]@{
     available = $false
+    status = if (Test-Path -LiteralPath $sqlitePath) { 'cli-unavailable' } else { 'store-missing' }
     head = $head
     indexed_commit = $null
     indexed_tree = $null
     indexed_at = $null
     marker_exists = Test-Path -LiteralPath $markerPath
-    needs_refresh = $true
+    needs_refresh = if (Test-Path -LiteralPath $markerPath) { $true } elseif (Test-Path -LiteralPath $sqlitePath) { $null } else { $true }
+    needs_refresh_is_known = -not (Test-Path -LiteralPath $sqlitePath) -or (Test-Path -LiteralPath $markerPath)
     working_tree_dirty = $workingTreeDirty
     marker_path = Convert-ToRepoPath -Root $root -Path $markerPath
     source = 'git-and-marker-fallback'
     error_message = ''
+    error_kind = ''
 }
 
 if (Test-Path -LiteralPath $sqlitePath) {
     $dotnetPath = Find-Dotnet -Root $root
-    $statusResult = Invoke-ProcessText `
-        -FilePath $dotnetPath `
-        -Arguments @(
-            'run',
-            '--project',
-            $memoryProject,
-            '--',
-            'status',
-            '--project-root',
-            $root,
-            '--db',
-            $sqlitePath,
-            '--json'
-        ) `
-        -WorkingDirectory $root `
-        -TimeoutSeconds 120
+    try {
+        $statusResult = Invoke-ProcessText `
+            -FilePath $dotnetPath `
+            -Arguments @(
+                'run',
+                '--no-restore',
+                '--project',
+                $memoryProject,
+                '--',
+                'status',
+                '--project-root',
+                $root,
+                '--db',
+                $sqlitePath,
+                '--json'
+            ) `
+            -WorkingDirectory $root `
+            -TimeoutSeconds 120 `
+            -LockPath $memoryCliLockPath `
+            -LockTimeoutSeconds 30
+    }
+    catch {
+        $statusResult = [ordered]@{
+            exit_code = 127
+            stdout = ''
+            stderr = $_.Exception.Message
+            timed_out = $false
+            lock_timed_out = $false
+        }
+    }
 
     if ($statusResult.exit_code -eq 0 -and -not [string]::IsNullOrWhiteSpace($statusResult.stdout)) {
-        $statusJson = $statusResult.stdout | ConvertFrom-Json
-        $memoryStatus = [ordered]@{
-            available = $true
-            head = $statusJson.head
-            indexed_commit = $statusJson.indexed_commit
-            indexed_tree = $statusJson.indexed_tree
-            indexed_at = $statusJson.indexed_at
-            marker_exists = [bool]$statusJson.marker_exists
-            needs_refresh = [bool]$statusJson.needs_refresh
-            working_tree_dirty = [bool]$statusJson.working_tree_dirty
-            marker_path = [string]$statusJson.marker_path
-            source = 'tools/Memory status'
-            error_message = ''
+        try {
+            $statusJson = $statusResult.stdout | ConvertFrom-Json
+            $memoryStatus = [ordered]@{
+                available = $true
+                status = 'reported'
+                head = $statusJson.head
+                indexed_commit = $statusJson.indexed_commit
+                indexed_tree = $statusJson.indexed_tree
+                indexed_at = $statusJson.indexed_at
+                marker_exists = [bool]$statusJson.marker_exists
+                needs_refresh = [bool]$statusJson.needs_refresh
+                needs_refresh_is_known = $true
+                working_tree_dirty = [bool]$statusJson.working_tree_dirty
+                marker_path = [string]$statusJson.marker_path
+                source = 'tools/Memory status'
+                error_message = ''
+                error_kind = ''
+            }
+        }
+        catch {
+            $memoryStatus.error_message = ("Memory CLI status did not return JSON. " + $_.Exception.Message + " Output=" + $statusResult.stdout).Trim()
+            $memoryStatus.error_kind = 'memory-cli-invalid-json'
         }
     }
     else {
         $memoryStatus.error_message = ($statusResult.stderr + $statusResult.stdout).Trim()
+        $memoryStatus.error_kind = if ([bool]$statusResult.lock_timed_out) { 'memory-cli-lock-timeout' } else { 'memory-cli-unavailable' }
     }
 }
 
@@ -358,6 +432,12 @@ if ([string]::IsNullOrWhiteSpace($head)) {
 $memoryStatusObservationStatus = 'unavailable'
 if ($memoryStatus.available) {
     $memoryStatusObservationStatus = 'reported'
+}
+elseif ($memoryStatus.status -eq 'store-missing') {
+    $memoryStatusObservationStatus = 'store-missing'
+}
+elseif ($memoryStatus.status -eq 'cli-unavailable') {
+    $memoryStatusObservationStatus = 'cli-unavailable'
 }
 
 $observations = @(
@@ -400,6 +480,8 @@ $report = [ordered]@{
     touches_secret_storage = $false
     uses_generated_exports_as_source = $false
     touches_build_artifacts = $false
+    memory_cli_checks_serialized = $true
+    memory_cli_lock_path = Convert-ToRepoPath -Root $root -Path $memoryCliLockPath
     git = [ordered]@{
         branch = $branch
         head = $head
@@ -422,7 +504,8 @@ $report = [ordered]@{
         embedding_pooling_baseline = $evalBaseline
     }
     summary = [ordered]@{
-        needs_refresh = [bool]$memoryStatus.needs_refresh
+        needs_refresh = $memoryStatus.needs_refresh
+        needs_refresh_is_known = [bool]$memoryStatus.needs_refresh_is_known
         marker_exists = [bool]$memoryStatus.marker_exists
         lancedb_eval_status = $evalStatus
         lancedb_eval_passed = $evalPassed

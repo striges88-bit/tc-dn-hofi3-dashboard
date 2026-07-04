@@ -12,13 +12,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-daily-che
 
 Good result: the report is written, `needs_refresh=false` when memory is already current, and LanceDB eval is still the latest `9/9` evidence if present.
 
+If the Memory CLI is unavailable because restore/build prerequisites or NuGet locks are broken, the report should say `CLI unavailable` and `needs_refresh unknown`. Treat that as an environment/tooling issue to fix, not as proof that memory is stale.
+
 ## After A Durable Commit
 
 If the commit changed ADRs, formulas, memory docs, lessons, scripts, tests, or architecture rules, refresh from committed `HEAD`:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1
-.\.dotnet\dotnet.exe run --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- status --project-root . --json
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- status --project-root . --json
 ```
 
 Good result: `needs_refresh=false`, `working_tree_dirty=false` unless you intentionally started the next source edit, SQLite stale-check has no issues, and LanceDB eval is `9/9`.
@@ -71,7 +73,7 @@ Stop at a clean handoff point:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-daily-check.ps1 -PlanOnly
-.\.dotnet\dotnet.exe run --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- status --project-root . --json
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- status --project-root . --json
 ```
 
 If source changes are already committed and `needs_refresh=true`, run `memory-refresh-all.ps1`. If source work is mid-slice, do not force refresh; update `tasks/todo.md` with the next command and compact there.

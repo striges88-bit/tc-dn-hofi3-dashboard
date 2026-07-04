@@ -32,7 +32,7 @@ if (-not (Test-Path $dotnetPath -PathType Leaf)) {
 }
 
 $projectPath = Join-Path $root 'tools\Memory\CryptoIndicatorApp.Memory.csproj'
-$cliOutput = & $dotnetPath run --project $projectPath -- retain-delete --project-root $root --source-path $SourcePath --json 2>&1
+$cliOutput = & $dotnetPath run --no-restore --project $projectPath -- retain-delete --project-root $root --source-path $SourcePath --json 2>&1
 $cliExitCode = $LASTEXITCODE
 $cliText = ($cliOutput | Out-String).Trim()
 

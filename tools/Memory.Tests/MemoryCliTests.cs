@@ -389,6 +389,7 @@ public sealed class MemoryCliTests
             CreateNoWindow = true,
         };
         startInfo.ArgumentList.Add("run");
+        startInfo.ArgumentList.Add("--no-restore");
         startInfo.ArgumentList.Add("--project");
         startInfo.ArgumentList.Add(projectPath);
         startInfo.ArgumentList.Add("--");

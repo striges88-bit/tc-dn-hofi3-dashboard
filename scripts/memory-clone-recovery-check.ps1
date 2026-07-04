@@ -292,7 +292,7 @@ $checkoutArguments = @('-C', $clonePath, 'checkout', '--detach', $head)
 $recoveryScript = Join-Path $clonePath 'scripts\memory-rebuild-from-head.ps1'
 $recoveryArguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $recoveryScript, '-ProjectRoot', $clonePath, '-StepTimeoutSeconds', ([string]$StepTimeoutSeconds))
 $cloneMemoryProject = Join-Path $clonePath 'tools\Memory\CryptoIndicatorApp.Memory.csproj'
-$statusArguments = @('run', '--project', $cloneMemoryProject, '--', 'status', '--project-root', $clonePath, '--json')
+$statusArguments = @('run', '--no-restore', '--project', $cloneMemoryProject, '--', 'status', '--project-root', $clonePath, '--json')
 $dotnetPathPrefix = Find-DotnetPathPrefix -Root $root
 $dotnetExecutable = Find-DotnetExecutable -Root $root
 

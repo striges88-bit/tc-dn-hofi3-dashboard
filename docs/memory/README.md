@@ -24,13 +24,15 @@ Generated graph, SQLite, or memory exports belong in `docs/memory/generated/`, w
 
 ## Commands
 
+Memory CLI examples use `dotnet run --no-restore`. Run a normal restore/build first on a fresh checkout; operator checks should not hide NuGet restore or lock problems inside memory status.
+
 Run a read-only operator snapshot before deciding whether a heavier refresh/check is needed:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-daily-check.ps1 -PlanOnly
 ```
 
-This writes `docs/memory/generated/memory-daily-check-report.json` and reports the current branch, `HEAD`, indexed commit when the generated SQLite store already exists, `needs_refresh`, marker status, latest LanceDB eval status, and generated report presence. It does not run `memory-refresh-all`, rebuild memory, import curated retain, install hooks, call Cloud, call Hindsight, or call Codex retain.
+This writes `docs/memory/generated/memory-daily-check-report.json` and reports the current branch, `HEAD`, indexed commit when the generated SQLite store already exists, `needs_refresh`, marker status, latest LanceDB eval status, and generated report presence. If the Memory CLI is unavailable, the report says `CLI unavailable` and leaves `needs_refresh unknown` instead of pretending memory is stale. It does not run `memory-refresh-all`, rebuild memory, import curated retain, install hooks, call Cloud, call Hindsight, or call Codex retain.
 
 Run the full manual memory refresh sequence:
 
@@ -98,37 +100,37 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh.p
 Refresh the canonical SQLite FTS5 memory store:
 
 ```powershell
-.\.dotnet\dotnet.exe run --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- refresh --project-root . --json
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- refresh --project-root . --json
 ```
 
 Refresh the canonical SQLite FTS5 memory store from the current Git commit:
 
 ```powershell
-.\.dotnet\dotnet.exe run --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- refresh-from-commit --commit HEAD --project-root . --json
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- refresh-from-commit --commit HEAD --project-root . --json
 ```
 
 Check whether generated memory is stale against `HEAD`:
 
 ```powershell
-.\.dotnet\dotnet.exe run --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- status --project-root . --json
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- status --project-root . --json
 ```
 
 Search current memory facts:
 
 ```powershell
-.\.dotnet\dotnet.exe run --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- search --project-root . --query "actual OFI formula" --json
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- search --project-root . --query "actual OFI formula" --json
 ```
 
 Explain a SQLite query plan and write `query_log`:
 
 ```powershell
-.\.dotnet\dotnet.exe run --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- explain --project-root . --query "actual OFI formula" --json
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- explain --project-root . --query "actual OFI formula" --json
 ```
 
 Run stale checks:
 
 ```powershell
-.\.dotnet\dotnet.exe run --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- stale-check --project-root . --json
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- stale-check --project-root . --json
 ```
 
 Probe the local LanceDB sidecar without installing hooks, importing raw files, or using Cloud:

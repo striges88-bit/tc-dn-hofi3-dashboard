@@ -103,7 +103,8 @@ function New-Step {
     param(
         [string]$Name,
         [string]$FilePath,
-        [string[]]$Arguments
+        [string[]]$Arguments,
+        [bool]$UsesMemoryCliLock = $false
     )
 
     [ordered]@{
@@ -113,16 +114,63 @@ function New-Step {
         command = "$FilePath $(Join-ProcessArguments $Arguments)"
         uses_cloud = $false
         uses_hook = $false
+        uses_memory_cli_lock = $UsesMemoryCliLock
     }
+}
+
+function Acquire-DirectoryLock {
+    param(
+        [string]$Path,
+        [int]$TimeoutSeconds
+    )
+
+    $directory = Split-Path -Parent $Path
+    if (-not [string]::IsNullOrWhiteSpace($directory)) {
+        New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    }
+
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    while ($timer.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+        try {
+            New-Item -ItemType Directory -Path $Path -ErrorAction Stop | Out-Null
+            return $true
+        }
+        catch {
+            Start-Sleep -Milliseconds 200
+        }
+    }
+
+    return $false
 }
 
 function Invoke-RefreshStep {
     param(
         [System.Collections.IDictionary]$Step,
-        [int]$TimeoutSeconds
+        [int]$TimeoutSeconds,
+        [string]$MemoryCliLockPath
     )
 
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    $lockAcquired = $false
+
+    if ([bool]$Step.uses_memory_cli_lock) {
+        $lockAcquired = Acquire-DirectoryLock -Path $MemoryCliLockPath -TimeoutSeconds $TimeoutSeconds
+        if (-not $lockAcquired) {
+            $timer.Stop()
+            return [ordered]@{
+                name = $Step.name
+                command = $Step.command
+                status = 'timeout'
+                exit_code = 124
+                duration_ms = [math]::Round($timer.Elapsed.TotalMilliseconds, 3)
+                stdout_tail = ''
+                stderr_tail = "Timed out waiting for Memory CLI lock: $MemoryCliLockPath"
+                uses_cloud = $Step.uses_cloud
+                uses_hook = $Step.uses_hook
+                uses_memory_cli_lock = $Step.uses_memory_cli_lock
+            }
+        }
+    }
 
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = [string]$Step.file_path
@@ -172,6 +220,7 @@ function Invoke-RefreshStep {
                 stderr_tail = Get-OutputTail $stderrText
                 uses_cloud = $Step.uses_cloud
                 uses_hook = $Step.uses_hook
+                uses_memory_cli_lock = $Step.uses_memory_cli_lock
             }
         }
 
@@ -186,10 +235,14 @@ function Invoke-RefreshStep {
             stderr_tail = Get-OutputTail $stderrText
             uses_cloud = $Step.uses_cloud
             uses_hook = $Step.uses_hook
+            uses_memory_cli_lock = $Step.uses_memory_cli_lock
         }
     }
     finally {
         $process.Dispose()
+        if ($lockAcquired) {
+            Remove-Item -LiteralPath $MemoryCliLockPath -Force -Recurse -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -233,6 +286,7 @@ $reportPath = Resolve-RootedOrRelativePath `
     -Root $root `
     -Path $OutputPath `
     -DefaultPath (Join-Path $root 'docs\memory\generated\memory-refresh-all-report.json')
+$memoryCliLockPath = Join-Path $root 'docs\memory\generated\memory-cli.lock'
 
 $dotnetPath = Find-Dotnet -Root $root
 $memoryProject = Join-Path $root 'tools\Memory\CryptoIndicatorApp.Memory.csproj'
@@ -241,8 +295,8 @@ $lanceDbScript = Join-Path $root 'scripts\lancedb-sidecar.ps1'
 
 $steps = @(
     (New-Step -Name 'legacy-json-refresh' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $legacyRefreshScript, '-ProjectRoot', $root)),
-    (New-Step -Name 'sqlite-refresh' -FilePath $dotnetPath -Arguments @('run', '--project', $memoryProject, '--', 'refresh-from-commit', '--commit', 'HEAD', '--project-root', $root, '--json')),
-    (New-Step -Name 'sqlite-stale-check' -FilePath $dotnetPath -Arguments @('run', '--project', $memoryProject, '--', 'stale-check', '--project-root', $root, '--json')),
+    (New-Step -Name 'sqlite-refresh' -FilePath $dotnetPath -Arguments @('run', '--no-restore', '--project', $memoryProject, '--', 'refresh-from-commit', '--commit', 'HEAD', '--project-root', $root, '--json') -UsesMemoryCliLock $true),
+    (New-Step -Name 'sqlite-stale-check' -FilePath $dotnetPath -Arguments @('run', '--no-restore', '--project', $memoryProject, '--', 'stale-check', '--project-root', $root, '--json') -UsesMemoryCliLock $true),
     (New-Step -Name 'lancedb-cleanup' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $lanceDbScript, '-ProjectRoot', $root, '-Command', 'cleanup')),
     (New-Step -Name 'lancedb-rebuild' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $lanceDbScript, '-ProjectRoot', $root, '-Command', 'rebuild')),
     (New-Step -Name 'lancedb-eval' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $lanceDbScript, '-ProjectRoot', $root, '-Command', 'eval'))
@@ -266,12 +320,13 @@ if ($PlanOnly) {
             stderr_tail = ''
             uses_cloud = $step.uses_cloud
             uses_hook = $step.uses_hook
+            uses_memory_cli_lock = $step.uses_memory_cli_lock
         })
     }
 }
 else {
     foreach ($step in $steps) {
-        $result = Invoke-RefreshStep -Step $step -TimeoutSeconds $StepTimeoutSeconds
+        $result = Invoke-RefreshStep -Step $step -TimeoutSeconds $StepTimeoutSeconds -MemoryCliLockPath $memoryCliLockPath
         $results.Add($result)
 
         if ($result.exit_code -ne 0) {
@@ -295,6 +350,7 @@ else {
                     stderr_tail = ''
                     uses_cloud = $step.uses_cloud
                     uses_hook = $step.uses_hook
+                    uses_memory_cli_lock = $step.uses_memory_cli_lock
                 })
             }
         }
@@ -326,6 +382,8 @@ $report = [ordered]@{
     touches_hindsight_store = $false
     touches_secret_storage = $false
     touches_build_artifacts = $false
+    memory_cli_checks_serialized = $true
+    memory_cli_lock_path = Convert-ToRepoPath -Root $root -Path $memoryCliLockPath
     steps = @($results)
 }
 
