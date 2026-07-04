@@ -13,11 +13,20 @@ public sealed class LanceDbSidecarSpikeTests
         var scriptPath = Path.Combine(Root, "scripts", "lancedb-sidecar.ps1");
         Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
 
-        var reportPath = Path.Combine(Root, "docs", "memory", "generated", "lancedb-sidecar-report.json");
+        using var temp = TemporaryDirectory.Create();
+        File.WriteAllText(Path.Combine(temp.Path, "CryptoIndicatorApp.sln"), string.Empty);
+
+        var generatedDirectory = Path.Combine(temp.Path, "docs", "memory", "generated");
+        Directory.CreateDirectory(generatedDirectory);
+        var evalReportPath = Path.Combine(generatedDirectory, "lancedb-sidecar-report.json");
+        var probeReportPath = Path.Combine(generatedDirectory, "lancedb-probe-report.json");
+        const string evalSentinel = "{ \"command\": \"eval\", \"sentinel\": \"keep\" }\n";
+        File.WriteAllText(evalReportPath, evalSentinel);
+
         var process = Process.Start(new ProcessStartInfo
         {
             FileName = "powershell.exe",
-            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" -ProjectRoot \"{Root}\" -Command probe -OutputPath \"{reportPath}\"",
+            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" -ProjectRoot \"{temp.Path}\" -Command probe",
             RedirectStandardError = true,
             RedirectStandardOutput = true,
             UseShellExecute = false,
@@ -30,9 +39,10 @@ public sealed class LanceDbSidecarSpikeTests
         var output = process.StandardOutput.ReadToEnd();
         var error = process.StandardError.ReadToEnd();
         Assert.True(process.ExitCode == 0, $"Exit {process.ExitCode}\nSTDOUT:\n{output}\nSTDERR:\n{error}");
-        Assert.True(File.Exists(reportPath), $"Missing report: {reportPath}");
+        Assert.True(File.Exists(probeReportPath), $"Missing report: {probeReportPath}");
+        Assert.Equal(evalSentinel, File.ReadAllText(evalReportPath));
 
-        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        using var report = JsonDocument.Parse(File.ReadAllText(probeReportPath));
         var root = report.RootElement;
 
         Assert.Equal(1, root.GetProperty("schema_version").GetInt32());
@@ -40,6 +50,7 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Equal("local-python-embedded", root.GetProperty("mode").GetString());
         Assert.Equal("sqlite-fts5", root.GetProperty("source_store").GetString());
         Assert.Equal("docs/memory/generated/lancedb", root.GetProperty("lancedb_store_path").GetString());
+        Assert.Equal("docs/memory/generated/lancedb-probe-report.json", root.GetProperty("report_path").GetString());
         Assert.Equal("docs/memory/generated/lancedb-sidecar-report.json", root.GetProperty("eval_json_report_path").GetString());
         Assert.Equal("docs/memory/generated/lancedb-eval-report.md", root.GetProperty("eval_markdown_report_path").GetString());
         Assert.False(root.GetProperty("cloud_enabled").GetBoolean());
@@ -99,6 +110,8 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("eval", spike, StringComparison.Ordinal);
         Assert.Contains("eval` passed `9/9`", spike, StringComparison.Ordinal);
         Assert.Contains("lancedb-eval-report.md", spike, StringComparison.Ordinal);
+        Assert.Contains("lancedb-probe-report.json", spike, StringComparison.Ordinal);
+        Assert.Contains("command-specific reports", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("query", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("expected ids", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("source_path", spike, StringComparison.Ordinal);
@@ -118,6 +131,8 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("rerun cleanup/rebuild/eval", contract, StringComparison.Ordinal);
         Assert.Contains("scripts/lancedb-sidecar.ps1", readme, StringComparison.Ordinal);
         Assert.Contains("lancedb-eval-report.md", readme, StringComparison.Ordinal);
+        Assert.Contains("lancedb-probe-report.json", readme, StringComparison.Ordinal);
+        Assert.Contains("must not overwrite", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("LanceDB semantic quality gate", openQuestions, StringComparison.Ordinal);
         Assert.Contains("rule.rest-hot-path-ban | current | data-pipeline", rules, StringComparison.Ordinal);
         Assert.Contains("rule.binance-dto-boundary | current | architecture", rules, StringComparison.Ordinal);
@@ -157,5 +172,30 @@ public sealed class LanceDbSidecarSpikeTests
         }
 
         return directory?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
+    }
+
+    private sealed class TemporaryDirectory : IDisposable
+    {
+        private TemporaryDirectory(string path)
+        {
+            Path = path;
+        }
+
+        public string Path { get; }
+
+        public static TemporaryDirectory Create()
+        {
+            var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "lancedb-sidecar-test-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(path);
+            return new TemporaryDirectory(path);
+        }
+
+        public void Dispose()
+        {
+            if (Directory.Exists(Path))
+            {
+                Directory.Delete(Path, recursive: true);
+            }
+        }
     }
 }

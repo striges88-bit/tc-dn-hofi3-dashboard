@@ -6,7 +6,7 @@ Do not add one-off commands as scripts unless they are repeatable and documented
 
 Use `memory-daily-check.ps1 -PlanOnly` as the quick read-only operator snapshot. It reports branch, `HEAD`, indexed commit, marker status, LanceDB eval status, and generated report presence. It does not rebuild memory, run `memory-refresh-all`, install hooks, import retain data, call Cloud, call Hindsight, or call Codex retain.
 
-Use `memory-refresh-all.ps1` for the full manual project-memory rebuild. It orchestrates the legacy JSON refresh, canonical SQLite `refresh-from-commit --commit HEAD`/stale-check, and LanceDB cleanup/rebuild/eval sequence without installing hooks or enabling background automation.
+Use `memory-refresh-all.ps1` for the full manual project-memory rebuild. It orchestrates the legacy JSON refresh, canonical SQLite `refresh-from-commit --commit HEAD`/stale-check, and LanceDB cleanup/rebuild/eval sequence without installing hooks or enabling background automation. LanceDB diagnostic commands write command-specific reports; only `eval` refreshes the JSON report consumed by `memory-pre-push-check.ps1`.
 
 Use `memory-rebuild-from-head.ps1 -PlanOnly` to review the local recovery delete plan. Without `-PlanOnly`, it deletes only allowlisted generated memory artifacts under `docs/memory/generated/`, runs `memory-refresh-all.ps1`, and verifies `memory status needs_refresh=false`; it does not delete source files, raw JSONL, secrets, `.hindsight/`, `bin/`, `obj/`, `publish/`, hooks, Cloud data, Codex memory, or external retain data.
 

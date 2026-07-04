@@ -38,7 +38,7 @@ Run the full manual memory refresh sequence:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1
 ```
 
-This runs legacy JSON refresh, SQLite refresh from commit (`refresh-from-commit --commit HEAD`), SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order. It writes an ignored wrapper report to `docs/memory/generated/memory-refresh-all-report.json`; the LanceDB eval step also writes `docs/memory/generated/lancedb-sidecar-report.json` and `docs/memory/generated/lancedb-eval-report.md`. It does not install hooks, enable Codex auto-retain, use Cloud, crawl project files directly for LanceDB, or import raw JSONL/generated exports/secrets/local proxy details/build artifacts.
+This runs legacy JSON refresh, SQLite refresh from commit (`refresh-from-commit --commit HEAD`), SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order. It writes an ignored wrapper report to `docs/memory/generated/memory-refresh-all-report.json`; LanceDB diagnostic steps write command-specific generated JSON reports, and the LanceDB eval step writes `docs/memory/generated/lancedb-sidecar-report.json` plus `docs/memory/generated/lancedb-eval-report.md`. It does not install hooks, enable Codex auto-retain, use Cloud, crawl project files directly for LanceDB, or import raw JSONL/generated exports/secrets/local proxy details/build artifacts.
 
 Rebuild local generated memory artifacts from committed `HEAD` after local store corruption or recovery testing:
 
@@ -139,6 +139,8 @@ Script path: `scripts/lancedb-sidecar.ps1`.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command probe
 ```
 
+The default probe report is `docs/memory/generated/lancedb-probe-report.json`; it must not overwrite `docs/memory/generated/lancedb-sidecar-report.json`, which is reserved for eval evidence.
+
 Rebuild, query, and evaluate the local LanceDB sidecar from SQLite `search_documents` only:
 
 ```powershell
@@ -151,6 +153,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.
 The LanceDB candidate uses local FastEmbed/ONNX embeddings by default with logical model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` through pinned `fastembed==0.8.0`, plus typed/exact-token reranking and an explicit `eval` gate. The production runtime registers the explicit custom alias `embedding_runtime_model=tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean` with `embedding_pooling=mean` instead of suppressing FastEmbed's upstream mean-pooling warning. The accepted semantic baseline records `embedding_pooling_baseline=mean-pooling` and `embedding_warning_policy=production-custom-alias-no-suppression`; it is current only while LanceDB `eval` passes `9/9`. The old token-hash provider is fallback/test-only.
 
 The generated eval reports are evidence artifacts for hook/automation review. They include query, expected ids/types, matched rank, source path, confidence, and gap notes, but they are not a source of truth.
+
+Non-eval LanceDB commands write command-specific generated JSON reports (`lancedb-search-report.json`, `lancedb-explain-report.json`, `lancedb-cleanup-report.json`, and `lancedb-rebuild-report.json`) so diagnostics cannot silently replace the latest eval evidence.
 
 Generate the pre-install Hindsight curated import manifest without calling Hindsight:
 

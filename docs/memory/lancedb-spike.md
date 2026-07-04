@@ -28,12 +28,13 @@ SQLite remains authoritative for `current`, `proposed`, `superseded`, `failed`, 
 - Wrapper: `scripts/lancedb-sidecar.ps1`.
 - Python script: `tools/MemorySemantic/lancedb_sidecar.py`.
 - Store path: `docs/memory/generated/lancedb`.
-- Report path: `docs/memory/generated/lancedb-sidecar-report.json`.
+- Eval JSON report path: `docs/memory/generated/lancedb-sidecar-report.json`.
 - Eval Markdown report path: `docs/memory/generated/lancedb-eval-report.md`.
+- Diagnostic JSON report paths: `docs/memory/generated/lancedb-probe-report.json`, `lancedb-search-report.json`, `lancedb-explain-report.json`, `lancedb-cleanup-report.json`, and `lancedb-rebuild-report.json`.
 - Commands: `probe`, `rebuild`, `search`, `explain`, `eval`, and `cleanup`.
 - Runtime mode: local Python embedded through `uv`; no Cloud, no service account, no OpenAI key, no Codex auto-retain.
 
-The sidecar now uses local FastEmbed/ONNX for semantic recall quality testing. The quality gate is explicit: `eval` must pass the required retrieval cases before any hook or background automation is considered. `eval` writes compact generated JSON and Markdown reports with query, expected ids/types, matched rank, source_path, confidence, and gap notes.
+The sidecar now uses local FastEmbed/ONNX for semantic recall quality testing. The quality gate is explicit: `eval` must pass the required retrieval cases before any hook or background automation is considered. `eval` writes compact generated JSON and Markdown reports with query, expected ids/types, matched rank, source_path, confidence, and gap notes. Diagnostic commands write command-specific reports and must not overwrite the eval JSON evidence used by `memory-pre-push-check`.
 
 ## Embedding Baseline
 
@@ -96,6 +97,7 @@ Expanded quality gate update 2026-06-29:
 - Rebuild indexed the current/proposed SQLite records into LanceDB; the ignored generated report records the exact count.
 - `eval` passed `9/9`: current OFI formula, formula owner, funding-source ADR, Binance DTO boundary, REST hot-path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
 - `eval` writes `docs/memory/generated/lancedb-sidecar-report.json` and `docs/memory/generated/lancedb-eval-report.md`; both are ignored generated evidence, not source-of-truth memory.
+- `probe`, `search`, `explain`, `cleanup`, and `rebuild` write separate command-specific JSON reports so diagnostics cannot silently replace the latest eval evidence.
 
 ## Semantic Quality Gate
 
