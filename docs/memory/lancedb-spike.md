@@ -17,7 +17,7 @@ The current production-candidate semantic quality layer uses local FastEmbed/ONN
 - Pooling: `embedding_pooling=mean`.
 - Pooling baseline: `embedding_pooling_baseline=mean-pooling`.
 - Warning policy: `embedding_warning_policy=production-custom-alias-no-suppression`.
-- Baseline gate: `embedding_baseline_eval_gate=lancedb-eval-9-of-9`.
+- Baseline gate: `embedding_baseline_eval_gate=lancedb-eval-11-of-11`.
 - Runtime: Python embedded through `uv`.
 - Cloud: disabled.
 
@@ -47,7 +47,7 @@ The local cache/venv policy is deliberately plain: `uv` may be discovered from `
 
 The accepted low-risk baseline is FastEmbed `0.8.0` with logical model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` and explicit mean-pooling behavior. FastEmbed `TextEmbedding` emits a warning when the upstream model name is used directly because the package moved it from older CLS behavior to mean pooling. The production sidecar avoids warning suppression by registering a local FastEmbed custom-model alias, `tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean`, with `PoolingType.MEAN`. Reports keep the logical `embedding_model`, the actual `embedding_runtime_model`, `embedding_pooling=mean`, and `embedding_warning_policy=production-custom-alias-no-suppression`.
 
-This baseline is current only while LanceDB `eval` passes `9/9`. Changing the package pin, model, pooling behavior, dimensions, or provider requires rerun cleanup/rebuild/eval, updating the generated JSON/Markdown eval reports, and updating this document before relying on the new semantic results.
+This baseline is current only while LanceDB `eval` passes `11/11`. Changing the package pin, model, pooling behavior, dimensions, or provider requires rerun cleanup/rebuild/eval, updating the generated JSON/Markdown eval reports, and updating this document before relying on the new semantic results.
 
 ## Guardrails
 
@@ -93,7 +93,7 @@ Update 2026-06-29:
 - FastEmbed/ONNX candidate rebuild with `fastembed==0.8.0` and model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` indexes the current/proposed SQLite record set; the ignored generated report records the exact per-run count.
 - The dependency-stability baseline pins `lancedb==0.34.0`, `pyarrow==24.0.0`, and `fastembed==0.8.0`; the LanceDB gate path runs `uv --offline` so missing local cache is reported as a preflight problem instead of downloading during a gate.
 - Indexed rows record `embedding_provider=fastembed`, `embedding_model=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, `embedding_runtime_model=tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean`, `embedding_pooling=mean`, `embedding_dimensions=384`, and `embedding_package_version=0.8.0`.
-- Reports record `embedding_package_pin=fastembed==0.8.0`, `embedding_pooling_baseline=mean-pooling`, `embedding_warning_policy=production-custom-alias-no-suppression`, `embedding_baseline_status=accepted-if-eval-passes`, and `embedding_baseline_eval_gate=lancedb-eval-9-of-9`.
+- Reports record `embedding_package_pin=fastembed==0.8.0`, `embedding_pooling_baseline=mean-pooling`, `embedding_warning_policy=production-custom-alias-no-suppression`, `embedding_baseline_status=accepted-if-eval-passes`, and `embedding_baseline_eval_gate=lancedb-eval-11-of-11`.
 - `search "actual OFI formula"` returned `formula_version.tc-dn-hofi3.current` first.
 - `explain "actual OFI formula"` returned `KNNVectorDistance`, `LanceRead`, and `TopK`; the ignored generated report records the exact per-run scan count.
 - The first FastEmbed `eval` passed `4/4`: current OFI formula, funding-source ADR, exchange adapter impact, and superseded-rule exclusion. This was a smoke baseline, not enough evidence for durable trust.
@@ -107,6 +107,13 @@ Expanded quality gate update 2026-06-29:
 - `eval` writes `docs/memory/generated/lancedb-sidecar-report.json` and `docs/memory/generated/lancedb-eval-report.md`; both are ignored generated evidence, not source-of-truth memory.
 - `probe`, `search`, `explain`, `cleanup`, and `rebuild` write separate command-specific JSON reports so diagnostics cannot silently replace the latest eval evidence.
 
+Retrieval quality update 2026-07-04:
+
+- `eval` passed `11/11`: the previous 9 source-backed cases plus strict no-answer cases for historical-only and unrelated/low-confidence queries.
+- Historical-only and low-confidence queries must return no results with gap notes rather than a random current fact.
+- `search` and `explain` reports include `freshness_check`, `minimum_retrieval_confidence`, raw candidate count, returned count, and top-level `gap_notes`.
+- Returned rows include source-backed freshness status and per-row gap notes. Rows with stale/incomplete source metadata or retrieval confidence below the threshold are rejected from the unified output.
+
 ## Semantic Quality Gate
 
 Required `eval` cases:
@@ -119,7 +126,9 @@ Required `eval` cases:
 - `live_replay_same_pipeline`: return `rule.live-replay-same-pipeline` within the accepted rank window.
 - `funding_slow_context`: return `adr.0004-funding-source-context` within the accepted rank window.
 - `exchange_adapter_impact`: return a `relation` sourced from `CryptoIndicatorApp.Infrastructure/Binance/`.
-- `exclude_superseded_rule`: do not return `superseded` or `failed` facts for current retrieval.
+- `exclude_superseded_rule`: return no answer for historical-only retrieval instead of a random current result.
+- `unknown_order_execution_approval`: return no answer when there is no approved source-backed project fact.
+- `low_confidence_unrelated_query`: return no answer with low-confidence gap notes when the query is unrelated to current project memory.
 
 Required eval report fields:
 
@@ -134,6 +143,6 @@ Required eval report fields:
 ## Limitations
 
 - FastEmbed model files may need a first-run local download into the Python/model cache. This is still local embedded execution, but it is not zero-install.
-- FastEmbed `0.8.0` warns when the upstream model name is used directly because this model now uses mean pooling instead of older CLS behavior. The production sidecar uses an explicit custom runtime alias with `PoolingType.MEAN` instead of suppressing the warning. The behavior is accepted only as the documented `mean-pooling` baseline while eval remains `9/9`, and changing it later requires a fresh eval baseline.
+- FastEmbed `0.8.0` warns when the upstream model name is used directly because this model now uses mean pooling instead of older CLS behavior. The production sidecar uses an explicit custom runtime alias with `PoolingType.MEAN` instead of suppressing the warning. The behavior is accepted only as the documented `mean-pooling` baseline while eval remains `11/11`, and changing it later requires a fresh eval baseline.
 - Raw vector distance alone ranked generic chunks above the current formula record during the first smoke. The sidecar keeps a small local reranker that prefers typed records such as `formula_version` and ADRs over generic chunks when exact-token overlap is present.
 - This does not replace SQLite FTS5 retrieval tests. It adds a semantic quality gate below SQLite status/source metadata.

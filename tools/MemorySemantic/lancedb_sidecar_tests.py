@@ -7,6 +7,7 @@ import lancedb_sidecar
 from lancedb_sidecar import (
     DEFAULT_EMBEDDING_MODEL,
     EVAL_CASES,
+    build_retrieval_output,
     evaluate_cases,
     ensure_generated_store_path,
     make_embedding_provider,
@@ -46,7 +47,7 @@ def test_fastembed_baseline_metadata_is_explicit_and_eval_gated():
     assert baseline["embedding_pooling"] == "mean"
     assert baseline["embedding_pooling_baseline"] == "mean-pooling"
     assert baseline["embedding_baseline_status"] == "accepted-if-eval-passes"
-    assert baseline["embedding_baseline_eval_gate"] == "lancedb-eval-9-of-9"
+    assert baseline["embedding_baseline_eval_gate"] == "lancedb-eval-11-of-11"
     assert baseline["embedding_warning_policy"] == "production-custom-alias-no-suppression"
     assert "rerun cleanup/rebuild/eval" in baseline["embedding_baseline_change_policy"]
 
@@ -220,6 +221,8 @@ def test_eval_cases_gate_expected_rank_and_sources():
         "funding_slow_context",
         "exchange_adapter_impact",
         "exclude_superseded_rule",
+        "unknown_order_execution_approval",
+        "low_confidence_unrelated_query",
     }
     assert {case["id"] for case in EVAL_CASES} == expected_case_ids
 
@@ -289,12 +292,14 @@ def test_eval_cases_gate_expected_rank_and_sources():
             }
         ],
         "exclude_superseded_rule": [],
+        "unknown_order_execution_approval": [],
+        "low_confidence_unrelated_query": [],
     }
 
     report = evaluate_cases(lambda case: results_by_case[case["id"]])
 
     assert report["passed"] is True
-    assert report["passed_count"] == 9
+    assert report["passed_count"] == 11
     assert report["failed_count"] == 0
 
 
@@ -352,7 +357,7 @@ def test_eval_markdown_report_contains_compact_operator_table():
         "embedding_package_pin": "fastembed==0.8.0",
         "embedding_pooling": "mean",
         "embedding_pooling_baseline": "mean-pooling",
-        "embedding_baseline_eval_gate": "lancedb-eval-9-of-9",
+        "embedding_baseline_eval_gate": "lancedb-eval-11-of-11",
         "cases": [
             {
                 "id": "current_ofi_formula",
@@ -382,7 +387,7 @@ def test_eval_markdown_report_contains_compact_operator_table():
     assert "tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean" in markdown
     assert "mean" in markdown
     assert "mean-pooling" in markdown
-    assert "lancedb-eval-9-of-9" in markdown
+    assert "lancedb-eval-11-of-11" in markdown
 
 
 def test_eval_cases_fail_when_superseded_rule_is_returned():
@@ -406,7 +411,7 @@ def test_eval_cases_fail_when_superseded_rule_is_returned():
     assert "exclude_superseded_rule" in failed_ids
 
 
-def test_eval_cases_allow_current_results_for_superseded_exclusion_case():
+def test_eval_cases_require_empty_result_for_superseded_exclusion_case():
     def search_case(case):
         if case["id"] == "exclude_superseded_rule":
             return [
@@ -423,7 +428,80 @@ def test_eval_cases_allow_current_results_for_superseded_exclusion_case():
     report = evaluate_cases(search_case)
     exclusion_case = next(case for case in report["cases"] if case["id"] == "exclude_superseded_rule")
 
-    assert exclusion_case["passed"] is True
+    assert exclusion_case["passed"] is False
+    assert "expected no answer" in exclusion_case["gap_notes"][0]
+
+
+def test_eval_cases_include_no_answer_gap_notes_for_expected_empty_case():
+    report = evaluate_cases(lambda case: [])
+    no_answer_case = next(case for case in report["cases"] if case["id"] == "unknown_order_execution_approval")
+
+    assert no_answer_case["passed"] is True
+    assert no_answer_case["matched_rank"] is None
+    assert no_answer_case["gap_notes"]
+    assert "no-answer expected" in no_answer_case["gap_notes"][0]
+
+
+def test_retrieval_output_filters_low_confidence_results_and_reports_freshness_gap_notes():
+    query = "quantum liquidity teleportation formula calendar"
+    rows = [
+        {
+            "id": "formula_version.tc-dn-hofi3.current",
+            "type": "formula_version",
+            "status": "current",
+            "title": "Current TC-DN-HOFI3 OFI formula",
+            "body": "The actual OFI formula is canonical and current.",
+            "source_path": "docs/formulas.md",
+            "source_hash": "abc",
+            "commit_sha": "commit",
+            "tree_sha": "tree",
+            "source_blob_sha": "blob",
+            "indexed_at": "2026-07-04T00:00:00Z",
+            "confidence": 0.95,
+            "_distance": 0.75,
+        }
+    ]
+    reranked = rerank_rows(rows, query, limit=5)
+
+    output = build_retrieval_output(query, reranked, raw_candidate_count=len(rows))
+
+    assert output["results"] == []
+    assert output["freshness_check"]["status"] == "passed"
+    assert output["freshness_check"]["raw_candidate_count"] == 1
+    assert output["freshness_check"]["returned_count"] == 0
+    assert output["gap_notes"]
+    assert "low-confidence" in output["gap_notes"][0]
+
+
+def test_retrieval_output_keeps_source_backed_results_with_freshness_notes():
+    query = "find current actual OFI formula TC-DN-HOFI3"
+    rows = [
+        {
+            "id": "formula_version.tc-dn-hofi3.current",
+            "type": "formula_version",
+            "status": "current",
+            "title": "Current TC-DN-HOFI3 OFI formula",
+            "body": "The actual OFI formula is canonical and current.",
+            "source_path": "docs/formulas.md",
+            "source_hash": "abc",
+            "commit_sha": "commit",
+            "tree_sha": "tree",
+            "source_blob_sha": "blob",
+            "indexed_at": "2026-07-04T00:00:00Z",
+            "confidence": 0.95,
+            "_distance": 0.75,
+        }
+    ]
+    reranked = rerank_rows(rows, query, limit=5)
+
+    output = build_retrieval_output(query, reranked, raw_candidate_count=len(rows))
+
+    assert output["gap_notes"] == []
+    assert output["freshness_check"]["status"] == "passed"
+    assert output["results"][0]["id"] == "formula_version.tc-dn-hofi3.current"
+    assert output["results"][0]["retrieval_confidence"] >= 0.40
+    assert output["results"][0]["freshness_status"] == "fresh"
+    assert output["results"][0]["gap_notes"] == []
 
 
 def test_store_path_guard_allows_only_generated_child_paths():
@@ -458,6 +536,9 @@ if __name__ == "__main__":
     test_eval_report_cases_include_operator_quality_fields()
     test_eval_markdown_report_contains_compact_operator_table()
     test_eval_cases_fail_when_superseded_rule_is_returned()
-    test_eval_cases_allow_current_results_for_superseded_exclusion_case()
+    test_eval_cases_require_empty_result_for_superseded_exclusion_case()
+    test_eval_cases_include_no_answer_gap_notes_for_expected_empty_case()
+    test_retrieval_output_filters_low_confidence_results_and_reports_freshness_gap_notes()
+    test_retrieval_output_keeps_source_backed_results_with_freshness_notes()
     test_store_path_guard_allows_only_generated_child_paths()
     print("ok")

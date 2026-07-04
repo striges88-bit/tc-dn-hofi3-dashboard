@@ -78,7 +78,7 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Equal("mean", root.GetProperty("embedding_pooling").GetString());
         Assert.Equal("mean-pooling", root.GetProperty("embedding_pooling_baseline").GetString());
         Assert.Equal("accepted-if-eval-passes", root.GetProperty("embedding_baseline_status").GetString());
-        Assert.Equal("lancedb-eval-9-of-9", root.GetProperty("embedding_baseline_eval_gate").GetString());
+        Assert.Equal("lancedb-eval-11-of-11", root.GetProperty("embedding_baseline_eval_gate").GetString());
         Assert.Equal("production-custom-alias-no-suppression", root.GetProperty("embedding_warning_policy").GetString());
         Assert.True(root.GetProperty("hidden_network_downloads_blocked").GetBoolean());
         Assert.True(root.GetProperty("uv_offline_required_for_gate").GetBoolean());
@@ -188,9 +188,9 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("embedding_pooling_baseline", spike, StringComparison.Ordinal);
         Assert.Contains("mean-pooling", spike, StringComparison.Ordinal);
         Assert.Contains("production-custom-alias-no-suppression", spike, StringComparison.Ordinal);
-        Assert.Contains("lancedb-eval-9-of-9", spike, StringComparison.Ordinal);
+        Assert.Contains("lancedb-eval-11-of-11", spike, StringComparison.Ordinal);
         Assert.Contains("eval", spike, StringComparison.Ordinal);
-        Assert.Contains("eval` passed `9/9`", spike, StringComparison.Ordinal);
+        Assert.Contains("eval` passed `11/11`", spike, StringComparison.Ordinal);
         Assert.Contains("lancedb-eval-report.md", spike, StringComparison.Ordinal);
         Assert.Contains("lancedb-probe-report.json", spike, StringComparison.Ordinal);
         Assert.Contains("command-specific reports", spike, StringComparison.OrdinalIgnoreCase);
@@ -202,6 +202,9 @@ public sealed class LanceDbSidecarSpikeTests
         Assert.Contains("expected ids", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("source_path", spike, StringComparison.Ordinal);
         Assert.Contains("gap notes", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("no-answer", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("low-confidence", spike, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("freshness_check", spike, StringComparison.Ordinal);
         Assert.Contains("formula_owner", spike, StringComparison.Ordinal);
         Assert.Contains("binance_dto_boundary", spike, StringComparison.Ordinal);
         Assert.Contains("rest_hot_path_ban", spike, StringComparison.Ordinal);

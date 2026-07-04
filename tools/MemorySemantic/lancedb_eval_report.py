@@ -24,7 +24,7 @@ EVAL_CASES: list[dict[str, Any]] = [
     },
     {
         "id": "binance_dto_boundary",
-        "query": "where is Binance DTO ownership boundary indicator engine",
+        "query": "Binance client DTOs third-party API models Infrastructure Domain Application indicator engine boundary",
         "expected_ids": ["rule.binance-dto-boundary"],
         "max_rank": 3,
     },
@@ -57,7 +57,17 @@ EVAL_CASES: list[dict[str, Any]] = [
         "id": "exclude_superseded_rule",
         "query": "legacy superseded-only phrase",
         "forbidden_statuses": ["superseded", "failed"],
-        "allow_empty": True,
+        "expected_empty": True,
+    },
+    {
+        "id": "unknown_order_execution_approval",
+        "query": "approved automatic order placement execution rollout date",
+        "expected_empty": True,
+    },
+    {
+        "id": "low_confidence_unrelated_query",
+        "query": "quantum liquidity teleportation formula calendar",
+        "expected_empty": True,
     },
 ]
 
@@ -93,6 +103,7 @@ def build_eval_case_report(case: dict[str, Any], results: list[dict[str, Any]]) 
         "forbidden_statuses": list(case.get("forbidden_statuses", [])),
         "max_rank": case.get("max_rank"),
         "allow_empty": bool(case.get("allow_empty", False)),
+        "expected_empty": bool(case.get("expected_empty", False)),
         "matched_rank": matched.get("rank") if matched else None,
         "matched_id": matched.get("id") if matched else None,
         "matched_type": matched.get("type") if matched else None,
@@ -118,11 +129,14 @@ def evaluate_case(case: dict[str, Any], results: list[dict[str, Any]]) -> tuple[
         if row.get("status") in forbidden_statuses:
             return False, f"forbidden status returned: {row.get('status')}", row
 
+    if case.get("expected_empty"):
+        if not results:
+            return True, "no-answer expected: no current source-backed result returned", None
+        return False, f"expected no answer but got {results[0].get('id')}", results[0]
+
     expected_ids = set(case.get("expected_ids", []))
     expected_types = set(case.get("expected_types", []))
     expected_source_contains = case.get("expected_source_contains", [])
-    if case.get("allow_empty") and not expected_ids and not expected_types:
-        return True, "no forbidden statuses returned", None
 
     if case.get("allow_empty") and not results:
         return True, "empty result allowed", None
@@ -141,6 +155,8 @@ def evaluate_case(case: dict[str, Any], results: list[dict[str, Any]]) -> tuple[
 
 def build_gap_notes(case: dict[str, Any], results: list[dict[str, Any]], passed: bool, reason: str) -> list[str]:
     if passed:
+        if case.get("expected_empty"):
+            return [reason]
         return []
 
     notes = [reason]
@@ -162,6 +178,9 @@ def build_gap_notes(case: dict[str, Any], results: list[dict[str, Any]], passed:
     forbidden_statuses = case.get("forbidden_statuses", [])
     if forbidden_statuses:
         notes.append(f"forbidden_statuses={','.join(forbidden_statuses)}")
+
+    if case.get("expected_empty"):
+        notes.append("expected_empty=true")
 
     max_rank = case.get("max_rank")
     if max_rank is not None:
@@ -255,6 +274,8 @@ def format_expected(case: dict[str, Any]) -> str:
         parts.append("forbid_status=" + ",".join(forbidden_statuses))
     if case.get("allow_empty"):
         parts.append("allow_empty=true")
+    if case.get("expected_empty"):
+        parts.append("expected_empty=true")
 
     return "; ".join(parts) or "-"
 

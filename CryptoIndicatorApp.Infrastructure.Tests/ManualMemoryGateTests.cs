@@ -396,7 +396,7 @@ public sealed class ManualMemoryGateTests
         Assert.Contains("memory-rebuild-from-head.ps1", runbook, StringComparison.Ordinal);
         Assert.Contains("/compact", runbook, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("needs_refresh=false", runbook, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("9/9", runbook, StringComparison.Ordinal);
+        Assert.Contains("11/11", runbook, StringComparison.Ordinal);
         Assert.Contains("auto-retain", runbook, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("post-commit rebuild", runbook, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("raw JSONL", runbook, StringComparison.OrdinalIgnoreCase);

@@ -10,7 +10,7 @@ Run this first when you want a cheap status check:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-daily-check.ps1 -PlanOnly
 ```
 
-Good result: the report is written, `needs_refresh=false` when memory is already current, and LanceDB eval is still the latest `9/9` evidence if present.
+Good result: the report is written, `needs_refresh=false` when memory is already current, and LanceDB eval is still the latest `11/11` evidence if present.
 
 If the Memory CLI is unavailable because restore/build prerequisites or NuGet locks are broken, the report should say `CLI unavailable` and `needs_refresh unknown`. Treat that as an environment/tooling issue to fix, not as proof that memory is stale.
 
@@ -23,7 +23,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-a
 .\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- status --project-root . --json
 ```
 
-Good result: `needs_refresh=false`, `working_tree_dirty=false` unless you intentionally started the next source edit, SQLite stale-check has no issues, and LanceDB eval is `9/9`.
+Good result: `needs_refresh=false`, `working_tree_dirty=false` unless you intentionally started the next source edit, SQLite stale-check has no issues, and LanceDB eval is `11/11`.
 
 ## Semantic Dependency Doctor
 
