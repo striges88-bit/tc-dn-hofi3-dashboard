@@ -1447,7 +1447,7 @@ Review / Results:
 - [x] Implement a minimal syntax-only C# extractor for namespaces, types, members, test methods, TODO markers, and experiment/regression markers.
 - [x] Store typed records in SQLite/search while preserving commit metadata and denylist rules.
 - [x] Update docs/lessons for the code-depth memory behavior.
-- [ ] Run narrow Memory CLI tests, related guardrails, build, `git diff --check`, commit, then `memory-refresh-all`, `memory status`, and `memory-pre-push-check`.
+- [x] Run narrow Memory CLI tests, related guardrails, build, `git diff --check`, commit, then `memory-refresh-all`, `memory status`, and `memory-pre-push-check`.
 
 Review / Results:
 
@@ -1463,3 +1463,39 @@ Review / Results:
 - Added regressions for overloaded methods and nested helper types after real `refresh-from-commit` exposed duplicate ids in `ChartGeometryBuilder.BuildPoints`, `BinanceConnectionOptions.ApplyTo`, and `TemporaryProjectFixture`.
 - Method symbols now use a parameter-type signature suffix, and nested types are scoped by containing type body spans. Direct SQLite `refresh-from-commit --commit HEAD` passed after those fixes.
 - Narrow code-depth regressions passed outside sandbox, including string-literal exclusion, overloads, and nested type scoping. Full Memory CLI tests passed `13/13` outside sandbox after the sanitizer/signature/nesting fixes.
+- PR #17 was merged to `main`; local `main` was refreshed to `0cde1db`, `memory-refresh-all` completed, `memory status` reported `needs_refresh=false`, and `memory-pre-push-check` passed with LanceDB eval `11/11`.
+
+## Curated Retain Completion Slice Todo
+
+- [x] Start branch `codex/curated-retain-completion` from clean `main`.
+- [x] Regenerate curated retain dry-run on current `HEAD` and classify current findings.
+- [x] Add a local-only redacted retain subset path that imports reviewed redacted text, not raw source text.
+- [x] Prove real lifecycle: import, retain-search, export redacted text, delete, and absent retain-search.
+- [x] Keep external retain, Codex auto-retain, Cloud, hooks, rebuilds, raw JSONL, generated exports, secrets, and build artifacts disabled.
+- [x] Update docs/lessons for the operator flow and remaining blockers.
+- [x] Run narrow retain tests, related guardrails, build, `git diff --check`, commit, then `memory-refresh-all`, `memory status`, and `memory-pre-push-check`.
+
+Review / Results:
+
+- Scope guard: this slice is local SQLite retain only. It must not enable Codex auto-retain, external retain, Cloud retain, post-commit rebuild, or any provider import.
+- Current dry-run on `HEAD 0cde1db` generated `25` allowlisted files and `168` findings: `0` critical, `96` review, `72` info; by type: `65` generated export references, `50` secret references, `29` raw JSONL/dump references, `20` local proxy details, `3` env references, and `1` absolute local path. The previously expected `138` findings is stale.
+- Clean candidates already include `TC-DN-HOFI3.md`, `docs/formulas.md`, `docs/decisions/0003-sqlite-fts5-canonical-memory.md`, `docs/decisions/0004-funding-source-context.md`, `docs/memory/entities.md`, `docs/memory/glossary.md`, `docs/memory/project-map.md`, and `docs/memory/rules.md`.
+- RED confirmed for `RetainImportUsesReviewedRedactedTextAndLifecycleDeletesIt`: importer exits `2` because `redaction_status=redacted` is still blocked.
+- RED confirmed for `RedactedSubsetScriptBuildsReviewedLocalReportOnly`: missing `scripts/curated-retain-redacted-subset.ps1`.
+- Partial GREEN implemented before compact: added the new RED tests, changed `CuratedRetainImporter` to accept `redaction_status=redacted` with `redacted_text`, and added `scripts/curated-retain-redacted-subset.ps1` as a report-only redaction subset generator.
+- GREEN confirmed after compact: fixed `CuratedRetainImporter` so retained items preserve `redaction_status=redacted` instead of hard-coding `candidate`; `RetainImportUsesReviewedRedactedTextAndLifecycleDeletesIt` passed `1/1` outside sandbox.
+- GREEN confirmed for the subset script guardrail: `RedactedSubsetScriptBuildsReviewedLocalReportOnly` passed `1/1` outside sandbox.
+- Real lifecycle proof passed on `docs/memory/retain-policy.md`: generated redacted subset (`ready_for_import`, `redaction_status=redacted`, `original_finding_count=19`), imported 1 local SQLite retained item from `HEAD`, found it with `retain-search` query `controlled local import into SQLite`, exported redacted text with `[REDACTED:*]` markers and no `OPENAI_API_KEY`/`sk-*`, deleted 1 retained item, and confirmed the same retain-search query returned `[]`.
+- Docs updated to describe `curated-retain-redacted-subset.ps1` and the controlled local SQLite lifecycle while keeping external retain, Codex auto-retain, Cloud, hooks, rebuilds, and provider import disabled.
+- Related verification after docs: retain lifecycle tests passed `4/4`; curated retain policy/dry-run guardrails passed `12/12`.
+- Review found and fixed a stale-source risk in `curated-retain-redacted-subset.ps1`: redacted subset generation now rejects sources changed since the dry-run report with `stale_source_metadata`. Regression `RedactedSubsetScriptRejectsSourcesChangedAfterDryRun` passed `1/1`.
+- Final pre-commit verification passed: curated retain policy/dry-run guardrails `13/13`, full `tools/Memory.Tests` `15/15`, solution build `0` warnings/errors, and `git diff --check` clean.
+- Source commit created for the slice, then `memory-refresh-all` completed, `memory status` reported `indexed_commit=HEAD` and `needs_refresh=false`, and `memory-pre-push-check` passed with LanceDB eval `11/11`.
+- Post-commit lifecycle proof on the final implementation passed for `docs/memory/retain-policy.md`: current dry-run generated `25` files and `170` findings; redacted subset was `ready_for_import`; local SQLite import from `HEAD` imported 1 `redacted` item; retain-search found it; export included `[REDACTED:*]` markers and no `OPENAI_API_KEY`/`sk-*`; delete removed 1 retained item; repeated retain-search returned `[]`.
+- Pre-compact memory status was checked outside sandbox: `head=0cde1db70d3cd4806842fcc85f681afef9b9bb01`, `indexed_commit=0cde1db70d3cd4806842fcc85f681afef9b9bb01`, `needs_refresh=false`, `marker_exists=false`, `working_tree_dirty=true`.
+- Current uncommitted files: `CryptoIndicatorApp.Infrastructure.Tests/CuratedRetainPolicyTests.cs`, `tools/Memory.Tests/MemoryCliTests.cs`, `tools/Memory/CuratedRetainImporter.cs`, `scripts/curated-retain-redacted-subset.ps1`, and `tasks/todo.md`.
+- Do not run `memory-refresh-all` yet; this slice is uncommitted and memory refresh indexes committed `HEAD`.
+- Next exact step after compact: run the two narrow GREEN tests outside sandbox:
+  `.\.dotnet\dotnet.exe test tools\Memory.Tests\CryptoIndicatorApp.Memory.Tests.csproj --no-restore --filter RetainImportUsesReviewedRedactedTextAndLifecycleDeletesIt`
+  and
+  `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter RedactedSubsetScriptBuildsReviewedLocalReportOnly`.
