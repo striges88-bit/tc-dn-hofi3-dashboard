@@ -75,6 +75,8 @@ public sealed class MemoryRefreshAllTests
         Assert.False(root.GetProperty("touches_hindsight_store").GetBoolean());
         Assert.False(root.GetProperty("touches_secret_storage").GetBoolean());
         Assert.False(root.GetProperty("touches_build_artifacts").GetBoolean());
+        Assert.True(root.GetProperty("memory_cli_checks_serialized").GetBoolean());
+        Assert.Equal("docs/memory/generated/memory-cli.lock", root.GetProperty("memory_cli_lock_path").GetString());
 
         var steps = root.GetProperty("steps").EnumerateArray().ToArray();
         Assert.Equal(
@@ -107,6 +109,16 @@ public sealed class MemoryRefreshAllTests
         var sqliteRefreshCommand = steps.Single(step => step.GetProperty("name").GetString() == "sqlite-refresh")
             .GetProperty("command")
             .GetString()!;
+        var sqliteStaleCheck = steps.Single(step => step.GetProperty("name").GetString() == "sqlite-stale-check");
+        var sqliteStaleCheckCommand = sqliteStaleCheck
+            .GetProperty("command")
+            .GetString()!;
+        var sqliteRefreshStep = steps.Single(step => step.GetProperty("name").GetString() == "sqlite-refresh");
+
+        Assert.True(sqliteRefreshStep.GetProperty("uses_memory_cli_lock").GetBoolean());
+        Assert.True(sqliteStaleCheck.GetProperty("uses_memory_cli_lock").GetBoolean());
+        Assert.Contains("run --no-restore --project", sqliteRefreshCommand, StringComparison.Ordinal);
+        Assert.Contains("run --no-restore --project", sqliteStaleCheckCommand, StringComparison.Ordinal);
         Assert.Contains("refresh-from-commit", sqliteRefreshCommand, StringComparison.Ordinal);
         Assert.Contains("--commit HEAD", sqliteRefreshCommand, StringComparison.Ordinal);
     }
