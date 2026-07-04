@@ -15,7 +15,7 @@
 - Hindsight embedded `bank list` forwards to the separate Rust `hindsight` CLI; local auto-install failed with `[WinError 2]`, so MCP bank behavior and file import remain unverified.
 - Hindsight upstream docs mention both `9077` and `8888` for local daemon examples; runtime project endpoint is confirmed as `http://127.0.0.1:9077`.
 - GBrain upstream CLI and Codex MCP path are confirmed in `docs/memory/gbrain-spike.md`, but it is now a historical/secondary candidate; local Windows install, `gbrain init --pglite`, runtime MCP tools, and export/backup format remain unverified.
-- Should Graphify still be spiked, or should SQLite `symbols`/`relations` cover the MVP code graph need first?
+- SQLite `symbols`/`relations` now cover the MVP code graph need first. Graphify remains deferred unless the lightweight C# extraction cannot answer a concrete navigation/retrieval case.
 - Should any generated memory export ever be committed, or should all generated indexes remain local and reproducible?
 - What recall threshold is acceptable beyond the current source-backed semantic quality gate?
 - Which human review cadence is enough for experiment summaries so failed live/replay observations do not become formula decisions?

@@ -9,6 +9,8 @@ public sealed record ProjectMemorySnapshot(
     IReadOnlyList<SymbolRecord> Symbols,
     IReadOnlyList<EventRecord> Events,
     IReadOnlyList<RelationRecord> Relations,
+    IReadOnlyList<ExperimentRecord> Experiments,
+    IReadOnlyList<TodoRecord> Todos,
     MemorySnapshotMetadata Metadata);
 
 public sealed record MemorySnapshotMetadata(
@@ -67,7 +69,13 @@ public sealed record FormulaVersionRecord(
     string SourcePath,
     string SourceHash);
 
-public sealed record SymbolRecord(string Symbol, string SourcePath, string SourceHash);
+public sealed record SymbolRecord(
+    string Symbol,
+    string Kind,
+    string DisplayName,
+    string? ParentSymbol,
+    string SourcePath,
+    string SourceHash);
 
 public sealed record EventRecord(
     string Id,
@@ -82,6 +90,21 @@ public sealed record RelationRecord(
     string FromId,
     string Relation,
     string ToId,
+    string Text,
+    string SourcePath,
+    string SourceHash);
+
+public sealed record ExperimentRecord(
+    string Id,
+    string Status,
+    string Outcome,
+    string Text,
+    string SourcePath,
+    string SourceHash);
+
+public sealed record TodoRecord(
+    string Id,
+    string Status,
     string Text,
     string SourcePath,
     string SourceHash);

@@ -1437,3 +1437,29 @@ Review / Results:
 - LanceDB `search`/`explain` output now includes `freshness_check`, raw/candidate/returned counts, `minimum_retrieval_confidence`, top-level `gap_notes`, and per-result freshness/gap fields.
 - Real LanceDB eval initially failed after the stricter filter because the candidate pool was too small for the typed DTO boundary rule and the threshold was too low for a random ADR no-answer case; the final path uses a larger candidate pool, `minimum_retrieval_confidence=0.40`, and a source-backed DTO eval query.
 - Verification passed: Python sidecar tests `ok`; real LanceDB `eval` `11/11`; related Infrastructure guardrails `29/29`; `tools/Memory.Tests` `9/9`; solution build `0` warnings/errors; `git diff --check` passed; post-commit `memory-refresh-all`, `memory status` (`needs_refresh=false`), and `memory-pre-push-check` passed on the committed slice.
+
+## Memory Code Depth Slice Todo
+
+- [x] Start branch `codex/memory-code-depth` from clean `main`.
+- [x] Add RED Memory CLI tests for C# Roslyn-light symbol extraction into `symbols` and searchable `symbol` documents.
+- [x] Add RED tests proving code-level relations/events/todos/experiments are populated from source files, not only generic chunks.
+- [x] Add RED stale-check tests for real missing symbol/test references based on extracted code symbols.
+- [x] Implement a minimal syntax-only C# extractor for namespaces, types, members, test methods, TODO markers, and experiment/regression markers.
+- [x] Store typed records in SQLite/search while preserving commit metadata and denylist rules.
+- [x] Update docs/lessons for the code-depth memory behavior.
+- [ ] Run narrow Memory CLI tests, related guardrails, build, `git diff --check`, commit, then `memory-refresh-all`, `memory status`, and `memory-pre-push-check`.
+
+Review / Results:
+
+- Scope guard: this slice uses a lightweight C# source parser and repository text markers only. It does not add MSBuild workspace loading, runtime WPF dependencies, Cloud, hooks, auto-retain, or post-commit rebuild.
+- Compact handoff: stopped mid-slice before fixing the remaining retrieval assertion. Branch `codex/memory-code-depth`; no commit yet; do not run `memory-refresh-all` until after a verified source commit.
+- RED evidence: the two new Memory CLI tests first failed because C# symbols ranked as chunks and C# `requires_symbol` references were not checked by stale-check.
+- Partial GREEN implemented: added `tools/Memory/CSharpMemoryExtractor.cs`; expanded `ProjectMemoryIndexer`, `MemoryModels`, `MemorySchema`, and `MemoryStore` to emit C# symbols, owns relations, test events, TODOs, and experiment records with existing source metadata; hardened the Memory CLI test harness to kill child process trees on timeout and retry temp SQLite cleanup.
+- Root cause of the remaining event failure: `MethodRegex` can start the match at the `[Fact]` attribute line, while `HasFactAttributeNearby` only inspected text before the match position; the attribute was excluded from the check window.
+- Review catch: the first declaration-window fix was too loose and falsely turned a helper method before `[Fact]` into a `test_method` event. Added a regression assertion and replaced the window scan with a `HasTestAttribute` flag derived from the method declaration match itself.
+- Narrow GREEN confirmed after the cleaner attribute-match fix: `.\.dotnet\dotnet.exe test tools\Memory.Tests\CryptoIndicatorApp.Memory.Tests.csproj --no-restore --filter "RefreshExtractsCSharpSymbolsRelationsEventsTodosAndExperiments|StaleCheckUsesCSharpSymbolsForCodeTestReferences"` passed `2/2` outside sandbox. The sandbox run still cannot create `%TEMP%` fixture directories.
+- First post-commit `scripts\memory-refresh-all.ps1` failed in SQLite refresh with `UNIQUE constraint failed: search_documents.id`; root cause was C# source embedded inside test raw string literals being parsed as real project symbols/events.
+- Added `RefreshIgnoresCSharpSyntaxAndMemoryMarkersInsideStringLiterals` and split literal blanking into `CSharpLiteralSanitizer`; C# strings/chars are blanked before typed extraction, while comments remain visible for real memory markers.
+- Added regressions for overloaded methods and nested helper types after real `refresh-from-commit` exposed duplicate ids in `ChartGeometryBuilder.BuildPoints`, `BinanceConnectionOptions.ApplyTo`, and `TemporaryProjectFixture`.
+- Method symbols now use a parameter-type signature suffix, and nested types are scoped by containing type body spans. Direct SQLite `refresh-from-commit --commit HEAD` passed after those fixes.
+- Narrow code-depth regressions passed outside sandbox, including string-literal exclusion, overloads, and nested type scoping. Full Memory CLI tests passed `13/13` outside sandbox after the sanitizer/signature/nesting fixes.

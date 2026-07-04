@@ -131,6 +131,8 @@ Required tables:
 
 Typed records must preserve source grounding: `id`, `status`, `source_path`, `source_hash`, `commit_sha`, `tree_sha`, `source_blob_sha`, `indexed_at`, `created_at` or `updated_at`, `valid_from`, `valid_until`, and `confidence` where applicable. Canonical status lives in SQLite; LanceDB may copy status and commit/source metadata only for filtering, validation, and reranking.
 
+The code-memory MVP extracts lightweight C# facts directly from indexed `.cs` files without loading MSBuild or Roslyn workspaces. It records namespace/type/method symbols in `symbols`, `owns` relations in `relations`, xUnit test-method and `requires_symbol=` markers in `events`, `TODO` markers in `todos`, and `experiment_outcome=` markers in `experiments`. These records are searchable typed documents in `search_documents`; generic chunks remain fallback context, not the preferred answer when a typed symbol/event/relation exists. Stale-check must validate `requires_symbol=` events against the extracted `symbols` table.
+
 ## Retrieval Protocol
 
 Retrieval is always staged:

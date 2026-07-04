@@ -56,6 +56,8 @@ public sealed class ProjectMemoryIndexer
         var symbols = new List<SymbolRecord>();
         var events = new List<EventRecord>();
         var relations = new List<RelationRecord>();
+        var experiments = new List<ExperimentRecord>();
+        var todos = new List<TodoRecord>();
 
         foreach (var file in Directory.EnumerateFiles(_projectRoot, "*", SearchOption.AllDirectories)
                      .Select(path => new FileInfo(path))
@@ -71,7 +73,7 @@ public sealed class ProjectMemoryIndexer
                 AddChunks(documents, relativePath, hash, text);
             }
 
-            AddSpecializedRecords(relativePath, hash, text, documents, rules, adrs, formulas, symbols, events, relations);
+            AddSpecializedRecords(relativePath, hash, text, documents, rules, adrs, formulas, symbols, events, relations, experiments, todos);
         }
 
         return new ProjectMemorySnapshot(
@@ -83,6 +85,8 @@ public sealed class ProjectMemoryIndexer
             symbols,
             events,
             relations,
+            experiments,
+            todos,
             MemorySnapshotMetadata.ForWorkingTree(indexedAt));
     }
 
@@ -96,7 +100,9 @@ public sealed class ProjectMemoryIndexer
         List<FormulaVersionRecord> formulas,
         List<SymbolRecord> symbols,
         List<EventRecord> events,
-        List<RelationRecord> relations)
+        List<RelationRecord> relations,
+        List<ExperimentRecord> experiments,
+        List<TodoRecord> todos)
     {
         if (path.Equals("docs/formulas.md", StringComparison.OrdinalIgnoreCase))
         {
@@ -132,7 +138,7 @@ public sealed class ProjectMemoryIndexer
             foreach (var symbol in ParseSymbols(text, path, hash))
             {
                 symbols.Add(symbol);
-                documents.Add(ToSearchDocument($"symbol.{symbol.Symbol}", "symbol", "current", symbol.Symbol, symbol.Symbol, path, hash));
+                documents.Add(ToSearchDocument($"symbol.{Slug(symbol.Symbol)}", "symbol", "current", symbol.Symbol, SymbolSearchBody(symbol), path, hash));
             }
         }
 
@@ -143,6 +149,11 @@ public sealed class ProjectMemoryIndexer
                 events.Add(symbolEvent);
                 documents.Add(ToSearchDocument(symbolEvent.Id, "event", "current", symbolEvent.Text, symbolEvent.Text, path, hash));
             }
+        }
+
+        if (path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+        {
+            AddCSharpRecords(path, hash, text, documents, symbols, events, relations, experiments, todos);
         }
 
         if (path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
@@ -188,17 +199,99 @@ public sealed class ProjectMemoryIndexer
             var symbol = rawLine.Trim().TrimStart('-').Trim();
             if (Regex.IsMatch(symbol, "^[A-Z0-9]{3,20}$"))
             {
-                yield return new SymbolRecord(symbol, path, hash);
+                yield return new SymbolRecord(symbol, "external_symbol", symbol, null, path, hash);
             }
         }
     }
 
     private static IEnumerable<EventRecord> ParseTestSymbolReferences(string text, string path, string hash)
     {
-        foreach (Match match in Regex.Matches(text, "requires_symbol=([A-Z0-9]{3,20})", RegexOptions.IgnoreCase))
+        foreach (Match match in Regex.Matches(text, "requires_symbol=([A-Za-z_][A-Za-z0-9_.]*|[A-Z0-9]{3,20})", RegexOptions.IgnoreCase))
         {
-            var symbol = match.Groups[1].Value.ToUpperInvariant();
-            yield return new EventRecord($"event.test-symbol-reference.{symbol}", "test_symbol_reference", symbol, match.Value, path, hash);
+            var rawSymbol = match.Groups[1].Value;
+            var symbol = rawSymbol.Contains('.', StringComparison.Ordinal) ? rawSymbol : rawSymbol.ToUpperInvariant();
+            yield return new EventRecord($"event.test-symbol-reference.{Slug(symbol)}", "test_symbol_reference", symbol, match.Value, path, hash);
+        }
+    }
+
+    private static void AddCSharpRecords(
+        string path,
+        string hash,
+        string text,
+        List<SearchDocument> documents,
+        List<SymbolRecord> symbols,
+        List<EventRecord> events,
+        List<RelationRecord> relations,
+        List<ExperimentRecord> experiments,
+        List<TodoRecord> todos)
+    {
+        var extraction = CSharpMemoryExtractor.Extract(path, text);
+
+        foreach (var extractedSymbol in extraction.Symbols)
+        {
+            var symbol = new SymbolRecord(
+                extractedSymbol.FullName,
+                extractedSymbol.Kind,
+                extractedSymbol.DisplayName,
+                extractedSymbol.ParentSymbol,
+                path,
+                hash);
+            symbols.Add(symbol);
+            documents.Add(ToSearchDocument(
+                $"symbol.{Slug(symbol.Symbol)}",
+                "symbol",
+                "current",
+                $"{symbol.Kind} {symbol.Symbol}",
+                SymbolSearchBody(symbol),
+                path,
+                hash));
+        }
+
+        foreach (var extractedRelation in extraction.Relations)
+        {
+            var relation = new RelationRecord(
+                $"relation.{Slug(extractedRelation.FromId)}.{extractedRelation.Relation}.{Slug(extractedRelation.ToId)}",
+                extractedRelation.FromId,
+                extractedRelation.Relation,
+                extractedRelation.ToId,
+                extractedRelation.Text,
+                path,
+                hash);
+            relations.Add(relation);
+            documents.Add(ToSearchDocument(relation.Id, "relation", "current", relation.Text, relation.Text, path, hash));
+        }
+
+        foreach (var extractedEvent in extraction.Events)
+        {
+            var memoryEvent = new EventRecord(
+                extractedEvent.Id,
+                extractedEvent.EventType,
+                extractedEvent.Symbol,
+                extractedEvent.Text,
+                path,
+                hash);
+            events.Add(memoryEvent);
+            documents.Add(ToSearchDocument(memoryEvent.Id, "event", "current", memoryEvent.Text, memoryEvent.Text, path, hash));
+        }
+
+        foreach (var extractedTodo in extraction.Todos)
+        {
+            var todo = new TodoRecord(extractedTodo.Id, extractedTodo.Status, extractedTodo.Text, path, hash);
+            todos.Add(todo);
+            documents.Add(ToSearchDocument(todo.Id, "todo", "current", todo.Text, todo.Text, path, hash));
+        }
+
+        foreach (var extractedExperiment in extraction.Experiments)
+        {
+            var experiment = new ExperimentRecord(
+                extractedExperiment.Id,
+                extractedExperiment.Status,
+                extractedExperiment.Outcome,
+                extractedExperiment.Text,
+                path,
+                hash);
+            experiments.Add(experiment);
+            documents.Add(ToSearchDocument(experiment.Id, "experiment", experiment.Status, experiment.Text, ExperimentSearchBody(experiment), path, hash));
         }
     }
 
@@ -323,7 +416,7 @@ public sealed class ProjectMemoryIndexer
         };
     }
 
-    private static string Slug(string value)
+    internal static string Slug(string value)
     {
         var builder = new StringBuilder(value.Length);
         foreach (var character in value.ToLowerInvariant())
@@ -332,5 +425,17 @@ public sealed class ProjectMemoryIndexer
         }
 
         return Regex.Replace(builder.ToString(), "-+", "-").Trim('-');
+    }
+
+    private static string SymbolSearchBody(SymbolRecord symbol)
+    {
+        return string.IsNullOrWhiteSpace(symbol.ParentSymbol)
+            ? $"{symbol.Kind} {symbol.Symbol} {symbol.DisplayName}"
+            : $"{symbol.Kind} {symbol.Symbol} {symbol.DisplayName} parent {symbol.ParentSymbol}";
+    }
+
+    private static string ExperimentSearchBody(ExperimentRecord experiment)
+    {
+        return $"experiment_outcome {experiment.Outcome} {experiment.Text}";
     }
 }
