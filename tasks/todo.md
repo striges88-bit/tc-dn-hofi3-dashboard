@@ -1419,3 +1419,21 @@ Review / Results:
   2. Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1`.
   3. Run `.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- status --project-root . --json`.
   4. Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-pre-push-check.ps1`.
+
+## Memory Retrieval Quality Slice Todo
+
+- [x] Start branch `codex/memory-retrieval-quality` from clean `main`.
+- [x] Add RED semantic quality tests for no-answer / low-confidence eval cases.
+- [x] Tighten superseded-only retrieval so the eval requires empty/gap instead of accepting a random current result.
+- [x] Add freshness and gap notes to LanceDB search/explain output.
+- [x] Update memory docs to describe the stricter no-answer and freshness behavior.
+- [x] Run Python sidecar tests, LanceDB cleanup/rebuild/eval, related .NET guardrails, build, and diff hygiene.
+- [x] Commit source slice, then run `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1`.
+
+Review / Results:
+
+- RED confirmed: Python sidecar tests failed on missing `build_retrieval_output` before implementation.
+- Added `expected_empty` eval cases for historical-only and unrelated/low-confidence queries; superseded-only retrieval now must return no-answer instead of accepting a random current result.
+- LanceDB `search`/`explain` output now includes `freshness_check`, raw/candidate/returned counts, `minimum_retrieval_confidence`, top-level `gap_notes`, and per-result freshness/gap fields.
+- Real LanceDB eval initially failed after the stricter filter because the candidate pool was too small for the typed DTO boundary rule and the threshold was too low for a random ADR no-answer case; the final path uses a larger candidate pool, `minimum_retrieval_confidence=0.40`, and a source-backed DTO eval query.
+- Verification passed: Python sidecar tests `ok`; real LanceDB `eval` `11/11`; related Infrastructure guardrails `29/29`; `tools/Memory.Tests` `9/9`; solution build `0` warnings/errors; `git diff --check` passed; post-commit `memory-refresh-all`, `memory status` (`needs_refresh=false`), and `memory-pre-push-check` passed on the committed slice.

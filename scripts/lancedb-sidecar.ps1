@@ -153,7 +153,7 @@ $embeddingRuntimeModel = if ($EmbeddingProvider -eq 'token-hash') {
 $embeddingPooling = if ($EmbeddingProvider -eq 'token-hash') { 'not-applicable' } elseif ($EmbeddingModel -eq $fastEmbedDefaultModel) { 'mean' } else { 'unknown' }
 $embeddingPoolingBaseline = if ($EmbeddingProvider -eq 'token-hash') { 'not-applicable' } else { 'mean-pooling' }
 $embeddingBaselineStatus = if ($EmbeddingProvider -eq 'token-hash') { 'fallback-test-only' } else { 'accepted-if-eval-passes' }
-$embeddingBaselineEvalGate = if ($EmbeddingProvider -eq 'token-hash') { 'not-semantic-quality-evidence' } else { 'lancedb-eval-9-of-9' }
+$embeddingBaselineEvalGate = if ($EmbeddingProvider -eq 'token-hash') { 'not-semantic-quality-evidence' } else { 'lancedb-eval-11-of-11' }
 $embeddingBaselineChangePolicy = if ($EmbeddingProvider -eq 'token-hash') {
     'do not use token-hash as semantic quality evidence'
 } else {

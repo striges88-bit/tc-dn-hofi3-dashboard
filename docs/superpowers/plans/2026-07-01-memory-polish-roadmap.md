@@ -142,7 +142,7 @@ Expected behavior:
 
 - [ ] **Step 2: Choose the low-risk baseline**
 
-Default recommendation: accept current FastEmbed `0.8.0` mean-pooling behavior as the baseline only if eval remains `9/9`; do not downgrade unless retrieval quality drops.
+Default recommendation: accept current FastEmbed `0.8.0` mean-pooling behavior as the baseline only if eval remains `11/11`; do not downgrade unless retrieval quality drops.
 
 - [ ] **Step 3: Verify Slice 4**
 

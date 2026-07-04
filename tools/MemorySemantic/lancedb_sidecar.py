@@ -22,6 +22,7 @@ SCHEMA_VERSION = 1
 TABLE_NAME = "memory_documents"
 TOKEN_HASH_VECTOR_DIMENSIONS = 64
 CURRENT_STATUSES = ("current", "proposed")
+MIN_RETRIEVAL_CONFIDENCE = 0.40
 DEFAULT_EMBEDDING_PROVIDER = "fastembed"
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 TOKEN_HASH_MODEL = "local-token-hash"
@@ -34,7 +35,7 @@ FASTEMBED_RUNTIME_MODEL_FILE = "model_optimized.onnx"
 FASTEMBED_POOLING = "mean"
 FASTEMBED_POOLING_BASELINE = "mean-pooling"
 FASTEMBED_BASELINE_STATUS = "accepted-if-eval-passes"
-FASTEMBED_BASELINE_EVAL_GATE = "lancedb-eval-9-of-9"
+FASTEMBED_BASELINE_EVAL_GATE = "lancedb-eval-11-of-11"
 FASTEMBED_BASELINE_CHANGE_POLICY = "rerun cleanup/rebuild/eval and update docs before changing package, model, or pooling"
 FASTEMBED_WARNING_POLICY = "production-custom-alias-no-suppression"
 
@@ -170,6 +171,7 @@ def search(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
     vector = provider.embed_one(args.query)
     rows = table.search(vector).limit(candidate_limit(args.limit)).to_list()
     reranked = rerank_rows(rows, args.query, args.limit)
+    retrieval = build_retrieval_output(args.query, reranked, raw_candidate_count=len(rows))
 
     report = build_base_report(args)
     report.update(
@@ -179,7 +181,7 @@ def search(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
             "query": args.query,
             **provider.metadata(),
             "table_embedding": read_table_embedding_metadata(reranked or rows),
-            "results": [project_search_row(row) for row in reranked],
+            **retrieval,
         }
     )
     return report
@@ -196,6 +198,7 @@ def explain(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
     analysis = safe_call_text(builder, "analyze_plan")
     rows = builder.to_list()
     reranked = rerank_rows(rows, args.query, args.limit)
+    retrieval = build_retrieval_output(args.query, reranked, raw_candidate_count=len(rows))
 
     report = build_base_report(args)
     report.update(
@@ -208,7 +211,7 @@ def explain(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
             "table_embedding": read_table_embedding_metadata(reranked or rows),
             "explain_plan": plan,
             "analyze_plan": analysis,
-            "results": [project_search_row(row) for row in reranked],
+            **retrieval,
         }
     )
     return report
@@ -220,7 +223,9 @@ def eval_quality(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any
 
     def search_case(case: dict[str, Any]) -> list[dict[str, Any]]:
         rows = table.search(provider.embed_one(case["query"])).limit(candidate_limit(args.limit)).to_list()
-        return [project_search_row(row) for row in rerank_rows(rows, case["query"], args.limit)]
+        reranked = rerank_rows(rows, case["query"], args.limit)
+        retrieval = build_retrieval_output(case["query"], reranked, raw_candidate_count=len(rows))
+        return retrieval["results"]
 
     eval_report = evaluate_cases(search_case)
     report = build_base_report(args)
@@ -607,7 +612,7 @@ def embed_token_hash(text: str) -> list[float]:
 
 
 def candidate_limit(limit: int) -> int:
-    return max(limit, min(100, limit * 5))
+    return max(limit, min(250, limit * 25))
 
 
 def rerank_rows(rows: list[dict[str, Any]], query: str, limit: int) -> list[dict[str, Any]]:
@@ -617,15 +622,34 @@ def rerank_rows(rows: list[dict[str, Any]], query: str, limit: int) -> list[dict
         distance = float(row.get("_distance", 0.0))
         row_type = str(row.get("type", ""))
         text = f"{row.get('title', '')}\n{row.get('body', '')}"
-        overlap = len(query_tokens.intersection(searchable_tokens(text)))
-        phrase_bonus = 0.15 if query.strip().lower() in text.lower() else 0.0
+        text_tokens = searchable_tokens(text)
+        matched_tokens = sorted(query_tokens.intersection(text_tokens))
+        overlap = len(matched_tokens)
+        exact_phrase_match = query.strip().lower() in text.lower()
+        phrase_bonus = 0.15 if exact_phrase_match else 0.0
         score = distance + type_penalty(row_type) + query_type_bonus(row_type, query_tokens) - (0.12 * overlap) - phrase_bonus
         copy = dict(row)
         copy["rerank_score"] = round(score, 6)
+        copy["query_token_count"] = len(query_tokens)
+        copy["matched_query_tokens"] = matched_tokens
+        copy["token_overlap_ratio"] = round(overlap / max(len(query_tokens), 1), 6)
+        copy["exact_phrase_match"] = exact_phrase_match
+        copy["retrieval_confidence"] = retrieval_confidence(
+            row_type,
+            copy["token_overlap_ratio"],
+            exact_phrase_match,
+        )
         ranked.append(copy)
 
     ranked.sort(key=lambda item: (float(item["rerank_score"]), str(item.get("type", "")), str(item.get("id", ""))))
     return ranked[:limit]
+
+
+def retrieval_confidence(row_type: str, token_overlap_ratio: float, exact_phrase_match: bool) -> float:
+    type_adjustment = -0.05 if row_type == "chunk" else 0.08
+    phrase_adjustment = 0.25 if exact_phrase_match else 0.0
+    score = 0.1 + (0.65 * token_overlap_ratio) + phrase_adjustment + type_adjustment
+    return round(max(0.0, min(1.0, score)), 6)
 
 
 def type_penalty(row_type: str) -> float:
@@ -672,7 +696,101 @@ def safe_call_text(instance: Any, method_name: str) -> str:
         return f"{method_name} failed: {exc}"
 
 
+def build_retrieval_output(query: str, ranked_rows: list[dict[str, Any]], raw_candidate_count: int) -> dict[str, Any]:
+    projected = [project_search_row(row) for row in ranked_rows]
+    accepted: list[dict[str, Any]] = []
+    rejected_low_confidence = 0
+    rejected_stale = 0
+
+    for result in projected:
+        if result["freshness_status"] != "fresh":
+            rejected_stale += 1
+            continue
+
+        if float(result.get("retrieval_confidence") or 0.0) < MIN_RETRIEVAL_CONFIDENCE:
+            rejected_low_confidence += 1
+            continue
+
+        accepted.append(result)
+
+    gap_notes = build_retrieval_gap_notes(
+        query,
+        raw_candidate_count,
+        accepted,
+        projected,
+        rejected_low_confidence,
+        rejected_stale,
+    )
+
+    return {
+        "raw_candidate_count": raw_candidate_count,
+        "candidate_count": len(projected),
+        "returned_count": len(accepted),
+        "minimum_retrieval_confidence": MIN_RETRIEVAL_CONFIDENCE,
+        "gap_notes": gap_notes,
+        "freshness_check": {
+            "status": "passed" if rejected_stale == 0 else "failed",
+            "raw_candidate_count": raw_candidate_count,
+            "candidate_count": len(projected),
+            "returned_count": len(accepted),
+            "rejected_stale_count": rejected_stale,
+            "rejected_low_confidence_count": rejected_low_confidence,
+            "requires_current_or_proposed_status": True,
+            "requires_source_path": True,
+            "requires_source_hash": True,
+            "requires_commit_sha": True,
+            "requires_source_blob_sha": True,
+            "requires_indexed_at": True,
+        },
+        "results": accepted,
+    }
+
+
+def build_retrieval_gap_notes(
+    query: str,
+    raw_candidate_count: int,
+    accepted: list[dict[str, Any]],
+    projected: list[dict[str, Any]],
+    rejected_low_confidence: int,
+    rejected_stale: int,
+) -> list[str]:
+    if accepted:
+        return []
+
+    if raw_candidate_count == 0:
+        return [f"no-answer: LanceDB returned no candidates for query '{query}'"]
+
+    notes: list[str] = []
+    if rejected_low_confidence > 0:
+        top = projected[0] if projected else {}
+        notes.append(
+            "low-confidence: no current source-backed result met "
+            f"retrieval_confidence>={MIN_RETRIEVAL_CONFIDENCE}; "
+            f"top_candidate={top.get('id')}; "
+            f"top_confidence={top.get('retrieval_confidence')}"
+        )
+
+    if rejected_stale > 0:
+        notes.append(f"freshness: rejected {rejected_stale} candidate(s) with stale or incomplete source metadata")
+
+    if not notes:
+        notes.append("no-answer: no candidate survived retrieval quality filters")
+
+    return notes
+
+
 def project_search_row(row: dict[str, Any]) -> dict[str, Any]:
+    freshness_status, freshness_notes = row_freshness(row)
+    result_gap_notes: list[str] = []
+    if freshness_notes:
+        result_gap_notes.extend(freshness_notes)
+
+    retrieval_score = row.get("retrieval_confidence")
+    if retrieval_score is None or float(retrieval_score) < MIN_RETRIEVAL_CONFIDENCE:
+        result_gap_notes.append(
+            f"retrieval_confidence below threshold {MIN_RETRIEVAL_CONFIDENCE}"
+        )
+
     return {
         "id": row.get("id"),
         "type": row.get("type"),
@@ -688,7 +806,29 @@ def project_search_row(row: dict[str, Any]) -> dict[str, Any]:
         "tree_sha": row.get("tree_sha"),
         "source_blob_sha": row.get("source_blob_sha"),
         "indexed_at": row.get("indexed_at"),
+        "retrieval_confidence": row.get("retrieval_confidence"),
+        "query_token_count": row.get("query_token_count"),
+        "matched_query_tokens": row.get("matched_query_tokens", []),
+        "token_overlap_ratio": row.get("token_overlap_ratio"),
+        "exact_phrase_match": row.get("exact_phrase_match"),
+        "freshness_status": freshness_status,
+        "freshness_notes": freshness_notes,
+        "gap_notes": result_gap_notes,
     }
+
+
+def row_freshness(row: dict[str, Any]) -> tuple[str, list[str]]:
+    notes: list[str] = []
+    if row.get("status") not in CURRENT_STATUSES:
+        notes.append(f"status is not current/proposed: {row.get('status')}")
+
+    required_fields = ("source_path", "source_hash", "commit_sha", "source_blob_sha", "indexed_at")
+    for field in required_fields:
+        value = row.get(field)
+        if value is None or not str(value).strip():
+            notes.append(f"missing {field}")
+
+    return ("fresh" if not notes else "stale", notes)
 
 
 def read_table_embedding_metadata(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
