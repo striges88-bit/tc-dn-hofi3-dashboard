@@ -1372,7 +1372,7 @@ Notes:
 - [x] Define uv executable discovery, cache, venv, and model-cache policy without writing runtime state into the repo.
 - [x] Block hidden network downloads in memory gates by running the LanceDB sidecar through offline uv execution unless an explicit preflight is introduced.
 - [x] Update memory docs/runbook/script docs with the dependency stability policy.
-- [ ] Run narrow guardrail tests, Python sidecar tests, real semantic doctor, LanceDB eval, build, diff hygiene, then commit and rerun memory gate.
+- [x] Run narrow guardrail tests, Python sidecar tests, real semantic doctor, LanceDB eval, build, diff hygiene, then commit and rerun memory gate.
 
 ## Memory Semantic Dependency Stability Results
 
@@ -1382,5 +1382,5 @@ Notes:
 - Python sidecar reports now include `lancedb_package_version/pin`, `pyarrow_package_version/pin`, and hidden-network-download guard fields.
 - Real offline semantic doctor passed with cached `uv 0.11.25`, `lancedb=0.34.0`, `pyarrow=24.0.0`, and `fastembed=0.8.0`.
 - Real LanceDB cleanup/rebuild/eval passed through the pinned offline path; eval reported `9/9`.
-- Verification passed so far: `LanceDbSidecarSpikeTests` `5/5`, Python sidecar tests returned `ok`, related Infrastructure guardrails `28/28`, and `tools/Memory.Tests` `9/9`.
-- Compact stop point: solution build passed with `0` warnings/errors and `git diff --check` passed. Source is intentionally uncommitted so `memory-refresh-all` has not been run yet; next command after compact should be review diff, then commit this slice, then run `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1`.
+- Verification passed: `LanceDbSidecarSpikeTests` `5/5`, Python sidecar tests returned `ok`, related Infrastructure guardrails `28/28`, `tools/Memory.Tests` `9/9`, solution build passed with `0` warnings/errors, and `git diff --check` passed.
+- Final gate passed after commit: `scripts\memory-refresh-all.ps1` completed, `memory status` reported `needs_refresh=false` with `indexed_commit=HEAD`, and `scripts\memory-pre-push-check.ps1` passed with LanceDB eval `9/9`.
