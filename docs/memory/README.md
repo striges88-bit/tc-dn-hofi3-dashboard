@@ -141,6 +141,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.
 
 The default probe report is `docs/memory/generated/lancedb-probe-report.json`; it must not overwrite `docs/memory/generated/lancedb-sidecar-report.json`, which is reserved for eval evidence.
 
+Check local semantic dependency readiness before a rebuild/eval gate:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-semantic-doctor.ps1
+```
+
+Use `-PlanOnly` for a report-only preview. The doctor records `uv` discovery, `lancedb==0.34.0`, `pyarrow==24.0.0`, `fastembed==0.8.0`, cache/venv policy, and whether the pinned runtime is available offline. It does not rebuild memory, import retain data, install hooks, call Cloud, or call Codex retain. Memory gates use `uv --offline`; if the local cache is missing, run an explicit dependency preflight instead of letting `memory-refresh-all` download packages or models in the background.
+
 Rebuild, query, and evaluate the local LanceDB sidecar from SQLite `search_documents` only:
 
 ```powershell
@@ -150,7 +158,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command eval
 ```
 
-The LanceDB candidate uses local FastEmbed/ONNX embeddings by default with logical model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` through pinned `fastembed==0.8.0`, plus typed/exact-token reranking and an explicit `eval` gate. The production runtime registers the explicit custom alias `embedding_runtime_model=tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean` with `embedding_pooling=mean` instead of suppressing FastEmbed's upstream mean-pooling warning. The accepted semantic baseline records `embedding_pooling_baseline=mean-pooling` and `embedding_warning_policy=production-custom-alias-no-suppression`; it is current only while LanceDB `eval` passes `9/9`. The old token-hash provider is fallback/test-only.
+The LanceDB candidate uses local FastEmbed/ONNX embeddings by default with logical model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` through pinned `lancedb==0.34.0`, `pyarrow==24.0.0`, and `fastembed==0.8.0`, plus typed/exact-token reranking and an explicit `eval` gate. The production runtime registers the explicit custom alias `embedding_runtime_model=tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean` with `embedding_pooling=mean` instead of suppressing FastEmbed's upstream mean-pooling warning. The accepted semantic baseline records `embedding_pooling_baseline=mean-pooling` and `embedding_warning_policy=production-custom-alias-no-suppression`; it is current only while LanceDB `eval` passes `9/9`. The old token-hash provider is fallback/test-only.
 
 The generated eval reports are evidence artifacts for hook/automation review. They include query, expected ids/types, matched rank, source path, confidence, and gap notes, but they are not a source of truth.
 

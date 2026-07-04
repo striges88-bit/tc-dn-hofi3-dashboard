@@ -137,6 +137,8 @@ $evalMarkdownOutput = Resolve-RootedOrRelativePath -Root $root -Path $EvalMarkdo
 $scriptPath = Join-Path $root 'tools\MemorySemantic\lancedb_sidecar.py'
 $uvPath = Find-Executable -Name 'uv.exe'
 $supportedCommands = @('probe', 'rebuild', 'search', 'explain', 'eval', 'cleanup')
+$lanceDbPackagePin = 'lancedb==0.34.0'
+$pyArrowPackagePin = 'pyarrow==24.0.0'
 $fastEmbedPackagePin = 'fastembed==0.8.0'
 $fastEmbedDefaultModel = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
 $fastEmbedRuntimeModel = 'tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean'
@@ -185,6 +187,8 @@ if ($Command -eq 'probe') {
         embedding_provider = $EmbeddingProvider
         embedding_model = if ($EmbeddingProvider -eq 'token-hash') { 'local-token-hash' } else { $EmbeddingModel }
         embedding_package_pin = $embeddingPackagePin
+        lancedb_package_pin = $lanceDbPackagePin
+        pyarrow_package_pin = $pyArrowPackagePin
         embedding_runtime_model = $embeddingRuntimeModel
         embedding_pooling = $embeddingPooling
         embedding_pooling_baseline = $embeddingPoolingBaseline
@@ -192,8 +196,11 @@ if ($Command -eq 'probe') {
         embedding_baseline_eval_gate = $embeddingBaselineEvalGate
         embedding_baseline_change_policy = $embeddingBaselineChangePolicy
         embedding_warning_policy = $embeddingWarningPolicy
+        hidden_network_downloads_blocked = $true
+        uv_offline_required_for_gate = $true
+        explicit_preflight_required_for_downloads = $true
         status = if ($null -eq $uvPath) { 'uv-unavailable' } else { 'ready-to-run' }
-        next_action = 'Run rebuild after SQLite memory refresh; do not install hooks or crawl project files directly.'
+        next_action = 'Run memory-semantic-doctor.ps1 first if dependency cache is uncertain; gate commands use uv --offline and do not install hooks or crawl project files directly.'
     }
     exit 0
 }
@@ -208,9 +215,10 @@ if ($null -eq $uvPath) {
 
 $arguments = @(
     'run',
+    '--offline',
     '--python', '3.12',
-    '--with', 'lancedb',
-    '--with', 'pyarrow',
+    '--with', $lanceDbPackagePin,
+    '--with', $pyArrowPackagePin,
     '--with', $fastEmbedPackagePin,
     'python',
     $scriptPath,

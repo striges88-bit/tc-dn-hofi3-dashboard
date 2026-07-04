@@ -1364,3 +1364,23 @@ Notes:
 - Narrow guardrails passed so far: `LanceDbSidecarSpikeTests` `3/3`, `ManualMemoryGateTests` `18/18`, and `MemoryRefreshAllTests` `5/5`.
 - Solution build passed with `0` warnings/errors, and `git diff --check` passed.
 - Final source commit passed `memory-refresh-all`, `memory status` (`needs_refresh=false`), and `memory-pre-push-check` with LanceDB eval `9/9`.
+
+## Memory Semantic Dependency Stability Todo
+
+- [x] Add RED guardrail tests for a read-only `scripts/memory-semantic-doctor.ps1` report.
+- [x] Pin the local semantic wrapper dependencies: `lancedb`, `pyarrow`, and `fastembed`.
+- [x] Define uv executable discovery, cache, venv, and model-cache policy without writing runtime state into the repo.
+- [x] Block hidden network downloads in memory gates by running the LanceDB sidecar through offline uv execution unless an explicit preflight is introduced.
+- [x] Update memory docs/runbook/script docs with the dependency stability policy.
+- [ ] Run narrow guardrail tests, Python sidecar tests, real semantic doctor, LanceDB eval, build, diff hygiene, then commit and rerun memory gate.
+
+## Memory Semantic Dependency Stability Results
+
+- RED confirmed: new `LanceDbSidecarSpikeTests` failed on missing `scripts/memory-semantic-doctor.ps1`, missing `lancedb==0.34.0`/`pyarrow==24.0.0` pins, missing offline uv policy, and missing docs.
+- GREEN implemented `scripts/memory-semantic-doctor.ps1` as a manual/read-only dependency preflight report for `uv`, pinned packages, cache/venv/model-cache policy, and offline runtime checks.
+- LanceDB wrapper now runs gate commands through `uv run --offline --python 3.12 --with lancedb==0.34.0 --with pyarrow==24.0.0 --with fastembed==0.8.0`.
+- Python sidecar reports now include `lancedb_package_version/pin`, `pyarrow_package_version/pin`, and hidden-network-download guard fields.
+- Real offline semantic doctor passed with cached `uv 0.11.25`, `lancedb=0.34.0`, `pyarrow=24.0.0`, and `fastembed=0.8.0`.
+- Real LanceDB cleanup/rebuild/eval passed through the pinned offline path; eval reported `9/9`.
+- Verification passed so far: `LanceDbSidecarSpikeTests` `5/5`, Python sidecar tests returned `ok`, related Infrastructure guardrails `28/28`, and `tools/Memory.Tests` `9/9`.
+- Compact stop point: solution build passed with `0` warnings/errors and `git diff --check` passed. Source is intentionally uncommitted so `memory-refresh-all` has not been run yet; next command after compact should be review diff, then commit this slice, then run `scripts\memory-refresh-all.ps1`, `memory status`, and `scripts\memory-pre-push-check.ps1`.

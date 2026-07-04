@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.metadata
 import json
 import math
 import os
@@ -25,6 +26,8 @@ DEFAULT_EMBEDDING_PROVIDER = "fastembed"
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 TOKEN_HASH_MODEL = "local-token-hash"
 FASTEMBED_PACKAGE_PIN = "fastembed==0.8.0"
+LANCEDB_PACKAGE_PIN = "lancedb==0.34.0"
+PYARROW_PACKAGE_PIN = "pyarrow==24.0.0"
 FASTEMBED_RUNTIME_MODEL = "tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean"
 FASTEMBED_RUNTIME_MODEL_SOURCE_HF = "qdrant/paraphrase-multilingual-MiniLM-L12-v2-onnx-Q"
 FASTEMBED_RUNTIME_MODEL_FILE = "model_optimized.onnx"
@@ -104,6 +107,13 @@ def build_base_report(args: argparse.Namespace) -> dict[str, Any]:
         "supported_commands": ["probe", "rebuild", "search", "explain", "eval", "cleanup"],
         "embedding_provider": args.embedding_provider,
         "embedding_model": normalized_embedding_model(args.embedding_provider, args.embedding_model),
+        "lancedb_package_version": package_version_or_none("lancedb"),
+        "lancedb_package_pin": LANCEDB_PACKAGE_PIN,
+        "pyarrow_package_version": package_version_or_none("pyarrow"),
+        "pyarrow_package_pin": PYARROW_PACKAGE_PIN,
+        "hidden_network_downloads_blocked": True,
+        "uv_offline_required_for_gate": True,
+        "explicit_preflight_required_for_downloads": True,
         **build_embedding_baseline_metadata(args.embedding_provider, args.embedding_model),
         "status": "ok",
     }
@@ -411,6 +421,13 @@ def find_git_executable() -> str | None:
         return str(common)
 
     return shutil.which("git")
+
+
+def package_version_or_none(package_name: str) -> str | None:
+    try:
+        return importlib.metadata.version(package_name)
+    except importlib.metadata.PackageNotFoundError:
+        return None
 
 
 def record_text(record: dict[str, Any]) -> str:

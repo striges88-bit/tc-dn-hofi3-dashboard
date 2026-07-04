@@ -23,6 +23,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-a
 
 Good result: `needs_refresh=false`, `working_tree_dirty=false` unless you intentionally started the next source edit, SQLite stale-check has no issues, and LanceDB eval is `9/9`.
 
+## Semantic Dependency Doctor
+
+Run this before a LanceDB rebuild/eval on a fresh machine, after Python/uv repair, or after dependency-cache cleanup:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-semantic-doctor.ps1
+```
+
+Good result: `status=ok`, `lancedb==0.34.0`, `pyarrow==24.0.0`, `fastembed==0.8.0`, cache/model paths outside the repo, and offline runtime checks pass. Memory gates use `uv --offline`, so missing dependencies should fail as a preflight issue instead of downloading in the background.
+
 ## Before Push Or PR
 
 Run the manual evidence gate:
