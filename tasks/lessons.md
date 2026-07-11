@@ -72,3 +72,4 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - If any redaction finding has invalid metadata, omit that source from the generated subset entirely; a blocked status does not make a partially redacted payload safe to write.
 - CI status commands that return exit code zero for both fresh and stale states need explicit JSON assertions; printing `needs_refresh` is observation, not a gate.
 - Retain import should allowlist known schema/mode/status combinations instead of rejecting only a few bad statuses; unknown report contracts must fail closed.
+- A YAML syntax parse does not validate GitHub Actions expression-context availability. Do not use `${{ runner.* }}` in `jobs.<job_id>.env`; resolve runner-only paths after the job starts through `RUNNER_TEMP`/`GITHUB_ENV`, and keep a regression guard for the workflow contract.

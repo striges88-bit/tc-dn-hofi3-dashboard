@@ -1522,3 +1522,20 @@ Review / Results:
 - Independent review identified seven issues: direct Python network bypass, partial redaction output on malformed findings, missing CI freshness assertion, fail-open unknown retain contracts, inconsistent uv discovery, ambiguous source-content flags, and stale runbook counters. All seven received focused RED/GREEN coverage or direct smoke evidence and were fixed.
 - Final pre-commit verification: related memory guardrails `38/38`; Memory CLI tests `17/17`; Python sidecar tests `ok`; full solution tests `146/146`; solution build `0` warnings/errors; PowerShell 5.1 and 7.6.3 probes `ready-to-run`; explicit preflight `ready`; following offline eval `11/11` with `network_download_allowed=false`; CI freshness assertion smoke passed; YAML parsed with all three jobs; `git diff --check` clean.
 - Post-commit memory cycle completed: `memory-refresh-all` rebuilt SQLite/LanceDB from committed `HEAD`, status reported matching `head/indexed_commit`, `needs_refresh=false`, and a clean worktree; `memory-pre-push-check` passed all 7 checks with LanceDB eval `11/11` and `network_download_allowed=false`.
+
+## Memory Operations CI Workflow Fix Todo
+
+- [x] Confirm PR #19 run `29164964673` is rejected during workflow validation at `.github/workflows/ci.yml:97`.
+- [x] Confirm the root cause against GitHub context availability: `runner` is unavailable in `jobs.<job_id>.env` and available in step-level keys.
+- [x] Add a RED regression guard for resolving the FastEmbed cache only after the runner starts.
+- [x] Move cache-path setup to a runner step without changing semantic dependency or network policy.
+- [x] Run the focused guardrail, related memory tests, solution build, and `git diff --check`.
+- [x] Record the lesson and prepare the focused fix for commit.
+- [ ] Commit the fix, refresh committed memory, pass the manual pre-push gate, push PR #19, and confirm GitHub accepts the workflow.
+
+Review / Results:
+
+- RED reproduced the server validation failure by finding `FASTEMBED_CACHE_PATH: ${{ runner.temp }}` in job-level `env`.
+- GREEN removes runner context from job-level `env`, writes the absolute cache path from `$env:RUNNER_TEMP` to `$env:GITHUB_ENV`, and uses `${{ runner.temp }}` only in the step-level `actions/cache` input.
+- Verification before commit passed: focused regression `1/1`, `ManualMemoryGateTests` `21/21`, full Infrastructure tests `76/76`, full solution tests `147/147`, solution build `0` warnings/errors, YAML parse found `dotnet`, `memory-lightweight`, and `memory-semantic`, and `git diff --check` was clean.
+- The first sandboxed full Infrastructure run failed only because `.tools/python-packages` was inaccessible; the exact test command passed outside sandbox.

@@ -94,7 +94,6 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     env:
-      FASTEMBED_CACHE_PATH: ${{ runner.temp }}\fastembed_cache
       HF_HUB_OFFLINE: '1'
 
     steps:
@@ -129,10 +128,16 @@ jobs:
             scripts/memory-semantic-doctor.ps1
             tools/MemorySemantic/*.py
 
+      - name: Configure FastEmbed model cache
+        shell: powershell
+        run: |
+          $modelCache = Join-Path $env:RUNNER_TEMP 'fastembed_cache'
+          "FASTEMBED_CACHE_PATH=$modelCache" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Restore FastEmbed model cache
         uses: actions/cache@v5
         with:
-          path: ${{ env.FASTEMBED_CACHE_PATH }}
+          path: ${{ runner.temp }}\fastembed_cache
           key: fastembed-${{ runner.os }}-py312-fastembed-0.8.0-paraphrase-multilingual-minilm-l12-v2-mean
 
       - name: Explicit semantic dependency preflight

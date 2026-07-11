@@ -455,6 +455,23 @@ public sealed class ManualMemoryGateTests
     }
 
     [Fact]
+    public void ContinuousIntegrationResolvesFastEmbedCacheAfterRunnerStarts()
+    {
+        var workflow = ReadText(".github/workflows/ci.yml");
+
+        Assert.DoesNotContain(
+            "FASTEMBED_CACHE_PATH: ${{ runner.temp }}",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains("$env:RUNNER_TEMP", workflow, StringComparison.Ordinal);
+        Assert.Contains("$env:GITHUB_ENV", workflow, StringComparison.Ordinal);
+        Assert.Contains(
+            "path: ${{ runner.temp }}\\fastembed_cache",
+            workflow,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task InstallPrePushHookPlanDoesNotInstallHookOrRunRebuild()
     {
         var scriptPath = Path.Combine(Root, "scripts", "install-memory-pre-push-hook.ps1");
