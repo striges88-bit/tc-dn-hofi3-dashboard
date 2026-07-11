@@ -661,6 +661,76 @@ public sealed class MemoryCliTests
         Assert.Empty(searchAfterDeleteJson.RootElement.GetProperty("results").EnumerateArray());
     }
 
+    [Fact]
+    public void RetainImportRejectsBlockedInputReportEvenWhenFileMetadataLooksSafe()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourceText = "# Blocked retain source\n\nblockedreportonly phrase must never be retained.\n";
+        fixture.Write("docs/memory/blocked-retain.md", sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                "docs/memory/blocked-retain.md",
+                HashText(sourceText),
+                sourceText.Length,
+                "candidate",
+                0));
+        var reportText = File.ReadAllText(reportPath)
+            .Replace(
+                "\"status\":\"ready_for_review\"",
+                "\"status\":\"blocked\",\"blocking_reasons\":[\"invalid_finding_line\"]",
+                StringComparison.Ordinal);
+        File.WriteAllText(reportPath, reportText);
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using (var importJson = JsonDocument.Parse(import.StandardOutput))
+        {
+            var root = importJson.RootElement;
+            Assert.Equal("blocked", root.GetProperty("status").GetString());
+            Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+            Assert.Contains(
+                root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+                reason => reason == "input_report_blocked");
+        }
+
+        using var search = fixture.RunMemoryCli("retain-search", "--query", "blockedreportonly", "--json");
+        Assert.Equal(0, search.ExitCode);
+        using var searchJson = JsonDocument.Parse(search.StandardOutput);
+        Assert.Empty(searchJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
+    [Fact]
+    public void RetainImportRejectsUnknownInputReportContract()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourceText = "# Unknown retain report\n\nunknownreportonly phrase must never be retained.\n";
+        fixture.Write("docs/memory/unknown-retain.md", sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                "docs/memory/unknown-retain.md",
+                HashText(sourceText),
+                sourceText.Length,
+                "candidate",
+                0));
+        var reportText = File.ReadAllText(reportPath)
+            .Replace("\"status\":\"ready_for_review\"", "\"status\":\"unknown\"", StringComparison.Ordinal);
+        File.WriteAllText(reportPath, reportText);
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "unsupported_input_report_contract");
+    }
+
     private static CliResult RunMemoryCli(params string[] arguments)
     {
         var projectPath = Path.Combine(RepositoryRoot, "tools", "Memory", "CryptoIndicatorApp.Memory.csproj");
@@ -872,14 +942,15 @@ public sealed class MemoryCliTests
         {
             var reportPath = Path.Combine(Root, "docs", "memory", "generated", "curated-retain-dry-run-report.json");
             Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
+            var isRedactedSubset = files.Any(file => file.RedactionStatus.Equals("redacted", StringComparison.OrdinalIgnoreCase));
+            var requiresReview = files.Any(file => file.FindingCount > 0 || file.RedactionStatus.Equals("review_required", StringComparison.OrdinalIgnoreCase));
             var report = new
             {
-                schema_version = 1,
+                schema_version = isRedactedSubset ? 2 : 1,
                 generator = "test",
-                mode = "dry-run",
-                status = files.Any(file => file.FindingCount > 0 || !file.RedactionStatus.Equals("candidate", StringComparison.OrdinalIgnoreCase))
-                    ? "review_required"
-                    : "ready_for_review",
+                mode = isRedactedSubset ? "redacted-subset" : "dry-run",
+                status = requiresReview ? "review_required" : isRedactedSubset ? "ready_for_import" : "ready_for_review",
+                blocking_reasons = Array.Empty<string>(),
                 external_retain_enabled = false,
                 codex_auto_retain_enabled = false,
                 cloud_enabled = false,

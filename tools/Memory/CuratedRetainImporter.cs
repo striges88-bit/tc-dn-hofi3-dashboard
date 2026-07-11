@@ -42,6 +42,38 @@ internal sealed class CuratedRetainImporter
             AddBlockingReason(blockingReasons, "unsafe_input_report_flags");
         }
 
+        var reportStatus = ReadString(root, "status");
+        var reportHasBlockingReasons = root.TryGetProperty("blocking_reasons", out var reportReasons)
+            && reportReasons.ValueKind == JsonValueKind.Array
+            && reportReasons.EnumerateArray().Any(reason => !string.IsNullOrWhiteSpace(reason.GetString()));
+        if (reportStatus.Equals("blocked", StringComparison.OrdinalIgnoreCase)
+            || reportStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)
+            || reportHasBlockingReasons)
+        {
+            AddBlockingReason(blockingReasons, "input_report_blocked");
+            return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
+        }
+
+        var reportSchemaVersion = ReadInt(root, "schema_version");
+        var reportMode = ReadString(root, "mode");
+        var isKnownDryRun = reportSchemaVersion == 1
+            && reportMode.Equals("dry-run", StringComparison.OrdinalIgnoreCase)
+            && (reportStatus.Equals("ready_for_review", StringComparison.OrdinalIgnoreCase)
+                || reportStatus.Equals("review_required", StringComparison.OrdinalIgnoreCase));
+        var isKnownRedactedSubset = reportSchemaVersion == 2
+            && reportMode.Equals("redacted-subset", StringComparison.OrdinalIgnoreCase)
+            && reportStatus.Equals("ready_for_import", StringComparison.OrdinalIgnoreCase);
+        if (!isKnownDryRun && !isKnownRedactedSubset)
+        {
+            AddBlockingReason(blockingReasons, "unsupported_input_report_contract");
+            return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
+        }
+
+        if (reportStatus.Equals("review_required", StringComparison.OrdinalIgnoreCase))
+        {
+            AddBlockingReason(blockingReasons, "input_report_blocked");
+        }
+
         if (!root.TryGetProperty("files", out var filesElement) || filesElement.ValueKind != JsonValueKind.Array)
         {
             AddBlockingReason(blockingReasons, "missing_files_in_input_report");

@@ -11,10 +11,12 @@ from lancedb_sidecar import (
     evaluate_cases,
     ensure_generated_store_path,
     make_embedding_provider,
+    resolve_fastembed_cache_dir,
     rerank_rows,
     render_eval_markdown,
     find_git_executable,
     source_matches,
+    validate_network_policy,
 )
 
 
@@ -56,6 +58,43 @@ def test_semantic_dependency_pins_are_explicit():
     assert lancedb_sidecar.LANCEDB_PACKAGE_PIN == "lancedb==0.34.0"
     assert lancedb_sidecar.PYARROW_PACKAGE_PIN == "pyarrow==24.0.0"
     assert lancedb_sidecar.FASTEMBED_PACKAGE_PIN == "fastembed==0.8.0"
+
+
+def test_fastembed_cache_dir_is_explicit_and_rejects_project_local_state():
+    with tempfile.TemporaryDirectory() as root_value, tempfile.TemporaryDirectory() as cache_value:
+        root = Path(root_value)
+        cache = Path(cache_value)
+
+        assert resolve_fastembed_cache_dir(root, str(cache)) == cache.resolve()
+
+        unsafe_cache = root / ".cache" / "fastembed"
+        try:
+            resolve_fastembed_cache_dir(root, str(unsafe_cache))
+        except ValueError as exc:
+            assert "outside the project root" in str(exc)
+        else:
+            raise AssertionError("Expected project-local FastEmbed cache path to be rejected.")
+
+
+def test_network_policy_requires_offline_models_except_explicit_preflight():
+    validate_network_policy("probe", False, False)
+    validate_network_policy("cleanup", False, False)
+    validate_network_policy("eval", True, False)
+    validate_network_policy("preflight", False, True)
+
+    try:
+        validate_network_policy("preflight", False, False)
+    except ValueError as exc:
+        assert "explicit network consent" in str(exc)
+    else:
+        raise AssertionError("Expected preflight without explicit network consent to fail.")
+
+    try:
+        validate_network_policy("eval", False, False)
+    except ValueError as exc:
+        assert "--offline-models" in str(exc)
+    else:
+        raise AssertionError("Expected normal semantic commands without offline model loading to fail.")
 
 
 def test_fastembed_mean_pooling_baseline_uses_custom_runtime_alias_without_production_suppression():
@@ -526,6 +565,8 @@ if __name__ == "__main__":
     test_default_embedding_provider_is_local_fastembed_multilingual_onnx()
     test_fastembed_baseline_metadata_is_explicit_and_eval_gated()
     test_semantic_dependency_pins_are_explicit()
+    test_fastembed_cache_dir_is_explicit_and_rejects_project_local_state()
+    test_network_policy_requires_offline_models_except_explicit_preflight()
     test_fastembed_mean_pooling_baseline_uses_custom_runtime_alias_without_production_suppression()
     test_fastembed_diagnostic_warning_capture_keeps_unrelated_warnings_visible()
     test_token_hash_fallback_can_embed_text()

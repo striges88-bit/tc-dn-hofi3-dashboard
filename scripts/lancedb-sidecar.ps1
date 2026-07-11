@@ -1,6 +1,6 @@
 param(
     [string]$ProjectRoot = '',
-    [ValidateSet('probe', 'rebuild', 'search', 'explain', 'eval', 'cleanup')]
+    [ValidateSet('probe', 'preflight', 'rebuild', 'search', 'explain', 'eval', 'cleanup')]
     [string]$Command = 'probe',
     [string]$DatabasePath = '',
     [string]$StorePath = '',
@@ -10,7 +10,9 @@ param(
     [int]$Limit = 10,
     [ValidateSet('fastembed', 'token-hash')]
     [string]$EmbeddingProvider = 'fastembed',
-    [string]$EmbeddingModel = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
+    [string]$EmbeddingModel = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',
+    [string]$ModelCachePath = '',
+    [switch]$AllowNetworkPreflight
 )
 
 Set-StrictMode -Version Latest
@@ -62,6 +64,13 @@ function Find-Executable {
         return $command.Source
     }
 
+    if ($Name -eq 'uv.exe' -and -not [string]::IsNullOrWhiteSpace($env:APPDATA)) {
+        $appDataCandidate = Join-Path $env:APPDATA 'Python\Python312\Scripts\uv.exe'
+        if (Test-Path -LiteralPath $appDataCandidate) {
+            return $appDataCandidate
+        }
+    }
+
     $wingetRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
     if (Test-Path -LiteralPath $wingetRoot) {
         $match = Get-ChildItem -Path $wingetRoot -Filter $Name -Recurse -ErrorAction SilentlyContinue |
@@ -92,6 +101,39 @@ function Resolve-RootedOrRelativePath {
     return [System.IO.Path]::GetFullPath((Join-Path $Root $Path))
 }
 
+function Resolve-ModelCachePath {
+    param(
+        [string]$Root,
+        [string]$Candidate
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Candidate)) {
+        $Candidate = $env:FASTEMBED_CACHE_PATH
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Candidate)) {
+        $Candidate = $env:FASTEMBED_CACHE_DIR
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Candidate)) {
+        $Candidate = Join-Path ([System.IO.Path]::GetTempPath()) 'fastembed_cache'
+    }
+
+    if (-not [System.IO.Path]::IsPathRooted($Candidate)) {
+        throw 'FASTEMBED_CACHE_PATH, FASTEMBED_CACHE_DIR, and -ModelCachePath must be absolute.'
+    }
+
+    $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
+    $cacheFull = [System.IO.Path]::GetFullPath($Candidate).TrimEnd('\', '/')
+    $rootPrefix = $rootFull + [System.IO.Path]::DirectorySeparatorChar
+    if ($cacheFull.Equals($rootFull, [System.StringComparison]::OrdinalIgnoreCase) -or
+        $cacheFull.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw 'FastEmbed cache must stay outside the project root.'
+    }
+
+    return $cacheFull
+}
+
 function Get-DefaultOutputPath {
     param(
         [string]$Root,
@@ -100,6 +142,7 @@ function Get-DefaultOutputPath {
 
     $fileName = switch ($Command) {
         'probe' { 'lancedb-probe-report.json' }
+        'preflight' { 'lancedb-preflight-report.json' }
         'search' { 'lancedb-search-report.json' }
         'explain' { 'lancedb-explain-report.json' }
         'cleanup' { 'lancedb-cleanup-report.json' }
@@ -128,6 +171,7 @@ function Write-JsonReport {
 }
 
 $root = Resolve-ProjectRoot -Candidate $ProjectRoot
+$modelCache = Resolve-ModelCachePath -Root $root -Candidate $ModelCachePath
 $database = Resolve-RootedOrRelativePath -Root $root -Path $DatabasePath -DefaultPath (Join-Path $root 'docs\memory\generated\project-memory.sqlite')
 $store = Resolve-RootedOrRelativePath -Root $root -Path $StorePath -DefaultPath (Join-Path $root 'docs\memory\generated\lancedb')
 $output = Resolve-RootedOrRelativePath -Root $root -Path $OutputPath -DefaultPath (Get-DefaultOutputPath -Root $root -Command $Command)
@@ -136,7 +180,7 @@ $evalMarkdownOutput = Resolve-RootedOrRelativePath -Root $root -Path $EvalMarkdo
 
 $scriptPath = Join-Path $root 'tools\MemorySemantic\lancedb_sidecar.py'
 $uvPath = Find-Executable -Name 'uv.exe'
-$supportedCommands = @('probe', 'rebuild', 'search', 'explain', 'eval', 'cleanup')
+$supportedCommands = @('probe', 'preflight', 'rebuild', 'search', 'explain', 'eval', 'cleanup')
 $lanceDbPackagePin = 'lancedb==0.34.0'
 $pyArrowPackagePin = 'pyarrow==24.0.0'
 $fastEmbedPackagePin = 'fastembed==0.8.0'
@@ -196,6 +240,7 @@ if ($Command -eq 'probe') {
         embedding_baseline_eval_gate = $embeddingBaselineEvalGate
         embedding_baseline_change_policy = $embeddingBaselineChangePolicy
         embedding_warning_policy = $embeddingWarningPolicy
+        model_cache_scope = 'outside-project'
         hidden_network_downloads_blocked = $true
         uv_offline_required_for_gate = $true
         explicit_preflight_required_for_downloads = $true
@@ -203,6 +248,10 @@ if ($Command -eq 'probe') {
         next_action = 'Run memory-semantic-doctor.ps1 first if dependency cache is uncertain; gate commands use uv --offline and do not install hooks or crawl project files directly.'
     }
     exit 0
+}
+
+if ($Command -eq 'preflight' -and -not $AllowNetworkPreflight) {
+    throw 'preflight requires -AllowNetworkPreflight.'
 }
 
 if (-not (Test-Path -LiteralPath $scriptPath)) {
@@ -213,9 +262,13 @@ if ($null -eq $uvPath) {
     throw 'uv.exe was not found in PATH or the WinGet package directory.'
 }
 
-$arguments = @(
-    'run',
-    '--offline',
+$networkPreflight = $Command -eq 'preflight' -and $AllowNetworkPreflight
+$arguments = @('run')
+if (-not $networkPreflight) {
+    $arguments += '--offline'
+}
+
+$arguments += @(
     '--python', '3.12',
     '--with', $lanceDbPackagePin,
     '--with', $pyArrowPackagePin,
@@ -230,12 +283,32 @@ $arguments = @(
     '--limit', ([string]$Limit),
     '--embedding-provider', $EmbeddingProvider,
     '--embedding-model', $EmbeddingModel,
+    '--model-cache', $modelCache,
     '--eval-markdown-output', $evalMarkdownOutput
 )
+
+if (-not $networkPreflight) {
+    $arguments += '--offline-models'
+}
+else {
+    $arguments += '--allow-network-preflight'
+}
 
 if (-not [string]::IsNullOrWhiteSpace($Query)) {
     $arguments += @('--query', $Query)
 }
 
-& $uvPath @arguments
-exit $LASTEXITCODE
+$previousFastEmbedCache = [Environment]::GetEnvironmentVariable('FASTEMBED_CACHE_PATH', 'Process')
+$previousHfOffline = [Environment]::GetEnvironmentVariable('HF_HUB_OFFLINE', 'Process')
+try {
+    [Environment]::SetEnvironmentVariable('FASTEMBED_CACHE_PATH', $modelCache, 'Process')
+    [Environment]::SetEnvironmentVariable('HF_HUB_OFFLINE', $(if ($networkPreflight) { $null } else { '1' }), 'Process')
+    & $uvPath @arguments
+    $exitCode = $LASTEXITCODE
+}
+finally {
+    [Environment]::SetEnvironmentVariable('FASTEMBED_CACHE_PATH', $previousFastEmbedCache, 'Process')
+    [Environment]::SetEnvironmentVariable('HF_HUB_OFFLINE', $previousHfOffline, 'Process')
+}
+
+exit $exitCode

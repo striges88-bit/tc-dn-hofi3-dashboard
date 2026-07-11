@@ -161,6 +161,22 @@ public sealed class LanceDbSidecarSpikeTests
     }
 
     [Fact]
+    public void SidecarModelPreflightRequiresExplicitConsentAndKeepsNormalGateOffline()
+    {
+        var script = ReadText("scripts/lancedb-sidecar.ps1");
+
+        Assert.Contains("[switch]$AllowNetworkPreflight", script, StringComparison.Ordinal);
+        Assert.Contains("'preflight'", script, StringComparison.Ordinal);
+        Assert.Contains("lancedb-preflight-report.json", script, StringComparison.Ordinal);
+        Assert.Contains("preflight requires -AllowNetworkPreflight", script, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("'--offline-models'", script, StringComparison.Ordinal);
+        Assert.Contains("FASTEMBED_CACHE_PATH", script, StringComparison.Ordinal);
+        Assert.Contains("HF_HUB_OFFLINE", script, StringComparison.Ordinal);
+        Assert.Contains("APPDATA", script, StringComparison.Ordinal);
+        Assert.Contains("Python\\Python312\\Scripts\\uv.exe", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SidecarDocsRequireSqliteExportAndCleanRebuildBeforeAutomation()
     {
         var spike = ReadText("docs/memory/lancedb-spike.md");

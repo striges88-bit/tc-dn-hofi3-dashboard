@@ -10,6 +10,7 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,8 +46,12 @@ def main() -> int:
     started = time.perf_counter()
 
     try:
+        validate_network_policy(args.command, args.offline_models, args.allow_network_preflight)
+        args.model_cache = str(resolve_fastembed_cache_dir(Path(args.project_root), args.model_cache))
         if args.command == "probe":
             report = build_probe_report(args, import_executed=False)
+        elif args.command == "preflight":
+            report = preflight(args)
         elif args.command == "cleanup":
             report = cleanup(args)
         else:
@@ -79,7 +84,11 @@ def main() -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build and query the local LanceDB memory sidecar.")
-    parser.add_argument("--command", choices=["probe", "rebuild", "search", "explain", "eval", "cleanup"], required=True)
+    parser.add_argument(
+        "--command",
+        choices=["probe", "preflight", "rebuild", "search", "explain", "eval", "cleanup"],
+        required=True,
+    )
     parser.add_argument("--project-root", required=True)
     parser.add_argument("--sqlite", required=True)
     parser.add_argument("--store", required=True)
@@ -88,6 +97,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--embedding-provider", choices=["fastembed", "token-hash"], default=DEFAULT_EMBEDDING_PROVIDER)
     parser.add_argument("--embedding-model", default=DEFAULT_EMBEDDING_MODEL)
+    parser.add_argument("--model-cache", default="")
+    parser.add_argument("--offline-models", action="store_true")
+    parser.add_argument("--allow-network-preflight", action="store_true")
     parser.add_argument("--eval-markdown-output", default="")
     return parser.parse_args()
 
@@ -105,16 +117,18 @@ def build_base_report(args: argparse.Namespace) -> dict[str, Any]:
         "auto_commit_refresh_enabled": False,
         "direct_project_crawl_enabled": False,
         "commit_hook_installed": False,
-        "supported_commands": ["probe", "rebuild", "search", "explain", "eval", "cleanup"],
+        "supported_commands": ["probe", "preflight", "rebuild", "search", "explain", "eval", "cleanup"],
         "embedding_provider": args.embedding_provider,
         "embedding_model": normalized_embedding_model(args.embedding_provider, args.embedding_model),
         "lancedb_package_version": package_version_or_none("lancedb"),
         "lancedb_package_pin": LANCEDB_PACKAGE_PIN,
         "pyarrow_package_version": package_version_or_none("pyarrow"),
         "pyarrow_package_pin": PYARROW_PACKAGE_PIN,
-        "hidden_network_downloads_blocked": True,
+        "model_cache_scope": "outside-project",
+        "hidden_network_downloads_blocked": args.offline_models,
         "uv_offline_required_for_gate": True,
         "explicit_preflight_required_for_downloads": True,
+        "network_download_allowed": args.allow_network_preflight and args.command == "preflight",
         **build_embedding_baseline_metadata(args.embedding_provider, args.embedding_model),
         "status": "ok",
     }
@@ -134,8 +148,34 @@ def build_probe_report(args: argparse.Namespace, import_executed: bool) -> dict[
     return report
 
 
+def validate_network_policy(command: str, offline_models: bool, allow_network_preflight: bool) -> None:
+    if command == "preflight" and not allow_network_preflight:
+        raise ValueError("preflight requires explicit network consent.")
+    if command in {"rebuild", "search", "explain", "eval"} and not offline_models:
+        raise ValueError(f"{command} requires --offline-models; only explicit preflight may load models from the network.")
+
+
+def preflight(args: argparse.Namespace) -> dict[str, Any]:
+    provider = provider_from_args(args)
+    vectors = provider.embed_many(["TC-DN-HOFI3 semantic model cache preflight"])
+    if len(vectors) != 1 or len(vectors[0]) != provider.dimensions:
+        raise RuntimeError("FastEmbed preflight returned an invalid embedding shape.")
+
+    report = build_base_report(args)
+    report.update(
+        {
+            "command": "preflight",
+            "status": "ready",
+            "import_executed": False,
+            "model_cache_ready": True,
+            **provider.metadata(),
+        }
+    )
+    return report
+
+
 def rebuild(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
-    provider = make_embedding_provider(args.embedding_provider, args.embedding_model)
+    provider = provider_from_args(args)
     records = load_sqlite_records(Path(args.project_root), Path(args.sqlite), provider)
     store_path = ensure_generated_store_path(Path(args.project_root), Path(args.store))
     deleted_existing_store = store_path.exists()
@@ -167,7 +207,7 @@ def search(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
         raise ValueError("Search requires --query.")
 
     table = open_table(args, lancedb_module)
-    provider = make_embedding_provider(args.embedding_provider, args.embedding_model)
+    provider = provider_from_args(args)
     vector = provider.embed_one(args.query)
     rows = table.search(vector).limit(candidate_limit(args.limit)).to_list()
     reranked = rerank_rows(rows, args.query, args.limit)
@@ -192,7 +232,7 @@ def explain(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
         raise ValueError("Explain requires --query.")
 
     table = open_table(args, lancedb_module)
-    provider = make_embedding_provider(args.embedding_provider, args.embedding_model)
+    provider = provider_from_args(args)
     builder = table.search(provider.embed_one(args.query)).limit(candidate_limit(args.limit))
     plan = safe_call_text(builder, "explain_plan")
     analysis = safe_call_text(builder, "analyze_plan")
@@ -218,7 +258,7 @@ def explain(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
 
 
 def eval_quality(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
-    provider = make_embedding_provider(args.embedding_provider, args.embedding_model)
+    provider = provider_from_args(args)
     table = open_table(args, lancedb_module)
 
     def search_case(case: dict[str, Any]) -> list[dict[str, Any]]:
@@ -515,7 +555,39 @@ class EmbeddingProvider:
         return metadata
 
 
-def make_embedding_provider(provider_name: str, model_name: str) -> EmbeddingProvider:
+def resolve_fastembed_cache_dir(project_root: Path, configured_cache: str = "") -> Path:
+    configured = (
+        configured_cache.strip()
+        or os.environ.get("FASTEMBED_CACHE_PATH", "").strip()
+        or os.environ.get("FASTEMBED_CACHE_DIR", "").strip()
+    )
+    cache_dir = Path(configured).expanduser() if configured else Path(tempfile.gettempdir()) / "fastembed_cache"
+    resolved_root = project_root.resolve()
+    resolved_cache = cache_dir.resolve()
+
+    try:
+        resolved_cache.relative_to(resolved_root)
+    except ValueError:
+        return resolved_cache
+
+    raise ValueError("FastEmbed cache must stay outside the project root.")
+
+
+def provider_from_args(args: argparse.Namespace) -> EmbeddingProvider:
+    return make_embedding_provider(
+        args.embedding_provider,
+        args.embedding_model,
+        cache_dir=args.model_cache,
+        local_files_only=args.offline_models,
+    )
+
+
+def make_embedding_provider(
+    provider_name: str,
+    model_name: str,
+    cache_dir: str | None = None,
+    local_files_only: bool = False,
+) -> EmbeddingProvider:
     if provider_name == "token-hash":
         return EmbeddingProvider(
             "token-hash",
@@ -537,7 +609,11 @@ def make_embedding_provider(provider_name: str, model_name: str) -> EmbeddingPro
         raise RuntimeError("fastembed is required for the default LanceDB semantic provider.") from exc
 
     runtime_model = ensure_fastembed_runtime_model(TextEmbedding, normalized_model)
-    model = TextEmbedding(model_name=runtime_model)
+    model = TextEmbedding(
+        model_name=runtime_model,
+        cache_dir=cache_dir,
+        local_files_only=local_files_only,
+    )
     dimensions = fastembed_dimensions(TextEmbedding, normalized_model)
     package_version = version("fastembed")
 

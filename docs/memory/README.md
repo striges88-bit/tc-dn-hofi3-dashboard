@@ -151,7 +151,7 @@ Check local semantic dependency readiness before a rebuild/eval gate:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-semantic-doctor.ps1
 ```
 
-Use `-PlanOnly` for a report-only preview. The doctor records `uv` discovery, `lancedb==0.34.0`, `pyarrow==24.0.0`, `fastembed==0.8.0`, cache/venv policy, and whether the pinned runtime is available offline. It does not rebuild memory, import retain data, install hooks, call Cloud, or call Codex retain. Memory gates use `uv --offline`; if the local cache is missing, run an explicit dependency preflight instead of letting `memory-refresh-all` download packages or models in the background.
+Use `-PlanOnly` for a report-only preview. The doctor records `uv` discovery, `lancedb==0.34.0`, `pyarrow==24.0.0`, `fastembed==0.8.0`, cache/venv policy, and whether the pinned runtime is available offline. It does not rebuild memory, import retain data, install hooks, call Cloud, or call Codex retain. On a fresh machine, run `memory-semantic-doctor.ps1 -AllowNetworkPreflight`, then `lancedb-sidecar.ps1 -Command preflight -AllowNetworkPreflight`. Normal gates use offline uv plus FastEmbed local-files-only loading and fail closed when either cache is missing.
 
 Rebuild, query, and evaluate the local LanceDB sidecar from SQLite `search_documents` only:
 
@@ -209,7 +209,7 @@ Generate a reviewed local redacted subset for explicitly selected allowlisted so
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-redacted-subset.ps1 -SourcePath docs/memory/retain-policy.md
 ```
 
-This reads the dry-run report, rejects sources changed since that dry-run, keeps the original source hash for Git commit verification, replaces risky lines with `[REDACTED:<finding-types>]`, and writes ignored JSON/Markdown reports under `docs/memory/generated/`. It does not import, retain, rebuild, install hooks, call Cloud, or call Codex retain.
+This reads the dry-run report, rejects sources changed since that dry-run, and keeps the original source hash for Git commit verification. In report schema v2, clean `candidate` entries are commit-source references and contain no candidate/source text; `redacted` entries contain reviewed `redacted_text` with risky lines replaced by `[REDACTED:<finding-types>]`. The separate content flags state exactly which text is present. Reports remain ignored under `docs/memory/generated/`, and the command does not import, retain, rebuild, install hooks, call Cloud, or call Codex retain.
 
 Run controlled local retain import only after reviewing the dry-run report:
 

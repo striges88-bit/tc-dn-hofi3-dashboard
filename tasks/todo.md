@@ -1492,10 +1492,33 @@ Review / Results:
 - Final pre-commit verification passed: curated retain policy/dry-run guardrails `13/13`, full `tools/Memory.Tests` `15/15`, solution build `0` warnings/errors, and `git diff --check` clean.
 - Source commit created for the slice, then `memory-refresh-all` completed, `memory status` reported `indexed_commit=HEAD` and `needs_refresh=false`, and `memory-pre-push-check` passed with LanceDB eval `11/11`.
 - Post-commit lifecycle proof on the final implementation passed for `docs/memory/retain-policy.md`: current dry-run generated `25` files and `170` findings; redacted subset was `ready_for_import`; local SQLite import from `HEAD` imported 1 `redacted` item; retain-search found it; export included `[REDACTED:*]` markers and no `OPENAI_API_KEY`/`sk-*`; delete removed 1 retained item; repeated retain-search returned `[]`.
-- Pre-compact memory status was checked outside sandbox: `head=0cde1db70d3cd4806842fcc85f681afef9b9bb01`, `indexed_commit=0cde1db70d3cd4806842fcc85f681afef9b9bb01`, `needs_refresh=false`, `marker_exists=false`, `working_tree_dirty=true`.
-- Current uncommitted files: `CryptoIndicatorApp.Infrastructure.Tests/CuratedRetainPolicyTests.cs`, `tools/Memory.Tests/MemoryCliTests.cs`, `tools/Memory/CuratedRetainImporter.cs`, `scripts/curated-retain-redacted-subset.ps1`, and `tasks/todo.md`.
-- Do not run `memory-refresh-all` yet; this slice is uncommitted and memory refresh indexes committed `HEAD`.
-- Next exact step after compact: run the two narrow GREEN tests outside sandbox:
+- Historical compact handoff, resolved by PR #18: memory status at `0cde1db70d3cd4806842fcc85f681afef9b9bb01` reported `needs_refresh=false` while the Curated retain worktree was still dirty.
+- Historical changed-file list, now committed and merged: `CryptoIndicatorApp.Infrastructure.Tests/CuratedRetainPolicyTests.cs`, `tools/Memory.Tests/MemoryCliTests.cs`, `tools/Memory/CuratedRetainImporter.cs`, `scripts/curated-retain-redacted-subset.ps1`, and `tasks/todo.md`.
+- Historical instruction, no longer active: wait to run `memory-refresh-all` until the Curated retain source was committed.
+- Historical next commands, completed before PR #18 merge:
   `.\.dotnet\dotnet.exe test tools\Memory.Tests\CryptoIndicatorApp.Memory.Tests.csproj --no-restore --filter RetainImportUsesReviewedRedactedTextAndLifecycleDeletesIt`
   and
   `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter RedactedSubsetScriptBuildsReviewedLocalReportOnly`.
+
+## Memory Operations Final Polish Slice Todo
+
+- [x] Start branch `codex/memory-operations-polish-final` from clean `main` after Curated retain PR #18 merge.
+- [x] Add RED guardrails for unambiguous curated retain report content flags.
+- [x] Add RED guardrails for operations troubleshooting, PowerShell compatibility wording, and CI job ordering.
+- [x] Clarify candidate versus redacted content fields without changing local-only retain safety boundaries.
+- [x] Expand the operations runbook with `uv` unavailable, NuGet/MSBuild lock, probe-versus-eval, and troubleshooting commands.
+- [x] Keep scripts Windows PowerShell 5.1-compatible while documenting PowerShell 7.6.3 as optional operator convenience.
+- [x] Run lightweight SQLite status/refresh/stale-check in CI before a dependency-cached LanceDB eval job.
+- [x] Run narrow RED/GREEN tests, PowerShell 5.1 and 7.6.3 smoke checks, semantic eval, solution build, and `git diff --check`.
+- [x] Review the completed diff, commit the verified slice, then run `memory-refresh-all`, `memory status`, and `memory-pre-push-check`.
+
+Review / Results:
+
+- Scope guard: no Cloud, external retain, Codex auto-retain, hook installation, post-commit rebuild, or generated report as source of truth.
+- RED confirmed: five focused Infrastructure tests fail on the current schema/runbook/workflow, and the Python sidecar test fails because explicit outside-repo FastEmbed cache resolution is not implemented yet.
+- Real schema-v2 report checks passed: a clean `docs/formulas.md` candidate is `commit-source-reference` with no embedded text, while `docs/memory/retain-policy.md` is `reviewed-redacted-text` with only the reviewed redacted payload.
+- Review found a blocked-report bypass in `CuratedRetainImporter`; RED proved a top-level blocked report imported successfully, and GREEN now rejects blocked/failed reports or non-empty `blocking_reasons` before storing rows.
+- PowerShell 5.1 and PowerShell 7.6.3 probe smoke both passed; preflight without consent failed closed; explicit model preflight completed; the following normal offline eval passed `11/11` with `network_download_allowed=false`.
+- Independent review identified seven issues: direct Python network bypass, partial redaction output on malformed findings, missing CI freshness assertion, fail-open unknown retain contracts, inconsistent uv discovery, ambiguous source-content flags, and stale runbook counters. All seven received focused RED/GREEN coverage or direct smoke evidence and were fixed.
+- Final pre-commit verification: related memory guardrails `38/38`; Memory CLI tests `17/17`; Python sidecar tests `ok`; full solution tests `146/146`; solution build `0` warnings/errors; PowerShell 5.1 and 7.6.3 probes `ready-to-run`; explicit preflight `ready`; following offline eval `11/11` with `network_download_allowed=false`; CI freshness assertion smoke passed; YAML parsed with all three jobs; `git diff --check` clean.
+- Post-commit memory cycle completed: `memory-refresh-all` rebuilt SQLite/LanceDB from committed `HEAD`, status reported matching `head/indexed_commit`, `needs_refresh=false`, and a clean worktree; `memory-pre-push-check` passed all 7 checks with LanceDB eval `11/11` and `network_download_allowed=false`.

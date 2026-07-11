@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace CryptoIndicatorApp.Infrastructure.Tests;
 
@@ -249,10 +250,16 @@ public sealed class CuratedRetainPolicyTests
 
         using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
         var root = report.RootElement;
+        Assert.Equal(2, root.GetProperty("schema_version").GetInt32());
         Assert.Equal("redacted-subset", root.GetProperty("mode").GetString());
         Assert.Equal("scripts/curated-retain-redacted-subset.ps1", root.GetProperty("generator").GetString());
         Assert.Equal("ready_for_import", root.GetProperty("status").GetString());
         Assert.True(root.GetProperty("writes_report_only").GetBoolean());
+        Assert.False(root.TryGetProperty("source_content_included", out _));
+        Assert.False(root.GetProperty("raw_source_text_included").GetBoolean());
+        Assert.True(root.GetProperty("source_derived_text_included").GetBoolean());
+        Assert.False(root.GetProperty("candidate_text_included").GetBoolean());
+        Assert.True(root.GetProperty("redacted_text_included").GetBoolean());
         Assert.False(root.GetProperty("external_retain_enabled").GetBoolean());
         Assert.False(root.GetProperty("codex_auto_retain_enabled").GetBoolean());
         Assert.False(root.GetProperty("cloud_enabled").GetBoolean());
@@ -265,6 +272,12 @@ public sealed class CuratedRetainPolicyTests
         var file = Assert.Single(root.GetProperty("files").EnumerateArray());
         Assert.Equal("AGENTS.md", file.GetProperty("path").GetString());
         Assert.Equal("redacted", file.GetProperty("redaction_status").GetString());
+        Assert.Equal("reviewed-redacted-text", file.GetProperty("content_kind").GetString());
+        Assert.False(file.TryGetProperty("source_content_included", out _));
+        Assert.False(file.GetProperty("raw_source_text_included").GetBoolean());
+        Assert.True(file.GetProperty("source_derived_text_included").GetBoolean());
+        Assert.False(file.GetProperty("candidate_text_included").GetBoolean());
+        Assert.True(file.GetProperty("redacted_text_included").GetBoolean());
         Assert.Equal(0, file.GetProperty("finding_count").GetInt32());
         Assert.True(file.GetProperty("original_finding_count").GetInt32() > 0);
         Assert.True(file.TryGetProperty("hash", out _));
@@ -275,6 +288,45 @@ public sealed class CuratedRetainPolicyTests
         Assert.Contains("redacted subset safe phrase", redactedText, StringComparison.Ordinal);
         Assert.DoesNotContain("OPENAI_API_KEY", redactedText, StringComparison.Ordinal);
         Assert.DoesNotContain("sk-testtoken", redactedText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RedactedSubsetReportReferencesCleanCandidateWithoutEmbeddingSourceText()
+    {
+        using var temp = TemporaryDirectory.Create();
+        WriteMinimumCuratedSources(temp);
+        const string sourcePath = "docs/formulas.md";
+
+        await RunCuratedDryRunAsync(temp.Path);
+
+        var result = await RunProjectScriptAsync(
+            "curated-retain-redacted-subset.ps1",
+            $"-ProjectRoot {Quote(temp.Path)} -SourcePath {sourcePath}");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-redacted-subset-report.json");
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+
+        Assert.Equal(2, root.GetProperty("schema_version").GetInt32());
+        Assert.Equal("ready_for_import", root.GetProperty("status").GetString());
+        Assert.False(root.TryGetProperty("source_content_included", out _));
+        Assert.False(root.GetProperty("raw_source_text_included").GetBoolean());
+        Assert.False(root.GetProperty("source_derived_text_included").GetBoolean());
+        Assert.False(root.GetProperty("candidate_text_included").GetBoolean());
+        Assert.False(root.GetProperty("redacted_text_included").GetBoolean());
+
+        var file = Assert.Single(root.GetProperty("files").EnumerateArray());
+        Assert.Equal(sourcePath, file.GetProperty("path").GetString());
+        Assert.Equal("candidate", file.GetProperty("redaction_status").GetString());
+        Assert.Equal("commit-source-reference", file.GetProperty("content_kind").GetString());
+        Assert.False(file.TryGetProperty("source_content_included", out _));
+        Assert.False(file.GetProperty("raw_source_text_included").GetBoolean());
+        Assert.False(file.GetProperty("source_derived_text_included").GetBoolean());
+        Assert.False(file.GetProperty("candidate_text_included").GetBoolean());
+        Assert.False(file.GetProperty("redacted_text_included").GetBoolean());
+        Assert.False(file.TryGetProperty("redacted_text", out _));
+        Assert.False(file.TryGetProperty("redacted_hash", out _));
     }
 
     [Fact]
@@ -306,6 +358,47 @@ public sealed class CuratedRetainPolicyTests
             root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
             reason => reason == "stale_source_metadata");
         Assert.Empty(root.GetProperty("files").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task RedactedSubsetScriptDoesNotWriteSourceTextWhenFindingMetadataIsInvalid()
+    {
+        using var temp = TemporaryDirectory.Create();
+        WriteMinimumCuratedSources(temp);
+        temp.Write(
+            "AGENTS.md",
+            "# Agents\n\nOPENAI_API_KEY=sk-testtoken1234567890 partialredactionleak must never reach the subset report.\n");
+
+        await RunCuratedDryRunAsync(temp.Path);
+        var dryRunPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-dry-run-report.json");
+        var dryRun = JsonNode.Parse(File.ReadAllText(dryRunPath))!.AsObject();
+        var findings = dryRun["findings"]!.AsArray();
+        Assert.NotEmpty(findings);
+        foreach (var finding in findings)
+        {
+            finding!["line"] = 999;
+        }
+
+        File.WriteAllText(dryRunPath, dryRun.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        var result = await RunProjectScriptAsync(
+            "curated-retain-redacted-subset.ps1",
+            $"-ProjectRoot {Quote(temp.Path)} -SourcePath AGENTS.md");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-redacted-subset-report.json");
+        var reportText = File.ReadAllText(reportPath);
+        using var report = JsonDocument.Parse(reportText);
+        var root = report.RootElement;
+
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "invalid_finding_line");
+        Assert.Empty(root.GetProperty("files").EnumerateArray());
+        Assert.DoesNotContain("OPENAI_API_KEY", reportText, StringComparison.Ordinal);
+        Assert.DoesNotContain("sk-testtoken", reportText, StringComparison.Ordinal);
+        Assert.DoesNotContain("partialredactionleak", reportText, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -41,3 +41,121 @@ jobs:
 
       - name: Test Memory CLI
         run: dotnet test tools/Memory.Tests/CryptoIndicatorApp.Memory.Tests.csproj --configuration Release --no-restore --no-build --logger "trx;LogFilePrefix=memory-cli"
+
+  memory-lightweight:
+    name: Lightweight canonical memory
+    needs: dotnet
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore Memory CLI
+        run: dotnet restore tools/Memory/CryptoIndicatorApp.Memory.csproj --disable-parallel
+
+      - name: Build Memory CLI
+        run: dotnet build tools/Memory/CryptoIndicatorApp.Memory.csproj --configuration Release --no-restore
+
+      - name: Memory status before SQLite refresh
+        run: dotnet run --project tools/Memory/CryptoIndicatorApp.Memory.csproj --configuration Release --no-build --no-restore -- status --project-root . --json
+
+      - name: Refresh canonical SQLite from HEAD
+        run: dotnet run --project tools/Memory/CryptoIndicatorApp.Memory.csproj --configuration Release --no-build --no-restore -- refresh-from-commit --commit HEAD --project-root . --json
+
+      - name: SQLite stale-check
+        run: dotnet run --project tools/Memory/CryptoIndicatorApp.Memory.csproj --configuration Release --no-build --no-restore -- stale-check --project-root . --json
+
+      - name: Assert SQLite memory is current
+        shell: powershell
+        run: |
+          $statusJson = (dotnet run --project tools/Memory/CryptoIndicatorApp.Memory.csproj --configuration Release --no-build --no-restore -- status --project-root . --json | Out-String)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Memory status failed with exit code $LASTEXITCODE."
+          }
+          $status = $statusJson | ConvertFrom-Json
+          Write-Output $statusJson
+          if ($status.needs_refresh) {
+            throw 'SQLite memory still needs refresh after commit-addressed refresh.'
+          }
+          if ($status.indexed_commit -ne $status.head) {
+            throw "SQLite indexed_commit $($status.indexed_commit) does not match HEAD $($status.head)."
+          }
+
+  memory-semantic:
+    name: Cached semantic memory quality
+    needs: memory-lightweight
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      FASTEMBED_CACHE_PATH: ${{ runner.temp }}\fastembed_cache
+      HF_HUB_OFFLINE: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore and build Memory CLI
+        run: |
+          dotnet restore tools/Memory/CryptoIndicatorApp.Memory.csproj --disable-parallel
+          dotnet build tools/Memory/CryptoIndicatorApp.Memory.csproj --configuration Release --no-restore
+
+      - name: Build canonical SQLite input
+        run: dotnet run --project tools/Memory/CryptoIndicatorApp.Memory.csproj --configuration Release --no-build --no-restore -- refresh-from-commit --commit HEAD --project-root . --json
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Setup cached uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: '0.11.28'
+          enable-cache: true
+          cache-dependency-glob: |
+            scripts/lancedb-sidecar.ps1
+            scripts/memory-semantic-doctor.ps1
+            tools/MemorySemantic/*.py
+
+      - name: Restore FastEmbed model cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.FASTEMBED_CACHE_PATH }}
+          key: fastembed-${{ runner.os }}-py312-fastembed-0.8.0-paraphrase-multilingual-minilm-l12-v2-mean
+
+      - name: Explicit semantic dependency preflight
+        shell: powershell
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-semantic-doctor.ps1 -AllowNetworkPreflight -TimeoutSeconds 300
+
+      - name: Explicit FastEmbed model cache preflight
+        shell: powershell
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command preflight -AllowNetworkPreflight
+
+      - name: Prove semantic dependencies work offline
+        shell: powershell
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-semantic-doctor.ps1 -TimeoutSeconds 300
+
+      - name: Test semantic sidecar
+        run: uv run --offline --python 3.12 --with lancedb==0.34.0 --with pyarrow==24.0.0 --with fastembed==0.8.0 python tools/MemorySemantic/lancedb_sidecar_tests.py
+
+      - name: Rebuild LanceDB from SQLite
+        shell: powershell
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command cleanup
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command rebuild
+
+      - name: LanceDB semantic eval
+        shell: powershell
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command eval

@@ -139,10 +139,10 @@ function Write-RedactedSubsetMarkdownReport {
     $lines.Add("- External retain: disabled")
     $lines.Add("- Codex auto-retain: disabled")
     $lines.Add('')
-    $lines.Add('| Source | Status | Original Findings |')
-    $lines.Add('| --- | --- | ---: |')
+    $lines.Add('| Source | Status | Content | Original Findings |')
+    $lines.Add('| --- | --- | --- | ---: |')
     foreach ($file in $Report.files) {
-        $lines.Add("| $($file['path']) | $($file['redaction_status']) | $($file['original_finding_count']) |")
+        $lines.Add("| $($file['path']) | $($file['redaction_status']) | $($file['content_kind']) | $($file['original_finding_count']) |")
     }
 
     Set-Content -Path $Path -Value $lines -Encoding UTF8
@@ -200,54 +200,73 @@ foreach ($requestedPath in $requested) {
         continue
     }
 
-    $lines = [System.IO.File]::ReadAllLines((Resolve-Path $fullPath).Path)
     $sourceFindings = @($inputFindings | Where-Object { ([string]$_.source_path) -eq $requestedPath })
-    $findingsByLine = @{}
-    foreach ($finding in $sourceFindings) {
-        $line = [int]$finding.line
-        if ($line -lt 1 -or $line -gt $lines.Length) {
-            Add-BlockingReason -Reasons $blockingReasons -Reason 'invalid_finding_line'
-            continue
-        }
-
-        if (-not $findingsByLine.ContainsKey($line)) {
-            $findingsByLine[$line] = [System.Collections.Generic.List[string]]::new()
-        }
-
-        $type = [string]$finding.type
-        if (-not $findingsByLine[$line].Contains($type)) {
-            $findingsByLine[$line].Add($type)
-        }
-    }
-
-    for ($index = 0; $index -lt $lines.Length; $index++) {
-        $lineNumber = $index + 1
-        if ($findingsByLine.ContainsKey($lineNumber)) {
-            $types = @($findingsByLine[$lineNumber] | Sort-Object)
-            $lines[$index] = "[REDACTED:$([string]::Join(',', $types))]"
-        }
-    }
-
-    $redactedText = [string]::Join("`n", $lines) + "`n"
-    $selectedFiles.Add([ordered]@{
+    $isRedacted = $sourceFindings.Count -gt 0
+    $selectedFile = [ordered]@{
         path = $requestedPath
         hash = [string]$file.hash
         size_bytes = [int64]$file.size_bytes
-        redaction_status = if ($sourceFindings.Count -gt 0) { 'redacted' } else { 'candidate' }
+        redaction_status = if ($isRedacted) { 'redacted' } else { 'candidate' }
+        content_kind = if ($isRedacted) { 'reviewed-redacted-text' } else { 'commit-source-reference' }
+        raw_source_text_included = $false
+        source_derived_text_included = $isRedacted
+        candidate_text_included = $false
+        redacted_text_included = $isRedacted
         finding_count = 0
         original_finding_count = $sourceFindings.Count
-        redacted_hash = Get-Sha256TextHash $redactedText
-        redacted_text = $redactedText
-    })
+    }
+
+    if ($isRedacted) {
+        $lines = [System.IO.File]::ReadAllLines((Resolve-Path $fullPath).Path)
+        $findingsByLine = @{}
+        $invalidFindingMetadata = $false
+        foreach ($finding in $sourceFindings) {
+            $line = [int]$finding.line
+            if ($line -lt 1 -or $line -gt $lines.Length) {
+                Add-BlockingReason -Reasons $blockingReasons -Reason 'invalid_finding_line'
+                $invalidFindingMetadata = $true
+                continue
+            }
+
+            if (-not $findingsByLine.ContainsKey($line)) {
+                $findingsByLine[$line] = [System.Collections.Generic.List[string]]::new()
+            }
+
+            $type = [string]$finding.type
+            if (-not $findingsByLine[$line].Contains($type)) {
+                $findingsByLine[$line].Add($type)
+            }
+        }
+
+        if ($invalidFindingMetadata) {
+            continue
+        }
+
+        for ($index = 0; $index -lt $lines.Length; $index++) {
+            $lineNumber = $index + 1
+            if ($findingsByLine.ContainsKey($lineNumber)) {
+                $types = @($findingsByLine[$lineNumber] | Sort-Object)
+                $lines[$index] = "[REDACTED:$([string]::Join(',', $types))]"
+            }
+        }
+
+        $redactedText = [string]::Join("`n", $lines) + "`n"
+        $selectedFile.redacted_hash = Get-Sha256TextHash $redactedText
+        $selectedFile.redacted_text = $redactedText
+    }
+
+    $selectedFiles.Add($selectedFile)
 }
 
 $relativeOutputPath = Get-RelativeProjectPath $OutputPath
 $markdownOutputPath = [System.IO.Path]::ChangeExtension($OutputPath, '.md')
 $relativeMarkdownOutputPath = Get-RelativeProjectPath $markdownOutputPath
 $status = if ($blockingReasons.Count -gt 0 -or $selectedFiles.Count -eq 0) { 'blocked' } else { 'ready_for_import' }
+$candidateFileCount = @($selectedFiles | Where-Object { $_['redaction_status'] -eq 'candidate' }).Count
+$redactedFileCount = @($selectedFiles | Where-Object { $_['redaction_status'] -eq 'redacted' }).Count
 
 $report = [ordered]@{
-    schema_version = 1
+    schema_version = 2
     generated_at = (Get-Date).ToUniversalTime().ToString('o')
     generator = 'scripts/curated-retain-redacted-subset.ps1'
     mode = 'redacted-subset'
@@ -259,8 +278,10 @@ $report = [ordered]@{
     output_is_generated = $relativeOutputPath.StartsWith('docs/memory/generated/')
     output_should_be_ignored = $true
     markdown_output_should_be_ignored = $true
-    source_content_included = $false
-    redacted_content_included = $true
+    raw_source_text_included = $false
+    source_derived_text_included = $redactedFileCount -gt 0
+    candidate_text_included = $false
+    redacted_text_included = $redactedFileCount -gt 0
     external_retain_enabled = $false
     codex_auto_retain_enabled = $false
     cloud_enabled = $false
@@ -274,6 +295,8 @@ $report = [ordered]@{
     blocking_reasons = @($blockingReasons)
     summary = [ordered]@{
         file_count = $selectedFiles.Count
+        candidate_file_count = $candidateFileCount
+        redacted_file_count = $redactedFileCount
         original_finding_count = (@($selectedFiles | ForEach-Object { [int]($_['original_finding_count']) }) | Measure-Object -Sum).Sum
     }
     files = @($selectedFiles)

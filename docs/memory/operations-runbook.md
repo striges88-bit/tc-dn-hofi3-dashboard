@@ -35,6 +35,76 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-semantic-
 
 Good result: `status=ok`, `lancedb==0.34.0`, `pyarrow==24.0.0`, `fastembed==0.8.0`, cache/model paths outside the repo, and offline runtime checks pass. Memory gates use `uv --offline`, so missing dependencies should fail as a preflight issue instead of downloading in the background.
 
+## Shell Compatibility
+
+Checked-in scripts remain Windows PowerShell 5.1-compatible and the documented gate commands use `powershell.exe`. PowerShell 7.6.3 is optional for interactive use; it is not required by the scripts or CI. When diagnosing a compatibility issue, rerun the same command with `powershell.exe` before treating it as a memory-system failure.
+
+## Troubleshooting
+
+### `uv-unavailable` Or Missing Semantic Cache
+
+Check discovery without changing memory:
+
+```powershell
+Get-Command uv.exe -All -ErrorAction SilentlyContinue
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-semantic-doctor.ps1 -PlanOnly
+```
+
+On a fresh machine, dependency and model downloads must be explicit. First prepare the pinned Python packages, then prepare the FastEmbed model cache, and finally prove that the normal path works offline:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-semantic-doctor.ps1 -AllowNetworkPreflight
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command preflight -AllowNetworkPreflight
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-semantic-doctor.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command eval
+```
+
+The preflight commands are the only semantic commands allowed to use the network. Normal rebuild/search/eval commands force both uv packages and FastEmbed model access offline.
+
+### Memory CLI Unavailable Or NuGet/MSBuild Lock
+
+Check for an existing build/test process before starting another one:
+
+```powershell
+Get-Process dotnet,msbuild,vstest.console -ErrorAction SilentlyContinue
+```
+
+Let the owning command finish or close its terminal, then restore and build serially:
+
+```powershell
+.\.dotnet\dotnet.exe restore CryptoIndicatorApp.sln --disable-parallel
+.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- status --project-root . --json
+```
+
+Do not infer `needs_refresh=true` from a NuGet lock, inaccessible MSBuild temp directory, or `CLI unavailable`; freshness is unknown until the CLI runs successfully.
+
+### Probe Versus Eval Reports
+
+`probe` checks configuration and writes `docs/memory/generated/lancedb-probe-report.json`. It does not run retrieval and is not quality evidence:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command probe
+```
+
+`eval` runs the 11-case semantic quality gate and writes `lancedb-sidecar-report.json` plus `lancedb-eval-report.md`:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command eval
+```
+
+`memory-pre-push-check.ps1` reads only the eval reports. A fresh probe must never overwrite or substitute for eval evidence.
+
+## CI Order
+
+CI keeps failure causes separated:
+
+1. `.NET build and tests` verifies the application and tooling.
+2. `Lightweight canonical memory` runs Memory CLI status, commit-addressed SQLite refresh, stale-check, and final status without Python/LanceDB.
+3. `Cached semantic memory quality` runs only after the lightweight job. It restores pinned uv and FastEmbed caches, performs the two explicit preflights, proves offline availability, rebuilds LanceDB from SQLite, and runs eval.
+
+CI does not run `memory-refresh-all`, install hooks, import curated retain data, call Cloud, or enable Codex auto-retain. A semantic dependency/cache failure therefore cannot be reported as SQLite staleness.
+
 ## Before Push Or PR
 
 Run the manual evidence gate:
@@ -43,7 +113,7 @@ Run the manual evidence gate:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-pre-push-check.ps1
 ```
 
-Good result: `status=passed`, `passed_count=9`, `failed_count=0`, no Cloud, no hooks installed by the command, and no generated exports used as source.
+Good result: `status=passed`, every item in `checks` is passed, the LanceDB eval detail reports `passed_count=11` and `failed_count=0`, no Cloud, no hooks installed by the command, and no generated exports used as source.
 
 ## Local Recovery
 

@@ -39,7 +39,7 @@ SQLite remains authoritative for `current`, `proposed`, `superseded`, `failed`, 
 
 The sidecar now uses local FastEmbed/ONNX for semantic recall quality testing. The quality gate is explicit: `eval` must pass the required retrieval cases before any hook or background automation is considered. `eval` writes compact generated JSON and Markdown reports with query, expected ids/types, matched rank, source_path, confidence, and gap notes. Diagnostic commands write command-specific reports and must not overwrite the eval JSON evidence used by `memory-pre-push-check`.
 
-`scripts/memory-semantic-doctor.ps1` is the dependency preflight. It reports the `uv` discovery path, dependency pins, cache policy, and whether the local offline runtime can import the pinned packages. The gate path uses `uv --offline`; hidden network downloads are blocked. Any dependency/model download must happen through an explicit preflight, never as a surprise inside `memory-refresh-all`, `memory-pre-push-check`, or a hook.
+`scripts/memory-semantic-doctor.ps1` is the dependency preflight. It reports the `uv` discovery path, dependency pins, cache policy, and whether the local offline runtime can import the pinned packages. On a fresh machine, `memory-semantic-doctor.ps1 -AllowNetworkPreflight` prepares packages and `lancedb-sidecar.ps1 -Command preflight -AllowNetworkPreflight` prepares the FastEmbed model cache. Normal rebuild/search/eval commands use `uv --offline`, `HF_HUB_OFFLINE=1`, and FastEmbed local-files-only loading. Hidden network downloads are therefore blocked inside `memory-refresh-all`, `memory-pre-push-check`, and hooks.
 
 The local cache/venv policy is deliberately plain: `uv` may be discovered from `PATH`, `%APPDATA%/Python/Python312/Scripts/uv.exe`, or `%LOCALAPPDATA%/Microsoft/WinGet/Packages/**/uv.exe`; dependency and model caches must stay outside the repo; no project `.venv` is required for memory gates.
 
@@ -142,7 +142,7 @@ Required eval report fields:
 
 ## Limitations
 
-- FastEmbed model files may need a first-run local download into the Python/model cache. This is still local embedded execution, but it is not zero-install.
+- FastEmbed model files need an explicit first-run `preflight -AllowNetworkPreflight` download into an outside-repo model cache. Normal gates fail closed when that cache is missing.
 - FastEmbed `0.8.0` warns when the upstream model name is used directly because this model now uses mean pooling instead of older CLS behavior. The production sidecar uses an explicit custom runtime alias with `PoolingType.MEAN` instead of suppressing the warning. The behavior is accepted only as the documented `mean-pooling` baseline while eval remains `11/11`, and changing it later requires a fresh eval baseline.
 - Raw vector distance alone ranked generic chunks above the current formula record during the first smoke. The sidecar keeps a small local reranker that prefers typed records such as `formula_version` and ADRs over generic chunks when exact-token overlap is present.
 - This does not replace SQLite FTS5 retrieval tests. It adds a semantic quality gate below SQLite status/source metadata.

@@ -401,11 +401,57 @@ public sealed class ManualMemoryGateTests
         Assert.Contains("post-commit rebuild", runbook, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("raw JSONL", runbook, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("secrets", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("uv-unavailable", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("NuGet", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("probe", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("eval", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PowerShell 7.6.3", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PowerShell 5.1-compatible", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Get-Process", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("dotnet.exe restore", runbook, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("passed_count=9", runbook, StringComparison.OrdinalIgnoreCase);
 
         Assert.Contains("operations-runbook.md", memoryReadme, StringComparison.Ordinal);
         Assert.Contains("memory-clone-recovery-check.ps1", memoryReadme, StringComparison.Ordinal);
         Assert.Contains("memory-clone-recovery-check.ps1", scriptsReadme, StringComparison.Ordinal);
         Assert.Contains("clone-like", scriptsReadme, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ContinuousIntegrationRunsLightweightMemoryBeforeCachedSemanticEval()
+    {
+        var workflow = ReadText(".github/workflows/ci.yml");
+
+        var lightweightJob = workflow.IndexOf("memory-lightweight:", StringComparison.Ordinal);
+        var semanticJob = workflow.IndexOf("memory-semantic:", StringComparison.Ordinal);
+        var preIndexStatus = workflow.IndexOf("Memory status before SQLite refresh", StringComparison.Ordinal);
+        var sqliteRefresh = workflow.IndexOf("Refresh canonical SQLite from HEAD", StringComparison.Ordinal);
+        var staleCheck = workflow.IndexOf("SQLite stale-check", StringComparison.Ordinal);
+        var finalStatusAssert = workflow.IndexOf("Assert SQLite memory is current", StringComparison.Ordinal);
+        var dependencyCache = workflow.IndexOf("enable-cache: true", StringComparison.Ordinal);
+        var modelCache = workflow.IndexOf("actions/cache@v5", StringComparison.Ordinal);
+        var dependencyPreflight = workflow.IndexOf("memory-semantic-doctor.ps1 -AllowNetworkPreflight", StringComparison.Ordinal);
+        var modelPreflight = workflow.IndexOf("-Command preflight -AllowNetworkPreflight", StringComparison.Ordinal);
+        var semanticEval = workflow.IndexOf("-Command eval", StringComparison.Ordinal);
+
+        Assert.True(lightweightJob >= 0, "Missing lightweight memory CI job.");
+        Assert.True(semanticJob > lightweightJob, "Semantic job must be declared after the lightweight job.");
+        Assert.Contains("needs: memory-lightweight", workflow, StringComparison.Ordinal);
+        Assert.True(preIndexStatus > lightweightJob && preIndexStatus < semanticJob);
+        Assert.True(sqliteRefresh > preIndexStatus && sqliteRefresh < semanticJob);
+        Assert.True(staleCheck > sqliteRefresh && staleCheck < semanticJob);
+        Assert.True(finalStatusAssert > staleCheck && finalStatusAssert < semanticJob);
+        Assert.Contains("ConvertFrom-Json", workflow, StringComparison.Ordinal);
+        Assert.Contains("if ($status.needs_refresh)", workflow, StringComparison.Ordinal);
+        Assert.Contains("SQLite memory still needs refresh", workflow, StringComparison.Ordinal);
+        Assert.True(dependencyCache > semanticJob && dependencyCache < semanticEval);
+        Assert.True(modelCache > semanticJob && modelCache < semanticEval);
+        Assert.True(dependencyPreflight > modelCache && dependencyPreflight < semanticEval);
+        Assert.True(modelPreflight > dependencyPreflight && modelPreflight < semanticEval);
+        Assert.Contains("HF_HUB_OFFLINE: '1'", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("memory-refresh-all.ps1", workflow, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("install-memory-", workflow, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("curated-retain-import", workflow, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
