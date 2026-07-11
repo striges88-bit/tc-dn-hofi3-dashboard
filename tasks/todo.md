@@ -1531,7 +1531,7 @@ Review / Results:
 - [x] Move cache-path setup to a runner step without changing semantic dependency or network policy.
 - [x] Run the focused guardrail, related memory tests, solution build, and `git diff --check`.
 - [x] Record the lesson and prepare the focused fix for commit.
-- [ ] Commit the fix, refresh committed memory, pass the manual pre-push gate, push PR #19, and confirm GitHub accepts the workflow.
+- [x] Commit the fix, refresh committed memory, pass the manual pre-push gate, push PR #19, and confirm GitHub accepts the workflow.
 
 Review / Results:
 
@@ -1539,3 +1539,23 @@ Review / Results:
 - GREEN removes runner context from job-level `env`, writes the absolute cache path from `$env:RUNNER_TEMP` to `$env:GITHUB_ENV`, and uses `${{ runner.temp }}` only in the step-level `actions/cache` input.
 - Verification before commit passed: focused regression `1/1`, `ManualMemoryGateTests` `21/21`, full Infrastructure tests `76/76`, full solution tests `147/147`, solution build `0` warnings/errors, YAML parse found `dotnet`, `memory-lightweight`, and `memory-semantic`, and `git diff --check` was clean.
 - The first sandboxed full Infrastructure run failed only because `.tools/python-packages` was inaccessible; the exact test command passed outside sandbox.
+
+## Memory Final Review Remediation Todo
+
+- [x] Reproduce the review findings: redacted-subset path escape and incomplete retain report acceptance.
+- [x] Add RED regressions for repository containment and strict report-contract validation.
+- [x] Implement minimal allowlist/containment and fail-closed contract checks.
+- [x] Run focused tests, related memory guardrails, full solution tests/build, and `git diff --check`.
+- [x] Review the remediation diff and prepare the commit-addressed refresh/pre-push sequence.
+
+External PR state is tracked on GitHub rather than as a self-referential source checkbox: after this source commit, run `memory-refresh-all`, `memory status`, and `memory-pre-push-check`, push PR #19, wait for green CI, return it to ready, and repeat the final review.
+
+Review / Results:
+
+- RED path regression returned `ready_for_import` for an escaped `docs/memory/../../../*.md` source and RED contract regression imported a report missing generator/safety metadata with exit `0`.
+- GREEN rejects rooted or traversal paths before any read, enforces allowlist plus lexical/resolved repository containment, and requires the exact known report generator with complete typed safety metadata.
+- A follow-up RED proved missing per-file `finding_count` was also defaulted to clean; GREEN now requires a non-negative JSON integer and blocks malformed file entries.
+- Verification passed: focused contract regressions `2/2`, path regression `1/1`, curated policy tests `13/13`, Infrastructure tests `77/77`, full solution tests `150/150`, and solution build `0` warnings/errors.
+- The first post-commit full refresh on `30ea194` stopped safely at LanceDB eval `10/11`: the superseded-only query matched its own fixture literal in a current `MemoryCliTests.cs` chunk.
+- RED `RefreshDoesNotTreatCSharpTestFixtureLiteralsAsCurrentFacts` reproduced the false current hit. GREEN now blanks string/char literal payloads only in generic C# test-project chunks while retaining production literals and typed test code memory.
+- Post-fix verification passed: focused self-contamination regression `1/1`, Memory CLI tests `20/20`, Infrastructure tests `77/77` outside sandbox, full solution tests `151/151`, and solution build `0` warnings/errors. The sandbox-only Infrastructure run failed on unreadable local `.tools/python-packages`, then the exact project test passed outside sandbox.

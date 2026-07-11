@@ -113,6 +113,29 @@ function Test-DeniedRetainPath {
         $lower.Contains('ss-local')
 }
 
+function Test-AllowlistedRetainPath {
+    param([Parameter(Mandatory = $true)][string]$RelativePath)
+
+    $path = $RelativePath.Replace('\', '/').Trim()
+    return $path -eq 'AGENTS.md' -or
+        $path -eq 'TC-DN-HOFI3.md' -or
+        $path -eq 'docs/formulas.md' -or
+        $path -eq 'tasks/lessons.md' -or
+        ($path.StartsWith('docs/decisions/') -and $path.EndsWith('.md')) -or
+        ($path.StartsWith('docs/memory/') -and
+            -not $path.StartsWith('docs/memory/generated/') -and
+            $path.EndsWith('.md'))
+}
+
+function Test-PathWithinProjectRoot {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $rootFull = [System.IO.Path]::GetFullPath($root).TrimEnd('\', '/')
+    $candidateFull = [System.IO.Path]::GetFullPath($Path).TrimEnd('\', '/')
+    $rootPrefix = $rootFull + [System.IO.Path]::DirectorySeparatorChar
+    return $candidateFull.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Add-BlockingReason {
     param(
         [System.Collections.Generic.List[string]]$Reasons,
@@ -171,8 +194,19 @@ $inputFiles = @($inputReport.files)
 $inputFindings = @($inputReport.findings)
 
 foreach ($requestedPath in $requested) {
+    $requestedPathSegments = $requestedPath.Replace('\', '/').Split('/')
+    if ([System.IO.Path]::IsPathRooted($requestedPath) -or $requestedPathSegments -contains '..') {
+        Add-BlockingReason -Reasons $blockingReasons -Reason 'source_outside_project'
+        continue
+    }
+
     if (Test-DeniedRetainPath $requestedPath) {
         Add-BlockingReason -Reasons $blockingReasons -Reason 'denied_source_path'
+        continue
+    }
+
+    if (-not (Test-AllowlistedRetainPath $requestedPath)) {
+        Add-BlockingReason -Reasons $blockingReasons -Reason 'source_not_allowlisted'
         continue
     }
 
@@ -182,9 +216,20 @@ foreach ($requestedPath in $requested) {
         continue
     }
 
-    $fullPath = Join-Path $root $requestedPath.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
+    $fullPath = [System.IO.Path]::GetFullPath((Join-Path $root $requestedPath.Replace('/', [System.IO.Path]::DirectorySeparatorChar)))
+    if (-not (Test-PathWithinProjectRoot $fullPath)) {
+        Add-BlockingReason -Reasons $blockingReasons -Reason 'source_outside_project'
+        continue
+    }
+
     if (-not (Test-Path $fullPath -PathType Leaf)) {
         Add-BlockingReason -Reasons $blockingReasons -Reason 'source_missing'
+        continue
+    }
+
+    $fullPath = (Resolve-Path -LiteralPath $fullPath).Path
+    if (-not (Test-PathWithinProjectRoot $fullPath)) {
+        Add-BlockingReason -Reasons $blockingReasons -Reason 'source_outside_project'
         continue
     }
 

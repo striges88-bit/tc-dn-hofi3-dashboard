@@ -298,13 +298,29 @@ public sealed class ProjectMemoryIndexer
     private static void AddChunks(List<SearchDocument> documents, string path, string hash, string text)
     {
         const int chunkSize = 4000;
-        for (var offset = 0; offset < text.Length; offset += chunkSize)
+        var chunkText = IsCSharpTestSource(path)
+            ? CSharpLiteralSanitizer.BlankStringAndCharLiterals(text)
+            : text;
+
+        for (var offset = 0; offset < chunkText.Length; offset += chunkSize)
         {
-            var length = Math.Min(chunkSize, text.Length - offset);
-            var chunk = text.Substring(offset, length);
+            var length = Math.Min(chunkSize, chunkText.Length - offset);
+            var chunk = chunkText.Substring(offset, length);
             var ordinal = offset / chunkSize;
             documents.Add(ToSearchDocument($"chunk.{Slug(path)}.{ordinal}", "chunk", "current", path, chunk, path, hash));
         }
+    }
+
+    private static bool IsCSharpTestSource(string path)
+    {
+        if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return path.Replace('\\', '/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Any(segment => segment.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase));
     }
 
     private bool ShouldIndexFile(FileInfo file)

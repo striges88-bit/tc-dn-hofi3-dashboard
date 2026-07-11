@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace CryptoIndicatorApp.Memory.Tests;
 
@@ -186,6 +187,29 @@ public sealed class MemoryCliTests
         Assert.Equal(0, superseded.ExitCode);
         using var supersededJson = JsonDocument.Parse(superseded.StandardOutput);
         Assert.Empty(supersededJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
+    [Fact]
+    public void RefreshDoesNotTreatCSharpTestFixtureLiteralsAsCurrentFacts()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.WriteStandardMemoryFiles();
+        fixture.Write(
+            "CryptoIndicatorApp.Infrastructure.Tests/RetrievalFixtureTests.cs",
+            """
+            namespace CryptoIndicatorApp.Infrastructure.Tests;
+
+            public sealed class RetrievalFixtureTests
+            {
+                private const string HistoricalFixture = "legacy superseded-only phrase";
+            }
+            """);
+        fixture.Refresh();
+
+        using var result = fixture.RunMemoryCli("search", "--query", "legacy superseded-only phrase", "--json");
+        Assert.Equal(0, result.ExitCode);
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        Assert.Empty(document.RootElement.GetProperty("results").EnumerateArray());
     }
 
     [Fact]
@@ -731,6 +755,97 @@ public sealed class MemoryCliTests
             reason => reason == "unsupported_input_report_contract");
     }
 
+    [Fact]
+    public void RetainImportRejectsIncompleteInputReportContract()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourceText = "# Incomplete retain report\n\nincompletecontractonly phrase must never be retained.\n";
+        fixture.Write("docs/memory/incomplete-retain.md", sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                "docs/memory/incomplete-retain.md",
+                HashText(sourceText),
+                sourceText.Length,
+                "candidate",
+                0));
+        var report = JsonNode.Parse(File.ReadAllText(reportPath))!.AsObject();
+        foreach (var propertyName in new[]
+                 {
+                     "generator",
+                     "external_retain_enabled",
+                     "codex_auto_retain_enabled",
+                     "cloud_enabled",
+                     "calls_hindsight",
+                     "calls_codex_retain",
+                     "installs_hooks",
+                     "runs_refresh_all",
+                     "rebuilds_memory",
+                     "imports_denylist",
+                     "writes_report_only",
+                 })
+        {
+            report.Remove(propertyName);
+        }
+
+        File.WriteAllText(reportPath, report.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using (var importJson = JsonDocument.Parse(import.StandardOutput))
+        {
+            var root = importJson.RootElement;
+            Assert.Equal("blocked", root.GetProperty("status").GetString());
+            Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+            Assert.Contains(
+                root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+                reason => reason == "incomplete_input_report_contract");
+        }
+
+        using var search = fixture.RunMemoryCli("retain-search", "--query", "incompletecontractonly", "--json");
+        Assert.Equal(0, search.ExitCode);
+        using var searchJson = JsonDocument.Parse(search.StandardOutput);
+        Assert.Empty(searchJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
+    [Fact]
+    public void RetainImportRejectsIncompleteFileMetadata()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourceText = "# Incomplete file metadata\n\nincompletefileonly phrase must never be retained.\n";
+        fixture.Write("docs/memory/incomplete-file.md", sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                "docs/memory/incomplete-file.md",
+                HashText(sourceText),
+                sourceText.Length,
+                "candidate",
+                0));
+        var report = JsonNode.Parse(File.ReadAllText(reportPath))!.AsObject();
+        report["files"]!.AsArray()[0]!.AsObject().Remove("finding_count");
+        File.WriteAllText(reportPath, report.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using (var importJson = JsonDocument.Parse(import.StandardOutput))
+        {
+            var root = importJson.RootElement;
+            Assert.Equal("blocked", root.GetProperty("status").GetString());
+            Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+            Assert.Contains(
+                root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+                reason => reason == "incomplete_input_report_contract");
+        }
+
+        using var search = fixture.RunMemoryCli("retain-search", "--query", "incompletefileonly", "--json");
+        Assert.Equal(0, search.ExitCode);
+        using var searchJson = JsonDocument.Parse(search.StandardOutput);
+        Assert.Empty(searchJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
     private static CliResult RunMemoryCli(params string[] arguments)
     {
         var projectPath = Path.Combine(RepositoryRoot, "tools", "Memory", "CryptoIndicatorApp.Memory.csproj");
@@ -947,10 +1062,14 @@ public sealed class MemoryCliTests
             var report = new
             {
                 schema_version = isRedactedSubset ? 2 : 1,
-                generator = "test",
+                generator = isRedactedSubset
+                    ? "scripts/curated-retain-redacted-subset.ps1"
+                    : "scripts/curated-retain-dry-run.ps1",
                 mode = isRedactedSubset ? "redacted-subset" : "dry-run",
                 status = requiresReview ? "review_required" : isRedactedSubset ? "ready_for_import" : "ready_for_review",
                 blocking_reasons = Array.Empty<string>(),
+                output_is_generated = true,
+                output_should_be_ignored = true,
                 external_retain_enabled = false,
                 codex_auto_retain_enabled = false,
                 cloud_enabled = false,

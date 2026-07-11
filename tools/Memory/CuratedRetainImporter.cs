@@ -7,6 +7,19 @@ namespace CryptoIndicatorApp.Memory;
 
 internal sealed class CuratedRetainImporter
 {
+    private static readonly string[] RequiredFalseSafetyFlags =
+    [
+        "external_retain_enabled",
+        "codex_auto_retain_enabled",
+        "cloud_enabled",
+        "calls_hindsight",
+        "calls_codex_retain",
+        "installs_hooks",
+        "runs_refresh_all",
+        "rebuilds_memory",
+        "imports_denylist",
+    ];
+
     private readonly string _projectRoot;
 
     public CuratedRetainImporter(string projectRoot)
@@ -30,22 +43,30 @@ internal sealed class CuratedRetainImporter
 
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(inputReportPath));
         var root = document.RootElement;
-        if (ReadBool(root, "external_retain_enabled")
-            || ReadBool(root, "codex_auto_retain_enabled")
-            || ReadBool(root, "cloud_enabled")
-            || ReadBool(root, "calls_hindsight")
-            || ReadBool(root, "calls_codex_retain")
-            || ReadBool(root, "installs_hooks")
-            || ReadBool(root, "runs_refresh_all")
-            || ReadBool(root, "rebuilds_memory"))
+        if (RequiredFalseSafetyFlags.Any(propertyName => ReadBool(root, propertyName)))
         {
             AddBlockingReason(blockingReasons, "unsafe_input_report_flags");
+            return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
         }
 
         var reportStatus = ReadString(root, "status");
-        var reportHasBlockingReasons = root.TryGetProperty("blocking_reasons", out var reportReasons)
-            && reportReasons.ValueKind == JsonValueKind.Array
-            && reportReasons.EnumerateArray().Any(reason => !string.IsNullOrWhiteSpace(reason.GetString()));
+        var reportReasonsPresent = root.TryGetProperty("blocking_reasons", out var reportReasons);
+        var reportReasonsMalformed = reportReasonsPresent && reportReasons.ValueKind != JsonValueKind.Array;
+        var reportHasBlockingReasons = false;
+        if (reportReasonsPresent && !reportReasonsMalformed)
+        {
+            foreach (var reason in reportReasons.EnumerateArray())
+            {
+                if (reason.ValueKind != JsonValueKind.String)
+                {
+                    reportReasonsMalformed = true;
+                    break;
+                }
+
+                reportHasBlockingReasons |= !string.IsNullOrWhiteSpace(reason.GetString());
+            }
+        }
+
         if (reportStatus.Equals("blocked", StringComparison.OrdinalIgnoreCase)
             || reportStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)
             || reportHasBlockingReasons)
@@ -56,16 +77,29 @@ internal sealed class CuratedRetainImporter
 
         var reportSchemaVersion = ReadInt(root, "schema_version");
         var reportMode = ReadString(root, "mode");
-        var isKnownDryRun = reportSchemaVersion == 1
+        var reportGenerator = ReadString(root, "generator");
+        var isDryRunContract = reportSchemaVersion == 1
             && reportMode.Equals("dry-run", StringComparison.OrdinalIgnoreCase)
             && (reportStatus.Equals("ready_for_review", StringComparison.OrdinalIgnoreCase)
                 || reportStatus.Equals("review_required", StringComparison.OrdinalIgnoreCase));
-        var isKnownRedactedSubset = reportSchemaVersion == 2
+        var isRedactedSubsetContract = reportSchemaVersion == 2
             && reportMode.Equals("redacted-subset", StringComparison.OrdinalIgnoreCase)
             && reportStatus.Equals("ready_for_import", StringComparison.OrdinalIgnoreCase);
-        if (!isKnownDryRun && !isKnownRedactedSubset)
+        if (!isDryRunContract && !isRedactedSubsetContract)
         {
             AddBlockingReason(blockingReasons, "unsupported_input_report_contract");
+            return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
+        }
+
+        var expectedGenerator = isDryRunContract
+            ? "scripts/curated-retain-dry-run.ps1"
+            : "scripts/curated-retain-redacted-subset.ps1";
+        if (!reportGenerator.Equals(expectedGenerator, StringComparison.Ordinal)
+            || !HasRequiredSafetyMetadata(root)
+            || reportReasonsMalformed
+            || (isRedactedSubsetContract && !reportReasonsPresent))
+        {
+            AddBlockingReason(blockingReasons, "incomplete_input_report_contract");
             return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
         }
 
@@ -82,6 +116,12 @@ internal sealed class CuratedRetainImporter
 
         foreach (var fileElement in filesElement.EnumerateArray())
         {
+            if (fileElement.ValueKind != JsonValueKind.Object)
+            {
+                AddBlockingReason(blockingReasons, "incomplete_input_report_contract");
+                continue;
+            }
+
             var sourcePath = ReadString(fileElement, "path");
             if (string.IsNullOrWhiteSpace(sourcePath))
             {
@@ -108,7 +148,12 @@ internal sealed class CuratedRetainImporter
             }
 
             var redactionStatus = ReadString(fileElement, "redaction_status");
-            var findingCount = ReadInt(fileElement, "finding_count");
+            if (!TryReadInt(fileElement, "finding_count", out var findingCount) || findingCount < 0)
+            {
+                AddBlockingReason(blockingReasons, "incomplete_input_report_contract");
+                continue;
+            }
+
             var isCandidate = redactionStatus.Equals("candidate", StringComparison.OrdinalIgnoreCase);
             var isRedacted = redactionStatus.Equals("redacted", StringComparison.OrdinalIgnoreCase);
             if ((!isCandidate && !isRedacted) || findingCount > 0)
@@ -183,6 +228,21 @@ internal sealed class CuratedRetainImporter
             && property.GetBoolean();
     }
 
+    private static bool HasRequiredSafetyMetadata(JsonElement root)
+    {
+        return RequiredFalseSafetyFlags.All(propertyName => HasBooleanValue(root, propertyName, expected: false))
+            && HasBooleanValue(root, "output_is_generated", expected: true)
+            && HasBooleanValue(root, "output_should_be_ignored", expected: true)
+            && HasBooleanValue(root, "writes_report_only", expected: true);
+    }
+
+    private static bool HasBooleanValue(JsonElement element, string propertyName, bool expected)
+    {
+        return element.TryGetProperty(propertyName, out var property)
+            && property.ValueKind is JsonValueKind.True or JsonValueKind.False
+            && property.GetBoolean() == expected;
+    }
+
     private static int ReadInt(JsonElement element, string propertyName)
     {
         if (!element.TryGetProperty(propertyName, out var property))
@@ -196,6 +256,14 @@ internal sealed class CuratedRetainImporter
         }
 
         return 0;
+    }
+
+    private static bool TryReadInt(JsonElement element, string propertyName, out int value)
+    {
+        value = 0;
+        return element.TryGetProperty(propertyName, out var property)
+            && property.ValueKind == JsonValueKind.Number
+            && property.TryGetInt32(out value);
     }
 
     private static string ReadString(JsonElement element, string propertyName)

@@ -402,6 +402,61 @@ public sealed class CuratedRetainPolicyTests
     }
 
     [Fact]
+    public async Task RedactedSubsetScriptRejectsTraversalOutsideProjectBeforeReadingSource()
+    {
+        using var temp = TemporaryDirectory.Create();
+        WriteMinimumCuratedSources(temp);
+        var outsideFileName = $"outside-retain-{Guid.NewGuid():N}.md";
+        var outsidePath = Path.Combine(Path.GetDirectoryName(temp.Path)!, outsideFileName);
+        var escapedSourcePath = $"docs/memory/../../../{outsideFileName}";
+        const string leakedPhrase = "outside-scope-content-must-not-enter-report";
+
+        try
+        {
+            File.WriteAllText(outsidePath, $"redact this line\n{leakedPhrase}\n");
+            await RunCuratedDryRunAsync(temp.Path);
+
+            var dryRunPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-dry-run-report.json");
+            var dryRun = JsonNode.Parse(File.ReadAllText(dryRunPath))!.AsObject();
+            dryRun["files"]!.AsArray().Add(new JsonObject
+            {
+                ["path"] = escapedSourcePath,
+                ["hash"] = ComputeSha256(outsidePath),
+                ["size_bytes"] = new FileInfo(outsidePath).Length,
+                ["redaction_status"] = "review_required",
+                ["finding_count"] = 1,
+            });
+            dryRun["findings"]!.AsArray().Add(new JsonObject
+            {
+                ["source_path"] = escapedSourcePath,
+                ["line"] = 1,
+                ["type"] = "review_marker",
+            });
+            File.WriteAllText(dryRunPath, dryRun.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+            var result = await RunProjectScriptAsync(
+                "curated-retain-redacted-subset.ps1",
+                $"-ProjectRoot {Quote(temp.Path)} -SourcePath {Quote(escapedSourcePath)}");
+
+            Assert.True(result.ExitCode == 0, result.ToString());
+            var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-redacted-subset-report.json");
+            var reportText = File.ReadAllText(reportPath);
+            using var report = JsonDocument.Parse(reportText);
+            var root = report.RootElement;
+            Assert.Equal("blocked", root.GetProperty("status").GetString());
+            Assert.Contains(
+                root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+                reason => reason == "source_outside_project");
+            Assert.Empty(root.GetProperty("files").EnumerateArray());
+            Assert.DoesNotContain(leakedPhrase, reportText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(outsidePath);
+        }
+    }
+
+    [Fact]
     public void ControlledRetainLifecycleScriptsAndDocsStayLocalOnly()
     {
         var exportScript = ReadText("scripts/curated-retain-export.ps1");
