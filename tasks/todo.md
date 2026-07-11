@@ -1559,3 +1559,19 @@ Review / Results:
 - The first post-commit full refresh on `30ea194` stopped safely at LanceDB eval `10/11`: the superseded-only query matched its own fixture literal in a current `MemoryCliTests.cs` chunk.
 - RED `RefreshDoesNotTreatCSharpTestFixtureLiteralsAsCurrentFacts` reproduced the false current hit. GREEN now blanks string/char literal payloads only in generic C# test-project chunks while retaining production literals and typed test code memory.
 - Post-fix verification passed: focused self-contamination regression `1/1`, Memory CLI tests `20/20`, Infrastructure tests `77/77` outside sandbox, full solution tests `151/151`, and solution build `0` warnings/errors. The sandbox-only Infrastructure run failed on unreadable local `.tools/python-packages`, then the exact project test passed outside sandbox.
+
+## Memory Final Review Follow-up Todo
+
+- [x] Add RED regressions for traversal source paths and allowlisted sources missing from the selected Git commit.
+- [x] Reject non-canonical repo-relative retain paths before Git lookup and make blob resolution use verified revisions.
+- [x] Run focused tests, full Memory CLI/solution verification, build, and `git diff --check`.
+
+External completion state is tracked on GitHub rather than as a self-referential source checkbox: after this source commit, rerun `memory-refresh-all`, status, pre-push, push, CI, and final review.
+
+Review / Results:
+
+- CI run `29167888529` passed all three jobs for `52e42fd`: .NET build/tests, lightweight canonical SQLite freshness, and cached semantic rebuild/eval.
+- Repeat review found one fail-closed defect: an allowlist-shaped path containing `..`, or a missing allowlisted Git path, can reach `ReadBlobSha`; `git rev-parse` without `--verify` may echo the unresolved revision spec, causing a later `git cat-file` exception instead of a blocked retain batch.
+- RED traversal regression reproduced exit `1` instead of a controlled blocked result; the normal missing-source regression was already fail-closed and now protects that behavior explicitly.
+- GREEN rejects rooted, `.` and `..` source paths before Git lookup and resolves commit paths with `git rev-parse --verify` as defense-in-depth.
+- Verification passed: focused regressions `2/2`, Memory CLI tests `22/22`, Infrastructure tests `77/77` outside sandbox, all solution projects `153/153`, and solution build `0` warnings/errors. The sandbox-only Infrastructure run again failed solely on unreadable local `.tools/python-packages` before the exact project command passed outside sandbox.

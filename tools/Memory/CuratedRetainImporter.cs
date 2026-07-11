@@ -129,7 +129,7 @@ internal sealed class CuratedRetainImporter
             }
 
             sourcePath = NormalizePath(sourcePath);
-            if (string.IsNullOrWhiteSpace(sourcePath))
+            if (string.IsNullOrWhiteSpace(sourcePath) || !IsSafeRelativeRepoPath(sourcePath))
             {
                 AddBlockingReason(blockingReasons, "invalid_sources_in_input_report");
                 continue;
@@ -284,6 +284,18 @@ internal sealed class CuratedRetainImporter
             || (path.StartsWith("docs/memory/", StringComparison.Ordinal)
                 && !path.StartsWith("docs/memory/generated/", StringComparison.Ordinal)
                 && path.EndsWith(".md", StringComparison.Ordinal));
+    }
+
+    private static bool IsSafeRelativeRepoPath(string relativePath)
+    {
+        if (Path.IsPathRooted(relativePath))
+        {
+            return false;
+        }
+
+        return NormalizePath(relativePath)
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .All(segment => segment is not "." and not "..");
     }
 
     private static bool TestDeniedRetainPath(string relativePath)

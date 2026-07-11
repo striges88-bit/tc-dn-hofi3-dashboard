@@ -846,6 +846,58 @@ public sealed class MemoryCliTests
         Assert.Empty(searchJson.RootElement.GetProperty("results").EnumerateArray());
     }
 
+    [Fact]
+    public void RetainImportRejectsTraversalSourcePathBeforeGitLookup()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourceText = "# Outside curated allowlist\n\ntraversalretainonly phrase must never be retained.\n";
+        fixture.Write("README.md", sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                "docs/memory/../../README.md",
+                HashText(sourceText),
+                sourceText.Length,
+                "candidate",
+                0));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "invalid_sources_in_input_report");
+    }
+
+    [Fact]
+    public void RetainImportRejectsAllowlistedSourceMissingFromCommitWithoutGitException()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                "docs/memory/missing-retain.md",
+                HashText("missing source"),
+                0,
+                "candidate",
+                0));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "missing_source_in_commit");
+    }
+
     private static CliResult RunMemoryCli(params string[] arguments)
     {
         var projectPath = Path.Combine(RepositoryRoot, "tools", "Memory", "CryptoIndicatorApp.Memory.csproj");

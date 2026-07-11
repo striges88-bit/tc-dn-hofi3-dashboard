@@ -81,7 +81,7 @@ internal sealed class GitCommitMemoryIndexer
 
     public static string? ReadBlobSha(string projectRoot, string commitSha, string sourcePath)
     {
-        return TryRunGitText(projectRoot, "rev-parse", $"{commitSha}:{sourcePath}")?.Trim();
+        return TryRunGitText(projectRoot, "rev-parse", "--verify", $"{commitSha}:{sourcePath}")?.Trim();
     }
 
     public static async Task<byte[]> ReadBlobBytesAsync(string projectRoot, string blobSha)
