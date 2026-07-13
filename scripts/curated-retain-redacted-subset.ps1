@@ -147,6 +147,137 @@ function Add-BlockingReason {
     }
 }
 
+function Test-JsonBooleanProperty {
+    param(
+        [Parameter(Mandatory = $true)][object]$Object,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][bool]$Expected
+    )
+
+    $property = $Object.PSObject.Properties[$Name]
+    return $null -ne $property -and
+        $property.Value -is [bool] -and
+        [bool]$property.Value -eq $Expected
+}
+
+function Test-JsonArrayProperty {
+    param(
+        [Parameter(Mandatory = $true)][object]$Object,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $property = $Object.PSObject.Properties[$Name]
+    return $null -ne $property -and $property.Value -is [System.Array]
+}
+
+function Test-JsonNonNegativeIntegerProperty {
+    param(
+        [Parameter(Mandatory = $true)][object]$Object,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        return $false
+    }
+
+    $value = $property.Value
+    return ($value -is [byte] -or
+            $value -is [int16] -or
+            $value -is [int32] -or
+            $value -is [int64] -or
+            $value -is [uint16] -or
+            $value -is [uint32] -or
+            $value -is [uint64]) -and [int64]$value -ge 0
+}
+
+function Test-DryRunReportContract {
+    param([Parameter(Mandatory = $true)][object]$Report)
+
+    $knownFindingTypes = @(
+        'secret_reference',
+        'env_reference',
+        'absolute_local_path',
+        'local_proxy_detail',
+        'raw_jsonl_or_dump',
+        'generated_export_reference'
+    )
+
+    foreach ($propertyName in @('schema_version', 'generator', 'mode', 'status', 'files', 'findings', 'blocking_reasons')) {
+        if ($null -eq $Report.PSObject.Properties[$propertyName]) {
+            return $false
+        }
+    }
+
+    if (-not (Test-JsonNonNegativeIntegerProperty -Object $Report -Name 'schema_version') -or
+        [int64]$Report.schema_version -ne 1 -or
+        [string]$Report.generator -cne 'scripts/curated-retain-dry-run.ps1' -or
+        [string]$Report.mode -cne 'dry-run' -or
+        @('ready_for_review', 'review_required') -cnotcontains [string]$Report.status -or
+        -not (Test-JsonArrayProperty -Object $Report -Name 'files') -or
+        -not (Test-JsonArrayProperty -Object $Report -Name 'findings') -or
+        -not (Test-JsonArrayProperty -Object $Report -Name 'blocking_reasons') -or
+        @($Report.blocking_reasons).Count -ne 0) {
+        return $false
+    }
+
+    foreach ($propertyName in @('external_retain_enabled', 'codex_auto_retain_enabled', 'cloud_enabled', 'calls_hindsight', 'calls_codex_retain', 'installs_hooks', 'runs_refresh_all', 'rebuilds_memory', 'imports_denylist')) {
+        if (-not (Test-JsonBooleanProperty -Object $Report -Name $propertyName -Expected $false)) {
+            return $false
+        }
+    }
+
+    foreach ($propertyName in @('output_is_generated', 'output_should_be_ignored', 'writes_report_only')) {
+        if (-not (Test-JsonBooleanProperty -Object $Report -Name $propertyName -Expected $true)) {
+            return $false
+        }
+    }
+
+    $files = @($Report.files)
+    $findings = @($Report.findings)
+    if (([string]$Report.status -eq 'review_required') -ne ($findings.Count -gt 0)) {
+        return $false
+    }
+
+    $filePaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $reportedFindingCount = 0
+    foreach ($file in $files) {
+        if ($null -eq $file -or
+            [string]::IsNullOrWhiteSpace([string]$file.path) -or
+            -not $filePaths.Add([string]$file.path) -or
+            -not (Test-JsonNonNegativeIntegerProperty -Object $file -Name 'finding_count')) {
+            return $false
+        }
+
+        $findingCount = @($findings | Where-Object { ([string]$_.source_path) -ceq ([string]$file.path) }).Count
+        $reportedFindingCount += [int64]$file.finding_count
+        $expectedRedactionStatus = if ($findingCount -eq 0) { 'candidate' } else { 'review_required' }
+        if ($findingCount -ne [int64]$file.finding_count -or
+            [string]$file.redaction_status -cne $expectedRedactionStatus) {
+            return $false
+        }
+    }
+
+    if ($reportedFindingCount -ne $findings.Count) {
+        return $false
+    }
+
+    $findingKeys = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($finding in $findings) {
+        $findingKey = "$([string]$finding.type)|$([string]$finding.source_path)|$([string]$finding.line)|$([string]$finding.rule)"
+        if ($null -eq $finding -or
+            -not $filePaths.Contains([string]$finding.source_path) -or
+            $knownFindingTypes -cnotcontains [string]$finding.type -or
+            -not (Test-JsonNonNegativeIntegerProperty -Object $finding -Name 'line') -or
+            [int64]$finding.line -lt 1 -or
+            -not $findingKeys.Add($findingKey)) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
 function Write-RedactedSubsetMarkdownReport {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -190,8 +321,13 @@ if ($requested.Count -eq 0) {
     Add-BlockingReason -Reasons $blockingReasons -Reason 'missing_source_path'
 }
 
-$inputFiles = @($inputReport.files)
-$inputFindings = @($inputReport.findings)
+$inputContractValid = Test-DryRunReportContract -Report $inputReport
+if (-not $inputContractValid) {
+    Add-BlockingReason -Reasons $blockingReasons -Reason 'invalid_input_report_contract'
+}
+
+$inputFiles = if ($inputContractValid) { @($inputReport.files) } else { @() }
+$inputFindings = if ($inputContractValid) { @($inputReport.findings) } else { @() }
 
 foreach ($requestedPath in $requested) {
     $requestedPathSegments = $requestedPath.Replace('\', '/').Split('/')
@@ -262,6 +398,8 @@ foreach ($requestedPath in $requested) {
     }
 
     if ($isRedacted) {
+        $sourceText = [System.IO.File]::ReadAllText((Resolve-Path $fullPath).Path)
+        $hasFinalNewline = $sourceText.EndsWith("`n") -or $sourceText.EndsWith("`r")
         $lines = [System.IO.File]::ReadAllLines((Resolve-Path $fullPath).Path)
         $findingsByLine = @{}
         $invalidFindingMetadata = $false
@@ -295,7 +433,10 @@ foreach ($requestedPath in $requested) {
             }
         }
 
-        $redactedText = [string]::Join("`n", $lines) + "`n"
+        $redactedText = [string]::Join("`n", $lines)
+        if ($hasFinalNewline) {
+            $redactedText += "`n"
+        }
         $selectedFile.redacted_hash = Get-Sha256TextHash $redactedText
         $selectedFile.redacted_text = $redactedText
     }

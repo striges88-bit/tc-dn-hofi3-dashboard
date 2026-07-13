@@ -7,6 +7,16 @@ namespace CryptoIndicatorApp.Memory;
 
 internal sealed class CuratedRetainImporter
 {
+    private static readonly HashSet<string> KnownRedactionTypes = new(StringComparer.Ordinal)
+    {
+        "secret_reference",
+        "env_reference",
+        "absolute_local_path",
+        "local_proxy_detail",
+        "raw_jsonl_or_dump",
+        "generated_export_reference",
+    };
+
     private static readonly string[] RequiredFalseSafetyFlags =
     [
         "external_retain_enabled",
@@ -78,26 +88,21 @@ internal sealed class CuratedRetainImporter
         var reportSchemaVersion = ReadInt(root, "schema_version");
         var reportMode = ReadString(root, "mode");
         var reportGenerator = ReadString(root, "generator");
-        var isDryRunContract = reportSchemaVersion == 1
-            && reportMode.Equals("dry-run", StringComparison.OrdinalIgnoreCase)
-            && (reportStatus.Equals("ready_for_review", StringComparison.OrdinalIgnoreCase)
-                || reportStatus.Equals("review_required", StringComparison.OrdinalIgnoreCase));
         var isRedactedSubsetContract = reportSchemaVersion == 2
             && reportMode.Equals("redacted-subset", StringComparison.OrdinalIgnoreCase)
             && reportStatus.Equals("ready_for_import", StringComparison.OrdinalIgnoreCase);
-        if (!isDryRunContract && !isRedactedSubsetContract)
+        if (!isRedactedSubsetContract)
         {
             AddBlockingReason(blockingReasons, "unsupported_input_report_contract");
             return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
         }
 
-        var expectedGenerator = isDryRunContract
-            ? "scripts/curated-retain-dry-run.ps1"
-            : "scripts/curated-retain-redacted-subset.ps1";
+        const string expectedGenerator = "scripts/curated-retain-redacted-subset.ps1";
         if (!reportGenerator.Equals(expectedGenerator, StringComparison.Ordinal)
             || !HasRequiredSafetyMetadata(root)
+            || (isRedactedSubsetContract && !HasRequiredSubsetContentMetadata(root))
             || reportReasonsMalformed
-            || (isRedactedSubsetContract && !reportReasonsPresent))
+            || !reportReasonsPresent)
         {
             AddBlockingReason(blockingReasons, "incomplete_input_report_contract");
             return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
@@ -113,6 +118,9 @@ internal sealed class CuratedRetainImporter
             AddBlockingReason(blockingReasons, "missing_files_in_input_report");
             return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
         }
+
+        var hasRedactedPayload = false;
+        var sourcePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var fileElement in filesElement.EnumerateArray())
         {
@@ -147,6 +155,12 @@ internal sealed class CuratedRetainImporter
                 continue;
             }
 
+            if (!sourcePaths.Add(sourcePath))
+            {
+                AddBlockingReason(blockingReasons, "duplicate_sources_in_input_report");
+                continue;
+            }
+
             var redactionStatus = ReadString(fileElement, "redaction_status");
             if (!TryReadInt(fileElement, "finding_count", out var findingCount) || findingCount < 0)
             {
@@ -166,6 +180,13 @@ internal sealed class CuratedRetainImporter
             if (isRedacted && string.IsNullOrWhiteSpace(redactedText))
             {
                 AddBlockingReason(blockingReasons, "missing_redacted_text");
+                continue;
+            }
+
+            if (isRedactedSubsetContract
+                && !HasValidSubsetFileContentMetadata(fileElement, isCandidate, isRedacted, redactedText))
+            {
+                AddBlockingReason(blockingReasons, "incomplete_input_report_contract");
                 continue;
             }
 
@@ -196,7 +217,14 @@ internal sealed class CuratedRetainImporter
                 continue;
             }
 
+            if (isRedacted && !IsReviewedRedactionOf(Encoding.UTF8.GetString(bytes), redactedText))
+            {
+                AddBlockingReason(blockingReasons, "invalid_redacted_text_derivation");
+                continue;
+            }
+
             var text = isRedacted ? redactedText : Encoding.UTF8.GetString(bytes);
+            hasRedactedPayload |= isRedacted;
             items.Add(new RetainedMemoryItem(
                 $"retained.local.{Slug(sourcePath)}.{commitSha[..12]}",
                 sourcePath,
@@ -208,6 +236,15 @@ internal sealed class CuratedRetainImporter
                 isRedacted ? "redacted" : "candidate",
                 retainedAt,
                 text));
+        }
+
+        if (isRedactedSubsetContract
+            && (!HasBooleanValue(root, "source_derived_text_included", hasRedactedPayload)
+                || !HasBooleanValue(root, "redacted_text_included", hasRedactedPayload)
+                || !HasBooleanValue(root, "candidate_text_included", expected: false)
+                || !HasBooleanValue(root, "raw_source_text_included", expected: false)))
+        {
+            AddBlockingReason(blockingReasons, "incomplete_input_report_contract");
         }
 
         return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
@@ -234,6 +271,95 @@ internal sealed class CuratedRetainImporter
             && HasBooleanValue(root, "output_is_generated", expected: true)
             && HasBooleanValue(root, "output_should_be_ignored", expected: true)
             && HasBooleanValue(root, "writes_report_only", expected: true);
+    }
+
+    private static bool HasRequiredSubsetContentMetadata(JsonElement root)
+    {
+        return HasBooleanProperty(root, "raw_source_text_included")
+            && HasBooleanProperty(root, "source_derived_text_included")
+            && HasBooleanProperty(root, "candidate_text_included")
+            && HasBooleanProperty(root, "redacted_text_included");
+    }
+
+    private static bool HasValidSubsetFileContentMetadata(
+        JsonElement file,
+        bool isCandidate,
+        bool isRedacted,
+        string redactedText)
+    {
+        if (!TryReadInt(file, "original_finding_count", out var originalFindingCount)
+            || originalFindingCount < 0
+            || !HasBooleanValue(file, "raw_source_text_included", expected: false)
+            || !HasBooleanValue(file, "candidate_text_included", expected: false))
+        {
+            return false;
+        }
+
+        var contentKind = ReadString(file, "content_kind");
+        var redactedHash = ReadString(file, "redacted_hash");
+        if (isCandidate)
+        {
+            return originalFindingCount == 0
+                && contentKind.Equals("commit-source-reference", StringComparison.Ordinal)
+                && HasBooleanValue(file, "source_derived_text_included", expected: false)
+                && HasBooleanValue(file, "redacted_text_included", expected: false)
+                && string.IsNullOrEmpty(redactedText)
+                && string.IsNullOrEmpty(redactedHash);
+        }
+
+        return isRedacted
+            && originalFindingCount > 0
+            && contentKind.Equals("reviewed-redacted-text", StringComparison.Ordinal)
+            && HasBooleanValue(file, "source_derived_text_included", expected: true)
+            && HasBooleanValue(file, "redacted_text_included", expected: true)
+            && Regex.IsMatch(redactedHash, "^[a-fA-F0-9]{64}$", RegexOptions.CultureInvariant)
+            && redactedHash.Equals(Sha256(Encoding.UTF8.GetBytes(redactedText)), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsReviewedRedactionOf(string sourceText, string redactedText)
+    {
+        var sourceLines = NormalizeLineEndings(sourceText.TrimStart('\uFEFF')).Split('\n');
+        var redactedLines = NormalizeLineEndings(redactedText.TrimStart('\uFEFF')).Split('\n');
+        if (sourceLines.Length != redactedLines.Length)
+        {
+            return false;
+        }
+
+        var changed = false;
+        for (var index = 0; index < sourceLines.Length; index++)
+        {
+            if (sourceLines[index].Equals(redactedLines[index], StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var markerMatch = Regex.Match(
+                redactedLines[index],
+                "^\\[REDACTED:(?<types>[A-Za-z0-9_.-]+(?:,[A-Za-z0-9_.-]+)*)\\]$",
+                RegexOptions.CultureInvariant);
+            if (!markerMatch.Success
+                || markerMatch.Groups["types"].Value
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Any(type => !KnownRedactionTypes.Contains(type)))
+            {
+                return false;
+            }
+
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static string NormalizeLineEndings(string text)
+    {
+        return text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+    }
+
+    private static bool HasBooleanProperty(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var property)
+            && property.ValueKind is JsonValueKind.True or JsonValueKind.False;
     }
 
     private static bool HasBooleanValue(JsonElement element, string propertyName, bool expected)

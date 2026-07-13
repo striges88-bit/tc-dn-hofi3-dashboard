@@ -401,6 +401,121 @@ public sealed class CuratedRetainPolicyTests
         Assert.DoesNotContain("partialredactionleak", reportText, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("schema_version")]
+    [InlineData("generator")]
+    [InlineData("status")]
+    [InlineData("blocking_reasons")]
+    [InlineData("safety_metadata")]
+    [InlineData("orphan_finding")]
+    [InlineData("duplicate_file")]
+    [InlineData("duplicate_finding")]
+    public async Task RedactedSubsetScriptRejectsInvalidDryRunReportContract(string mutation)
+    {
+        using var temp = TemporaryDirectory.Create();
+        WriteMinimumCuratedSources(temp);
+        var dryRunPath = await RunCuratedDryRunAsync(temp.Path);
+        var dryRun = JsonNode.Parse(File.ReadAllText(dryRunPath))!.AsObject();
+
+        switch (mutation)
+        {
+            case "schema_version":
+                dryRun["schema_version"] = 99;
+                break;
+            case "generator":
+                dryRun["generator"] = "scripts/untrusted-report.ps1";
+                break;
+            case "status":
+                dryRun["status"] = "blocked";
+                break;
+            case "blocking_reasons":
+                dryRun["blocking_reasons"] = new JsonArray("review_failed");
+                break;
+            case "safety_metadata":
+                dryRun.Remove("writes_report_only");
+                break;
+            case "orphan_finding":
+                dryRun["status"] = "review_required";
+                dryRun["findings"]!.AsArray().Add(new JsonObject
+                {
+                    ["source_path"] = "docs/memory/not-in-files.md",
+                    ["line"] = 1,
+                    ["type"] = "secret_reference",
+                });
+                break;
+            case "duplicate_file":
+                dryRun["files"]!.AsArray().Add(dryRun["files"]!.AsArray()[0]!.DeepClone());
+                break;
+            case "duplicate_finding":
+                var reportFiles = dryRun["files"]!.AsArray()
+                    .Select(node => node!.AsObject())
+                    .ToArray();
+                foreach (var reportFile in reportFiles)
+                {
+                    reportFile["finding_count"] = 0;
+                    reportFile["redaction_status"] = "candidate";
+                }
+
+                var agentsFile = reportFiles.Single(file => file["path"]!.GetValue<string>() == "AGENTS.md");
+                agentsFile["finding_count"] = 2;
+                agentsFile["redaction_status"] = "review_required";
+                dryRun["status"] = "review_required";
+                dryRun["findings"] = new JsonArray();
+                var duplicateFinding = new JsonObject
+                {
+                    ["source_path"] = "AGENTS.md",
+                    ["line"] = 1,
+                    ["type"] = "secret_reference",
+                    ["rule"] = "secret/token/api key marker",
+                };
+                dryRun["findings"]!.AsArray().Add(duplicateFinding);
+                dryRun["findings"]!.AsArray().Add(duplicateFinding.DeepClone());
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null);
+        }
+
+        File.WriteAllText(dryRunPath, dryRun.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        var result = await RunProjectScriptAsync(
+            "curated-retain-redacted-subset.ps1",
+            $"-ProjectRoot {Quote(temp.Path)} -SourcePath AGENTS.md");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-redacted-subset-report.json");
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "invalid_input_report_contract");
+        Assert.Empty(root.GetProperty("files").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task RedactedSubsetScriptPreservesMissingFinalNewline()
+    {
+        using var temp = TemporaryDirectory.Create();
+        WriteMinimumCuratedSources(temp);
+        temp.Write("AGENTS.md", "# Agents\nOPENAI_API_KEY=sk-testtoken1234567890 must be redacted");
+
+        await RunCuratedDryRunAsync(temp.Path);
+        var result = await RunProjectScriptAsync(
+            "curated-retain-redacted-subset.ps1",
+            $"-ProjectRoot {Quote(temp.Path)} -SourcePath AGENTS.md");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-redacted-subset-report.json");
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal("ready_for_import", root.GetProperty("status").GetString());
+        var redactedText = Assert.Single(root.GetProperty("files").EnumerateArray())
+            .GetProperty("redacted_text")
+            .GetString();
+        Assert.NotNull(redactedText);
+        Assert.False(redactedText.EndsWith('\n'));
+    }
+
     [Fact]
     public async Task RedactedSubsetScriptRejectsTraversalOutsideProjectBeforeReadingSource()
     {
@@ -430,8 +545,9 @@ public sealed class CuratedRetainPolicyTests
             {
                 ["source_path"] = escapedSourcePath,
                 ["line"] = 1,
-                ["type"] = "review_marker",
+                ["type"] = "secret_reference",
             });
+            dryRun["status"] = "review_required";
             File.WriteAllText(dryRunPath, dryRun.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
             var result = await RunProjectScriptAsync(

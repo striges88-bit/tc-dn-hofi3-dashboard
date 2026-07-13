@@ -624,8 +624,8 @@ public sealed class MemoryCliTests
     {
         using var fixture = MemoryProjectFixture.Create();
         fixture.Write("CryptoIndicatorApp.sln", string.Empty);
-        var sourceText = "# Reviewed Retain Source\n\nOPENAI_API_KEY=sk-testtoken1234567890 originalonlyretain phrase must never be retained.\n";
-        var redactedText = "# Reviewed Retain Source\n\n[REDACTED:secret_reference]\n\nredactedonlyretain phrase is safe for local sqlite retain.\n";
+        var sourceText = "# Reviewed Retain Source\n\nOPENAI_API_KEY=sk-testtoken1234567890 originalonlyretain phrase must never be retained.\nredactedonlyretain phrase is safe for local sqlite retain.\n";
+        var redactedText = "# Reviewed Retain Source\n\n[REDACTED:secret_reference]\nredactedonlyretain phrase is safe for local sqlite retain.\n";
         fixture.Write("docs/memory/reviewed-retain.md", sourceText);
         fixture.InitializeGitRepository();
         var reportPath = fixture.WriteCuratedRetainReport(
@@ -635,7 +635,8 @@ public sealed class MemoryCliTests
                 sourceText.Length,
                 "redacted",
                 0,
-                redactedText));
+                redactedText,
+                1));
 
         using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
         Assert.Equal(0, import.ExitCode);
@@ -685,6 +686,193 @@ public sealed class MemoryCliTests
         Assert.Empty(searchAfterDeleteJson.RootElement.GetProperty("results").EnumerateArray());
     }
 
+    [Theory]
+    [InlineData("content_kind")]
+    [InlineData("redacted_hash")]
+    [InlineData("content_flags")]
+    public void RetainImportRejectsInvalidRedactedPayloadContract(string mutation)
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourceText = "# Redacted contract\n\nOPENAI_API_KEY=sk-testtoken1234567890 must be removed.\n";
+        const string redactedText = "# Redacted contract\n\n[REDACTED:secret_reference]\n";
+        fixture.Write("docs/memory/redacted-contract.md", sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                "docs/memory/redacted-contract.md",
+                HashText(sourceText),
+                sourceText.Length,
+                "redacted",
+                0,
+                redactedText,
+                1));
+        var report = JsonNode.Parse(File.ReadAllText(reportPath))!.AsObject();
+        var file = report["files"]!.AsArray()[0]!.AsObject();
+
+        switch (mutation)
+        {
+            case "content_kind":
+                file["content_kind"] = "commit-source-reference";
+                break;
+            case "redacted_hash":
+                file["redacted_hash"] = new string('0', 64);
+                break;
+            case "content_flags":
+                file["redacted_text_included"] = false;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null);
+        }
+
+        File.WriteAllText(reportPath, report.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "incomplete_input_report_contract");
+    }
+
+    [Fact]
+    public void RetainImportRejectsUnknownRedactionMarkerType()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourceText = "# Redacted marker\n\nOPENAI_API_KEY=sk-testtoken1234567890 must be removed.\n";
+        const string redactedText = "# Redacted marker\n\n[REDACTED:REST_hot_path_allowed]\n";
+        fixture.Write("docs/memory/redacted-marker.md", sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                "docs/memory/redacted-marker.md",
+                HashText(sourceText),
+                sourceText.Length,
+                "redacted",
+                0,
+                redactedText,
+                1));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "invalid_redacted_text_derivation");
+    }
+
+    [Fact]
+    public void RetainImportRejectsSchemaOneDryRunEvenWhenCandidateLooksClean()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourceText = "# Dry-run candidate\n\nschemaonedryrun must not import directly.\n";
+        fixture.Write("docs/memory/schema-one-dry-run.md", sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                "docs/memory/schema-one-dry-run.md",
+                HashText(sourceText),
+                sourceText.Length,
+                "candidate",
+                0));
+        var report = JsonNode.Parse(File.ReadAllText(reportPath))!.AsObject();
+        report["schema_version"] = 1;
+        report["generator"] = "scripts/curated-retain-dry-run.ps1";
+        report["mode"] = "dry-run";
+        report["status"] = "ready_for_review";
+        File.WriteAllText(reportPath, report.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "unsupported_input_report_contract");
+    }
+
+    [Fact]
+    public void RetainImportRejectsDuplicateSourcePathsBeforeCandidateCanOverwriteRedaction()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourceText = "# Duplicate source\n\nOPENAI_API_KEY=sk-testtoken1234567890 duplicateoriginal must not import.\n";
+        const string redactedText = "# Duplicate source\n\n[REDACTED:secret_reference]\n";
+        const string sourcePath = "docs/memory/duplicate-source.md";
+        fixture.Write(sourcePath, sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                sourcePath,
+                HashText(sourceText),
+                sourceText.Length,
+                "redacted",
+                0,
+                redactedText,
+                1),
+            new MemoryProjectFixture.RetainReportFile(
+                sourcePath,
+                HashText(sourceText),
+                sourceText.Length,
+                "candidate",
+                0));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "duplicate_sources_in_input_report");
+
+        using var search = fixture.RunMemoryCli("retain-search", "--query", "duplicateoriginal", "--json");
+        Assert.Equal(0, search.ExitCode);
+        using var searchJson = JsonDocument.Parse(search.StandardOutput);
+        Assert.Empty(searchJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
+    [Fact]
+    public void RetainImportRejectsRedactedTextNotDerivedFromCommittedSource()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourceText = "# Redaction provenance\n\nOPENAI_API_KEY=sk-testtoken1234567890 must be removed.\n";
+        const string injectedText = "# Redaction provenance\n\ninjected arbitrary memory text\n";
+        fixture.Write("docs/memory/redaction-provenance.md", sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                "docs/memory/redaction-provenance.md",
+                HashText(sourceText),
+                sourceText.Length,
+                "redacted",
+                0,
+                injectedText,
+                1));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "invalid_redacted_text_derivation");
+    }
+
     [Fact]
     public void RetainImportRejectsBlockedInputReportEvenWhenFileMetadataLooksSafe()
     {
@@ -702,7 +890,7 @@ public sealed class MemoryCliTests
                 0));
         var reportText = File.ReadAllText(reportPath)
             .Replace(
-                "\"status\":\"ready_for_review\"",
+                "\"status\":\"ready_for_import\"",
                 "\"status\":\"blocked\",\"blocking_reasons\":[\"invalid_finding_line\"]",
                 StringComparison.Ordinal);
         File.WriteAllText(reportPath, reportText);
@@ -741,7 +929,7 @@ public sealed class MemoryCliTests
                 "candidate",
                 0));
         var reportText = File.ReadAllText(reportPath)
-            .Replace("\"status\":\"ready_for_review\"", "\"status\":\"unknown\"", StringComparison.Ordinal);
+            .Replace("\"status\":\"ready_for_import\"", "\"status\":\"unknown\"", StringComparison.Ordinal);
         File.WriteAllText(reportPath, reportText);
 
         using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
@@ -1109,16 +1297,13 @@ public sealed class MemoryCliTests
         {
             var reportPath = Path.Combine(Root, "docs", "memory", "generated", "curated-retain-dry-run-report.json");
             Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
-            var isRedactedSubset = files.Any(file => file.RedactionStatus.Equals("redacted", StringComparison.OrdinalIgnoreCase));
-            var requiresReview = files.Any(file => file.FindingCount > 0 || file.RedactionStatus.Equals("review_required", StringComparison.OrdinalIgnoreCase));
+            var hasRedactedPayload = files.Any(file => file.RedactionStatus.Equals("redacted", StringComparison.OrdinalIgnoreCase));
             var report = new
             {
-                schema_version = isRedactedSubset ? 2 : 1,
-                generator = isRedactedSubset
-                    ? "scripts/curated-retain-redacted-subset.ps1"
-                    : "scripts/curated-retain-dry-run.ps1",
-                mode = isRedactedSubset ? "redacted-subset" : "dry-run",
-                status = requiresReview ? "review_required" : isRedactedSubset ? "ready_for_import" : "ready_for_review",
+                schema_version = 2,
+                generator = "scripts/curated-retain-redacted-subset.ps1",
+                mode = "redacted-subset",
+                status = "ready_for_import",
                 blocking_reasons = Array.Empty<string>(),
                 output_is_generated = true,
                 output_should_be_ignored = true,
@@ -1132,12 +1317,23 @@ public sealed class MemoryCliTests
                 rebuilds_memory = false,
                 imports_denylist = false,
                 writes_report_only = true,
+                raw_source_text_included = false,
+                source_derived_text_included = hasRedactedPayload,
+                candidate_text_included = false,
+                redacted_text_included = hasRedactedPayload,
                 files = files.Select(file => new
                 {
                     path = file.Path,
                     hash = file.Hash,
                     size_bytes = file.SizeBytes,
                     redaction_status = file.RedactionStatus,
+                    content_kind = file.RedactionStatus.Equals("redacted", StringComparison.OrdinalIgnoreCase)
+                        ? "reviewed-redacted-text"
+                        : "commit-source-reference",
+                    raw_source_text_included = false,
+                    source_derived_text_included = file.RedactionStatus.Equals("redacted", StringComparison.OrdinalIgnoreCase),
+                    candidate_text_included = false,
+                    redacted_text_included = file.RedactionStatus.Equals("redacted", StringComparison.OrdinalIgnoreCase),
                     finding_count = file.FindingCount,
                     original_finding_count = file.OriginalFindingCount,
                     redacted_text = file.RedactedText,

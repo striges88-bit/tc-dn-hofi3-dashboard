@@ -397,6 +397,7 @@ $report = [ordered]@{
     mode = 'dry-run'
     purpose = 'Curated retain preflight report only; this script does not call retain/import APIs.'
     status = if ($sortedFindings.Count -gt 0) { 'review_required' } else { 'ready_for_review' }
+    blocking_reasons = @()
     output_path = $relativeOutputPath
     markdown_report_path = $relativeMarkdownOutputPath
     output_is_generated = $relativeOutputPath.StartsWith('docs/memory/generated/')

@@ -1575,3 +1575,25 @@ Review / Results:
 - RED traversal regression reproduced exit `1` instead of a controlled blocked result; the normal missing-source regression was already fail-closed and now protects that behavior explicitly.
 - GREEN rejects rooted, `.` and `..` source paths before Git lookup and resolves commit paths with `git rev-parse --verify` as defense-in-depth.
 - Verification passed: focused regressions `2/2`, Memory CLI tests `22/22`, Infrastructure tests `77/77` outside sandbox, all solution projects `153/153`, and solution build `0` warnings/errors. The sandbox-only Infrastructure run again failed solely on unreadable local `.tools/python-packages` before the exact project command passed outside sandbox.
+
+## PR 19 Final Review Remediation
+
+- [x] Add RED coverage proving the redacted-subset script rejects an unknown, blocked, or incomplete dry-run report contract.
+- [x] Add RED coverage proving retain import rejects inconsistent redacted content metadata and text not derived from the selected Git blob.
+- [x] Validate the dry-run contract before the subset script reads file/finding payloads.
+- [x] Validate per-file content flags, `content_kind`, `redacted_hash`, and source-derived redaction before local import.
+- [x] Run focused tests, full memory/.NET verification, build, and `git diff --check`.
+- [x] Complete final diff review and prepare the coherent remediation commit.
+
+External completion state is tracked on GitHub rather than as a self-referential source checkbox: after this source commit, run `memory-refresh-all`, `memory status`, and `memory-pre-push-check`, push PR #19, wait for green CI, repeat the final review, and merge.
+
+Review / Results:
+
+- Merge paused after independent review found two Important fail-closed gaps: the subset generator trusted unvalidated dry-run metadata, and the importer trusted schema-v2 `redacted_text` without proving its content contract or derivation from the committed source.
+- RED was observed for all new cases: subset-contract `0/5` and importer metadata/provenance `0/4`. After the minimal fixes, the same focused filters passed `5/5` and `4/4`.
+- Full solution verification reached `153/153` outside sandbox, build completed with `0` warnings/errors, and `git diff --check` passed. The sandbox-only solution run again failed solely on unreadable local `.tools/python-packages`.
+- Pre-commit review found three additional Important gaps: orphan/duplicate dry-run mappings, direct schema-v1 import bypassing the reviewed subset, and unrestricted redaction marker labels. Commit remains paused while RED/GREEN remediation is in progress; the missing-final-newline mismatch is included as a small adjacent regression.
+- RED/GREEN then proved and fixed those gaps: invalid dry-run mappings plus newline preservation reached `9/9`; retain-import cases reached `15/15`; schema-v1 is now review evidence only and schema-v2 is the sole import authorization.
+- A second review found a duplicate schema-v2 `source_path` overwrite path. Its RED test observed exit `0`; GREEN now blocks the whole batch with `duplicate_sources_in_input_report`. Exact duplicate dry-run findings are also rejected, and stale controlled-retain wording in `open-questions.md` was corrected.
+- Final verification after all fixes passed all solution projects `169/169`, build with `0` warnings/errors, and `git diff --check`. Final independent review reported no Critical or Important findings.
+- The post-compact verification repeated the same complete result on the unchanged source diff: `169/169`, build with `0` warnings/errors, and clean `git diff --check`.
