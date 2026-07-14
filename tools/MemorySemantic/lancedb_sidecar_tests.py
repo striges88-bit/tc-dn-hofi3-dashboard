@@ -1,3 +1,5 @@
+import hashlib
+import sqlite3
 import subprocess
 import tempfile
 import warnings
@@ -545,6 +547,85 @@ def test_retrieval_output_rejects_partial_overlap_generic_chunk():
     assert "top_threshold=0.5" in output["gap_notes"][0]
 
 
+def test_semantic_rebuild_excludes_operational_todo_chunks_but_keeps_typed_todos():
+    with tempfile.TemporaryDirectory() as root_value:
+        root = Path(root_value)
+        todo_path = root / "tasks" / "todo.md"
+        lessons_path = root / "tasks" / "lessons.md"
+        todo_path.parent.mkdir(parents=True)
+        todo_path.write_text("operational handoff history", encoding="utf-8")
+        lessons_path.write_text("durable project lesson", encoding="utf-8")
+
+        sqlite_path = root / "project-memory.sqlite"
+        connection = sqlite3.connect(sqlite_path)
+        try:
+            connection.execute(
+                """
+                CREATE TABLE search_documents (
+                    id TEXT,
+                    type TEXT,
+                    status TEXT,
+                    title TEXT,
+                    body TEXT,
+                    source_path TEXT,
+                    source_hash TEXT,
+                    confidence REAL,
+                    updated_at TEXT,
+                    commit_sha TEXT,
+                    tree_sha TEXT,
+                    source_blob_sha TEXT,
+                    indexed_at TEXT
+                )
+                """
+            )
+            connection.executemany(
+                "INSERT INTO search_documents VALUES (?, ?, 'current', ?, ?, ?, ?, 0.95, ?, NULL, NULL, NULL, ?)",
+                [
+                    (
+                        "chunk.tasks-todo-md.0",
+                        "chunk",
+                        "tasks/todo.md",
+                        "operational handoff history",
+                        "tasks/todo.md",
+                        hashlib.sha256(todo_path.read_bytes()).hexdigest(),
+                        "2026-07-14T00:00:00Z",
+                        "2026-07-14T00:00:00Z",
+                    ),
+                    (
+                        "todo.memory-follow-up",
+                        "todo",
+                        "Memory follow-up",
+                        "current typed todo",
+                        "tasks/todo.md",
+                        hashlib.sha256(todo_path.read_bytes()).hexdigest(),
+                        "2026-07-14T00:00:00Z",
+                        "2026-07-14T00:00:00Z",
+                    ),
+                    (
+                        "chunk.tasks-lessons-md.0",
+                        "chunk",
+                        "tasks/lessons.md",
+                        "durable project lesson",
+                        "tasks/lessons.md",
+                        hashlib.sha256(lessons_path.read_bytes()).hexdigest(),
+                        "2026-07-14T00:00:00Z",
+                        "2026-07-14T00:00:00Z",
+                    ),
+                ],
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        provider = make_embedding_provider("token-hash", "")
+        records = lancedb_sidecar.load_sqlite_records(root, sqlite_path, provider)
+        record_ids = {record["id"] for record in records}
+
+        assert "chunk.tasks-todo-md.0" not in record_ids
+        assert "todo.memory-follow-up" in record_ids
+        assert "chunk.tasks-lessons-md.0" in record_ids
+
+
 def test_retrieval_output_keeps_source_backed_results_with_freshness_notes():
     query = "find current actual OFI formula TC-DN-HOFI3"
     rows = [
@@ -615,6 +696,7 @@ if __name__ == "__main__":
     test_eval_cases_include_no_answer_gap_notes_for_expected_empty_case()
     test_retrieval_output_filters_low_confidence_results_and_reports_freshness_gap_notes()
     test_retrieval_output_rejects_partial_overlap_generic_chunk()
+    test_semantic_rebuild_excludes_operational_todo_chunks_but_keeps_typed_todos()
     test_retrieval_output_keeps_source_backed_results_with_freshness_notes()
     test_store_path_guard_allows_only_generated_child_paths()
     print("ok")

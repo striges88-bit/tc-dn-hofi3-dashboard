@@ -1752,7 +1752,10 @@ Compact boundary:
 - [x] Run the full offline `lancedb_sidecar_tests.py`, then real LanceDB eval and require `11/11` before committing.
 - [x] Update `tasks/lessons.md` and retrieval docs; run focused .NET guardrails, full solution tests/build, `git diff --check`, and self-review.
 - [x] Commit the focused semantic gate fix as a separate slice from the retained-store boundary.
-- [ ] After the commit, rerun `memory-refresh-all`, `memory status`, and `memory-pre-push-check`.
+- [x] Run the first post-commit `memory-refresh-all`; canonical refresh/stale-check and LanceDB rebuild succeeded, but eval correctly blocked the gate at `10/11`.
+- [x] Add a RED/GREEN semantic-source policy: keep `tasks/todo.md` in canonical SQLite/FTS, exclude only its generic chunks from LanceDB, and preserve future typed `todo` records.
+- [x] Rerun offline Python tests and a direct real LanceDB rebuild/eval against the canonical store; require `11/11` before broader verification.
+- [ ] Run focused .NET guardrails, solution tests/build, diff review, and commit the source-boundary fix; only then run full commit-addressed refresh, status, and pre-push.
 
 Review / Results:
 
@@ -1760,6 +1763,7 @@ Review / Results:
 - Offline Python tests passed, real FastEmbed/LanceDB eval passed `11/11`, focused .NET memory guardrails passed `35/35` outside sandbox, full solution tests passed `195/195`, and solution build passed with `0` warnings/errors.
 - The first focused .NET run inside sandbox failed only because `memory-refresh.ps1` could not read `.tools/python-packages`; the exact command passed outside sandbox, so no source workaround was added.
 - Self-review found no Critical or Important defect. The report contract is additive; existing `minimum_retrieval_confidence=0.40` remains available while the chunk-specific floor and effective per-result threshold are explicit.
+- The first rebuild from `90dec95` exposed a second self-contamination path: `chunk.tasks-todo-md.46` contains all three historical-query tokens, scores `0.70`, and legitimately clears the new `0.50` chunk floor. Raising the floor would suppress useful chunks and is rejected; the operational todo log needs an explicit semantic-source boundary instead.
 
 Compact boundary:
 
@@ -1768,3 +1772,30 @@ Compact boundary:
 - Intentional uncommitted source is limited to the new RED test plus this handoff. Generated reports/indexes are ignored local state.
 - Do not amend `f236e25`; make the semantic gate correction a separate focused commit.
 - First implementation step after `/compact`: introduce `MIN_CHUNK_RETRIEVAL_CONFIDENCE = 0.50` and an effective-threshold helper in `tools/MemorySemantic/lancedb_sidecar.py`, then use it consistently in filtering and per-result gap notes before rerunning the RED test.
+
+## PR 19 Todo Chunk Source Boundary Compact Handoff
+
+- [x] Observe the post-commit failure on the rebuilt corpus: eval `10/11`, with `chunk.tasks-todo-md.46` scoring `0.70` because the operational handoff repeats all historical-query tokens.
+- [x] Reject a higher global chunk threshold as harmful: it would suppress useful current chunks instead of separating operational history from durable semantic evidence.
+- [x] Add an integration RED using a temporary SQLite store; confirm that the existing loader imports a generic `tasks/todo.md` chunk.
+- [x] GREEN: exclude only `type=chunk` records from `tasks/todo.md` during LanceDB loading; preserve typed `todo` records and `tasks/lessons.md` chunks.
+- [x] Expose `semantic_chunk_excluded_sources=["tasks/todo.md"]` in sidecar reports and document the SQLite-FTS-only boundary in the contract and semantic README.
+- [x] Run the full offline Python suite (`ok`), direct LanceDB rebuild (`2433` records instead of `2481`), and real eval (`11/11`).
+- [x] After `/compact`: run focused LanceDB/contract/manual-gate .NET tests; the exact outside-sandbox rerun passed `35/35` after the sandbox-only offline-cache denial.
+- [x] Run full solution tests/build, `git diff --check`, and self-review.
+- [x] Commit this source-boundary correction separately; then run `scripts/memory-refresh-all.ps1`, memory status, and `scripts/memory-pre-push-check.ps1` against the final commit.
+
+Review / Results:
+
+- Focused LanceDB/contract/manual-gate tests passed `35/35` outside sandbox after the expected sandbox-only denial on `.tools/python-packages`.
+- Full solution tests passed `195/195`; solution build passed with `0` warnings and `0` errors; `git diff --check` passed.
+- Self-review found no Critical or Important defect: only generic `chunk` rows from normalized `tasks/todo.md` are excluded, while typed `todo`, `tasks/lessons.md`, and canonical SQLite/FTS retrieval remain unchanged.
+- The integration fixture now closes SQLite in `finally` so a failed assertion cannot be obscured by a Windows temp-directory lock; the full offline Python suite returned `ok` afterward.
+- The first commit-addressed full refresh completed all steps, rebuilt `2433` LanceDB records, and passed semantic eval `11/11`; status reported `HEAD=indexed_commit`, `needs_refresh=false`, and a clean worktree, then manual pre-push passed all `7/7` checks.
+
+Compact boundary:
+
+- Branch remains `codex/memory-operations-polish-final`; PR #19 remains open and unmerged.
+- The source-boundary correction is a separate commit after the retained-store and threshold slices; generated SQLite/LanceDB/reports remain ignored local state.
+- Commit-addressed refresh proved that 48 operational todo chunks are absent from LanceDB while eval remains `11/11`; canonical SQLite/FTS still owns exact `tasks/todo.md` retrieval.
+- If this completion record is amended into the slice commit, the same refresh/status/pre-push sequence must pass against the amended `HEAD` before any push.

@@ -10,4 +10,6 @@ Run `scripts/memory-semantic-doctor.ps1` before a rebuild/eval gate on a fresh o
 
 The token-hash provider is retained only for deterministic fallback/unit tests. It is not semantic quality evidence.
 
+`tasks/todo.md` remains searchable in canonical SQLite FTS5, but its generic chunks are excluded from LanceDB because the operational history can repeat eval queries and stale handoff language. Typed `todo` records are not excluded.
+
 `eval` writes compact generated JSON and Markdown reports under `docs/memory/generated/` with query, expected ids/types, matched rank, source path, confidence, no-answer/low-confidence cases, and gap notes. Typed facts use a `0.40` retrieval-confidence floor; generic chunks use `0.50` so weak partial token overlap cannot satisfy a typed or superseded-only question. `search` and `explain` report both floors, the effective per-result threshold, `freshness_check`, returned count, and top-level gap notes. Treat those reports as review evidence, not source-of-truth memory.

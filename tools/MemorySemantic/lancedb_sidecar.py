@@ -25,6 +25,7 @@ TOKEN_HASH_VECTOR_DIMENSIONS = 64
 CURRENT_STATUSES = ("current", "proposed")
 MIN_RETRIEVAL_CONFIDENCE = 0.40
 MIN_CHUNK_RETRIEVAL_CONFIDENCE = 0.50
+SEMANTIC_CHUNK_EXCLUDED_SOURCES = frozenset({"tasks/todo.md"})
 DEFAULT_EMBEDDING_PROVIDER = "fastembed"
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 TOKEN_HASH_MODEL = "local-token-hash"
@@ -118,6 +119,7 @@ def build_base_report(args: argparse.Namespace) -> dict[str, Any]:
         "auto_commit_refresh_enabled": False,
         "direct_project_crawl_enabled": False,
         "commit_hook_installed": False,
+        "semantic_chunk_excluded_sources": sorted(SEMANTIC_CHUNK_EXCLUDED_SOURCES),
         "supported_commands": ["probe", "preflight", "rebuild", "search", "explain", "eval", "cleanup"],
         "embedding_provider": args.embedding_provider,
         "embedding_model": normalized_embedding_model(args.embedding_provider, args.embedding_model),
@@ -384,6 +386,8 @@ def load_sqlite_records(project_root: Path, sqlite_path: Path, provider: "Embedd
     for row in rows:
         source_path = row["source_path"]
         source_hash = row["source_hash"]
+        if not should_index_semantic_record(row["type"], source_path):
+            continue
         if not source_matches(project_root, source_path, source_hash, row["commit_sha"], row["source_blob_sha"]):
             continue
 
@@ -417,6 +421,11 @@ def load_sqlite_records(project_root: Path, sqlite_path: Path, provider: "Embedd
         records.append(copy)
 
     return records
+
+
+def should_index_semantic_record(record_type: str, source_path: str) -> bool:
+    normalized_source = source_path.replace("\\", "/").casefold()
+    return record_type != "chunk" or normalized_source not in SEMANTIC_CHUNK_EXCLUDED_SOURCES
 
 
 def source_matches(
