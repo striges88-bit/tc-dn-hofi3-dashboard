@@ -525,6 +525,281 @@ public sealed class MemoryCliTests
     }
 
     [Fact]
+    public void CanonicalRefreshPreservesRetainedRowsInSeparateDefaultStore()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string retainedText = "# Persistent Retain Source\n\ncanonicalrefreshretain survives canonical index rebuilds.\n";
+        fixture.Write("docs/memory/persistent-retain.md", retainedText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                "docs/memory/persistent-retain.md",
+                HashText(retainedText),
+                Encoding.UTF8.GetByteCount(retainedText),
+                "candidate",
+                0));
+
+        using (var import = fixture.RunMemoryCliWithDefaultStores(
+                   "retain-import",
+                   "--input-report",
+                   reportPath,
+                   "--commit",
+                   "HEAD",
+                   "--json"))
+        {
+            Assert.Equal(0, import.ExitCode);
+        }
+
+        using (var searchBeforeRefresh = fixture.RunMemoryCliWithDefaultStores(
+                   "retain-search",
+                   "--query",
+                   "canonicalrefreshretain",
+                   "--json"))
+        {
+            Assert.Equal(0, searchBeforeRefresh.ExitCode);
+            using var searchJson = JsonDocument.Parse(searchBeforeRefresh.StandardOutput);
+            Assert.Single(searchJson.RootElement.GetProperty("results").EnumerateArray());
+        }
+
+        using (var refresh = fixture.RunMemoryCliWithDefaultStores("refresh", "--json"))
+        {
+            Assert.Equal(0, refresh.ExitCode);
+        }
+
+        using var searchAfterRefresh = fixture.RunMemoryCliWithDefaultStores(
+            "retain-search",
+            "--query",
+            "canonicalrefreshretain",
+            "--json");
+        Assert.Equal(0, searchAfterRefresh.ExitCode);
+        using var searchAfterRefreshJson = JsonDocument.Parse(searchAfterRefresh.StandardOutput);
+        Assert.Single(searchAfterRefreshJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
+    [Fact]
+    public void RetainReimportReplacesPriorSearchableVersionForSourcePath()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourcePath = "docs/memory/versioned-retain.md";
+        const string originalText = "# Versioned Retain\n\noldversionretain must stop being searchable after re-import.\n";
+        fixture.Write(sourcePath, originalText);
+        fixture.InitializeGitRepository();
+        var originalReportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                sourcePath,
+                HashText(originalText),
+                Encoding.UTF8.GetByteCount(originalText),
+                "candidate",
+                0));
+
+        using (var firstImport = fixture.RunMemoryCliWithDefaultStores(
+                   "retain-import",
+                   "--input-report",
+                   originalReportPath,
+                   "--commit",
+                   "HEAD",
+                   "--json"))
+        {
+            Assert.Equal(0, firstImport.ExitCode);
+        }
+
+        const string updatedText = "# Versioned Retain\n\nnewversionretain is the only current searchable version.\n";
+        fixture.Write(sourcePath, updatedText);
+        fixture.RunGit("add", sourcePath);
+        fixture.RunGit("commit", "-m", "update retained source");
+        var updatedReportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                sourcePath,
+                HashText(updatedText),
+                Encoding.UTF8.GetByteCount(updatedText),
+                "candidate",
+                0));
+
+        using (var secondImport = fixture.RunMemoryCliWithDefaultStores(
+                   "retain-import",
+                   "--input-report",
+                   updatedReportPath,
+                   "--commit",
+                   "HEAD",
+                   "--json"))
+        {
+            Assert.Equal(0, secondImport.ExitCode);
+        }
+
+        using (var oldSearch = fixture.RunMemoryCliWithDefaultStores(
+                   "retain-search",
+                   "--query",
+                   "oldversionretain",
+                   "--json"))
+        {
+            Assert.Equal(0, oldSearch.ExitCode);
+            using var oldSearchJson = JsonDocument.Parse(oldSearch.StandardOutput);
+            Assert.Empty(oldSearchJson.RootElement.GetProperty("results").EnumerateArray());
+        }
+
+        using (var newSearch = fixture.RunMemoryCliWithDefaultStores(
+                   "retain-search",
+                   "--query",
+                   "newversionretain",
+                   "--json"))
+        {
+            Assert.Equal(0, newSearch.ExitCode);
+            using var newSearchJson = JsonDocument.Parse(newSearch.StandardOutput);
+            Assert.Single(newSearchJson.RootElement.GetProperty("results").EnumerateArray());
+        }
+
+        var exportPath = Path.Combine(fixture.Root, "retain-export.json");
+        using var export = fixture.RunMemoryCliWithDefaultStores(
+            "retain-export",
+            "--output",
+            exportPath,
+            "--json");
+        Assert.Equal(0, export.ExitCode);
+        using var exportJson = JsonDocument.Parse(export.StandardOutput);
+        Assert.Equal(1, exportJson.RootElement.GetProperty("exported_count").GetInt32());
+        Assert.Contains(
+            "newversionretain",
+            exportJson.RootElement.GetProperty("items")[0].GetProperty("text").GetString(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DefaultRetainStoreMigratesLegacyCanonicalRowsWithoutLoss()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourcePath = "docs/memory/legacy-retain.md";
+        const string retainedText = "# Legacy Retain\n\nlegacyretainedrow migrates into the isolated lifecycle store.\n";
+        fixture.Write(sourcePath, retainedText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                sourcePath,
+                HashText(retainedText),
+                Encoding.UTF8.GetByteCount(retainedText),
+                "candidate",
+                0));
+
+        using (var legacyImport = fixture.RunMemoryCli(
+                   "retain-import",
+                   "--input-report",
+                   reportPath,
+                   "--commit",
+                   "HEAD",
+                   "--json"))
+        {
+            Assert.Equal(0, legacyImport.ExitCode);
+        }
+
+        fixture.Refresh();
+
+        using (var migratedSearch = fixture.RunMemoryCliWithDefaultStores(
+                   "retain-search",
+                   "--query",
+                   "legacyretainedrow",
+                   "--json"))
+        {
+            Assert.Equal(0, migratedSearch.ExitCode);
+            using var migratedSearchJson = JsonDocument.Parse(migratedSearch.StandardOutput);
+            Assert.Single(migratedSearchJson.RootElement.GetProperty("results").EnumerateArray());
+        }
+
+        Assert.True(File.Exists(fixture.RetainedDatabasePath));
+
+        using var legacySearch = fixture.RunMemoryCli(
+            "retain-search",
+            "--query",
+            "legacyretainedrow",
+            "--json");
+        Assert.Equal(0, legacySearch.ExitCode);
+        using var legacySearchJson = JsonDocument.Parse(legacySearch.StandardOutput);
+        Assert.Empty(legacySearchJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
+    [Fact]
+    public void DefaultRetainStoreFailsClosedWhenLegacyAndIsolatedStoresBothContainRows()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string isolatedPath = "docs/memory/isolated-retain.md";
+        const string isolatedText = "# Isolated Retain\n\nisolatedconflictrow remains in the retained database.\n";
+        const string legacyPath = "docs/memory/legacy-conflict-retain.md";
+        const string legacyText = "# Legacy Retain\n\nlegacyconflictrow remains in the canonical database.\n";
+        fixture.Write(isolatedPath, isolatedText);
+        fixture.Write(legacyPath, legacyText);
+        fixture.InitializeGitRepository();
+
+        var isolatedReportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                isolatedPath,
+                HashText(isolatedText),
+                Encoding.UTF8.GetByteCount(isolatedText),
+                "candidate",
+                0));
+        using (var isolatedImport = fixture.RunMemoryCliWithDefaultStores(
+                   "retain-import",
+                   "--input-report",
+                   isolatedReportPath,
+                   "--commit",
+                   "HEAD",
+                   "--json"))
+        {
+            Assert.Equal(0, isolatedImport.ExitCode);
+        }
+
+        var legacyReportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                legacyPath,
+                HashText(legacyText),
+                Encoding.UTF8.GetByteCount(legacyText),
+                "candidate",
+                0));
+        using (var legacyImport = fixture.RunMemoryCli(
+                   "retain-import",
+                   "--input-report",
+                   legacyReportPath,
+                   "--commit",
+                   "HEAD",
+                   "--json"))
+        {
+            Assert.Equal(0, legacyImport.ExitCode);
+        }
+
+        using var defaultSearch = fixture.RunMemoryCliWithDefaultStores(
+            "retain-search",
+            "--query",
+            "conflictrow",
+            "--json");
+        Assert.Equal(1, defaultSearch.ExitCode);
+        Assert.Contains(
+            "Both project-memory.sqlite and project-retained.sqlite contain retained items",
+            defaultSearch.StandardError,
+            StringComparison.Ordinal);
+
+        using var isolatedSearch = fixture.RunMemoryCli(
+            "retain-search",
+            "--db",
+            fixture.RetainedDatabasePath,
+            "--query",
+            "isolatedconflictrow",
+            "--json");
+        Assert.Equal(0, isolatedSearch.ExitCode);
+        using var isolatedSearchJson = JsonDocument.Parse(isolatedSearch.StandardOutput);
+        Assert.Single(isolatedSearchJson.RootElement.GetProperty("results").EnumerateArray());
+
+        using var legacySearch = fixture.RunMemoryCli(
+            "retain-search",
+            "--query",
+            "legacyconflictrow",
+            "--json");
+        Assert.Equal(0, legacySearch.ExitCode);
+        using var legacySearchJson = JsonDocument.Parse(legacySearch.StandardOutput);
+        Assert.Single(legacySearchJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
+    [Fact]
     public void RetainImportUsesCollisionResistantIdsForDistinctCanonicalPaths()
     {
         using var fixture = MemoryProjectFixture.Create();
@@ -1513,11 +1788,14 @@ public sealed class MemoryCliTests
         {
             Root = root;
             DatabasePath = Path.Combine(Root, "docs", "memory", "generated", "project-memory.sqlite");
+            RetainedDatabasePath = Path.Combine(Root, "docs", "memory", "generated", "project-retained.sqlite");
         }
 
         public string Root { get; }
 
         public string DatabasePath { get; }
+
+        public string RetainedDatabasePath { get; }
 
         public static MemoryProjectFixture Create()
         {
@@ -1670,6 +1948,18 @@ public sealed class MemoryCliTests
             {
                 args.Add("--db");
                 args.Add(DatabasePath);
+            }
+
+            return MemoryCliTests.RunMemoryCli(args.ToArray());
+        }
+
+        public CliResult RunMemoryCliWithDefaultStores(params string[] arguments)
+        {
+            var args = new List<string>(arguments);
+            if (!args.Contains("--project-root", StringComparer.Ordinal))
+            {
+                args.Add("--project-root");
+                args.Add(Root);
             }
 
             return MemoryCliTests.RunMemoryCli(args.ToArray());

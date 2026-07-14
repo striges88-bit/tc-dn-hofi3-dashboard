@@ -54,6 +54,30 @@ public sealed class CuratedRetainPolicyTests
     }
 
     [Fact]
+    public void CuratedRetainUsesAnIsolatedLifecycleStore()
+    {
+        var adr = ReadText("docs/decisions/0009-curated-retain-storage-boundary.md");
+        var policy = ReadText("docs/memory/retain-policy.md");
+        var contract = ReadText("docs/memory/contract.md");
+        var runbook = ReadText("docs/memory/operations-runbook.md");
+
+        foreach (var document in new[] { adr, policy, contract })
+        {
+            Assert.Contains("project-memory.sqlite", document, StringComparison.Ordinal);
+            Assert.Contains("project-retained.sqlite", document, StringComparison.Ordinal);
+            Assert.Contains("one current retained version per `source_path`", document, StringComparison.OrdinalIgnoreCase);
+        }
+
+        Assert.Contains("legacy", adr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("fail closed", adr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("retain-import", runbook, StringComparison.Ordinal);
+        Assert.Contains("retain-search", runbook, StringComparison.Ordinal);
+        Assert.Contains("curated-retain-export.ps1", runbook, StringComparison.Ordinal);
+        Assert.Contains("curated-retain-delete.ps1", runbook, StringComparison.Ordinal);
+        Assert.Contains("absent", runbook, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task PostCommitMarkerInstallerRemainsMarkerOnlyAfterRetainPolicy()
     {
         var scriptPath = Path.Combine(Root, "scripts", "install-memory-post-commit-marker-hook.ps1");

@@ -121,6 +121,17 @@ Import allowlists only schema-2 `redacted-subset`; schema-1 `dry-run` remains re
 
 Controlled local import does not enable external retain, Codex auto-retain, Cloud, Hindsight, hooks, refresh wrappers, LanceDB rebuild, raw JSONL import, generated export import, or build-artifact import.
 
+## Local Storage Boundary
+
+Canonical generated memory and curated retain use different ignored SQLite files:
+
+- `docs/memory/generated/project-memory.sqlite` is disposable/rebuildable from Git and may be recreated by canonical refresh;
+- `docs/memory/generated/project-retained.sqlite` is the controlled local lifecycle store and must survive canonical refresh/recovery.
+
+The retained database owns `retained_items` and `retained_items_fts`. It keeps one current retained version per `source_path`; a later reviewed import atomically replaces the older searchable row and records the new commit, tree, blob, source hash, provider, redaction status, and retain timestamp. Source history remains in Git rather than accumulating as stale searchable retain rows.
+
+The first default retain command may migrate legacy rows from `project-memory.sqlite` only when `project-retained.sqlite` has no retained rows. Migration copies and verifies current rows before removing legacy tables. If both stores contain rows, it must fail closed and leave both unchanged. Use explicit `--db` only to inspect and resolve that local conflict; automatic migration must not choose a winner.
+
 ## Controlled Local Export And Delete
 
 After controlled local import, retained SQLite rows must be lifecycle-testable before any external memory is considered. Use `scripts/curated-retain-export.ps1` to export local retained rows into `docs/memory/generated/curated-retain-export-report.json`.

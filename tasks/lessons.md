@@ -84,3 +84,4 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - Byte-level Git fixtures on Windows need an explicit `.gitattributes` `-text` rule when the test must preserve CRLF or BOM exactly.
 - Keep structural report-contract failures separate from source freshness and encoding failures so blocked results remain diagnosable.
 - Reject invalid UTF-8 at the shared scanner boundary; replacement-character decoding can turn a malformed candidate into different retained text and weaken secret scanning.
+- When separating durable local retain from a rebuildable canonical SQLite index, test real command-default routing, preserve legacy rows across refresh, and migrate only into an empty destination. If both stores contain data, fail closed; an explicit `--db` must bypass automatic migration so each copy remains diagnosable.

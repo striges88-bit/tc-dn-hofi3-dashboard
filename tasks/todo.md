@@ -1609,7 +1609,7 @@ Review / Results:
 - [x] Define schema-v2 `findings` as an exact empty array for the current subset contract and reject missing, non-empty, unknown, duplicate, or orphan entries during import.
 - [x] Add a RED collision case and replace lossy retained-item IDs with a stable hash of the exact canonical source path; reject duplicate batch IDs before SQLite writes.
 - [x] Fix and cover the remaining contract polish: byte-preserving redaction derivation, verified `size_bytes`, strict rejection of non-canonical path spelling, duplicate `-SourcePath`, explicit schema-v2 wrapper input, propagated CLI exit code, and structured malformed-JSON failure.
-- [ ] Rerun focused RED/GREEN tests, all Memory/Infrastructure tests, solution tests/build, `git diff --check`, memory refresh/status/pre-push, CI, and final review before merging PR #19.
+- [x] Rerun focused RED/GREEN tests, all Memory/Infrastructure tests, solution tests/build, `git diff --check`, memory refresh/status/pre-push, CI, and final review before merging PR #19.
 
 Review / Results:
 
@@ -1688,3 +1688,53 @@ Compact boundary:
 - `git diff --check` passed; its only output is the existing informational CRLF-to-LF warning for the touched Infrastructure test project file. No generated memory, raw recording, secret, build, or local-proxy path is in the source diff.
 - The coherent remediation commit was followed by a completed commit-addressed refresh, clean `memory status`, all `7/7` manual pre-push checks, and LanceDB eval `11/11`; the same gate is rerun after the final todo-only amend so indexed metadata matches the durable SHA.
 - Residual hardening for a separate focused slice: prove that allowlisted Windows reparse-point/symlink files cannot resolve outside the repository before scanner reads. The current lexical checks are covered, but target-resolution semantics need a privilege-aware Windows regression rather than an unverified claim.
+
+## PR 19 Final Lifecycle Review Compact Handoff
+
+- [x] Push `cbdae1fe1550a12bddcf4f4f499bc32422d7028b` and confirm PR #19 targets that exact SHA.
+- [x] Confirm all three GitHub CI jobs pass: `.NET build and tests` (`11m38s`), `Lightweight canonical memory` (`2m49s`), and `Cached semantic memory quality` (`6m33s`).
+- [x] Complete an independent read-only review of the full `72cd6ba..cbdae1fe` diff and verify every reported finding against the current source.
+- [x] Add RED lifecycle tests proving canonical refresh cannot silently erase controlled retain and re-import cannot leave stale searchable versions.
+- [x] Decide and document the retain persistence boundary. Use a separate local retained-memory SQLite store because canonical `project-memory.sqlite` is intentionally disposable/rebuildable from Git while curated retain has explicit export/delete lifecycle.
+- [x] Make one canonical retained version current per `source_path`; re-import replaces the prior searchable row and preserves current commit/source audit metadata.
+- [ ] Make import/export/delete reports truthful for local-store mutation, actual database/output paths, generated/ignored status, and wrapper exit codes.
+- [ ] Expand deterministic secret detection for bare GitHub PAT, JWT, AWS access key, and PEM private-key markers before any external/Codex retain can be considered.
+- [ ] Pin the FastEmbed model to immutable revision/artifact identity, include it in metadata/cache keys, and lock the Python dependency graph; rerun offline cleanup/rebuild/eval `11/11`.
+- [ ] Close verified contract polish: schema-v2 default/required input, non-object JSON root, any non-empty `blocking_reasons`, empty import batch, repo-path separator boundary in both importer/CLI, separated stderr/JSON stdout, export/delete exit propagation, runbook lifecycle sequence, and LanceDB `preflight` inventory.
+- [ ] Keep the known CI duplicate Memory.Tests execution as a focused efficiency fix, and keep reparse-point target containment as a privilege-aware Windows hardening test.
+- [ ] After RED/GREEN remediation: rerun curated Infrastructure, full Memory.Tests, full solution tests/build, `git diff --check`, update lessons/docs/ADR, commit, then `memory-refresh-all`, status, pre-push, push, green CI, and one final independent review before merge.
+
+Review / Results:
+
+- No Critical finding was reported.
+- Important finding 1 is confirmed: `MemoryStore.Refresh()` calls `RecreateSchema()`, and `MemorySchema.RecreateStatements` drops both `retained_items` and `retained_items_fts`; normal `memory-refresh-all` therefore destroys controlled local retain.
+- Important finding 2 is confirmed: retained IDs include commit SHA, import deletes only the same ID, and `retain-search` has no current-version filter; re-importing a changed source can leave stale and current text searchable together.
+- Important finding 3 is confirmed: import claims `writes_report_only=true` despite mutating SQLite; export/delete hard-code default generated output metadata for custom paths and always exit `0`.
+- Important finding 4 is confirmed as a future external-retain blocker: current regexes do not detect common bare credential formats. Current exposure remains local because Cloud/external/Codex retain is disabled.
+- Important finding 5 is confirmed as a reproducibility blocker: package top-level pins and eval `11/11` exist, but the Hugging Face model revision/artifact digest and transitive Python graph are not immutable.
+- Ten Minor findings were verified: stale direct-CLI input default; non-object JSON root; blank `blocking_reasons`; empty successful batch/dead branch; path-prefix metadata boundary; merged stderr/stdout; export/delete exit `0`; duplicate Memory.Tests CI execution; missing retain lifecycle sequence in the short operations runbook; and missing LanceDB `preflight` in the contract command list.
+- The connector-backed GitHub app returned repository `404` for this private installation, but authenticated `gh` successfully verified PR #19 and CI. This is a connector-access limitation, not a repository or PR failure.
+- Worktree is intentionally dirty only because this durable handoff updates `tasks/todo.md`; do not commit or refresh it alone. PR #19 remains open, ready, and unmerged at `cbdae1fe` with green CI. First command after `/compact`: add the RED regression `canonical refresh preserves retained rows` (or proves the selected separate-store boundary) before changing schema/runtime code.
+
+## PR 19 Retained Store Boundary Compact Handoff
+
+- [x] Observe RED: default canonical refresh erased the retained search hit (`Assert.Single`, collection empty).
+- [x] Route canonical commands to `project-memory.sqlite` and retain lifecycle commands to `project-retained.sqlite`; remove retain tables from canonical recreate-schema.
+- [x] Observe RED for stale re-import and replace all prior rows for the same canonical `source_path` atomically before inserting the reviewed current version.
+- [x] Add one-time legacy migration from the canonical DB, preserving rows through canonical refresh and deleting legacy tables only after destination import succeeds.
+- [x] Add fail-closed conflict behavior when both stores contain rows; explicit `--db` bypasses migration so each store remains diagnosable.
+- [x] Add ADR 0009 plus contract, retain-policy, and runbook lifecycle/recovery documentation.
+- [x] Verify focused lifecycle tests `4/4`, focused doc contract `1/1`, and full `Memory.Tests` `45/45`.
+- [x] Run the full `CuratedRetainPolicyTests` filter; this is the first command after `/compact`.
+- [x] Run solution tests/build, `git diff --check`, and self-review the complete retained-store diff.
+- [ ] Update this review section, commit the coherent boundary slice, then and only then run `memory-refresh-all`, `memory status`, and `memory-pre-push-check`.
+
+Compact boundary:
+
+- Branch remains `codex/memory-operations-polish-final`; PR #19 remains unmerged.
+- Worktree is intentionally dirty with the retained-store implementation, tests, ADR/docs, lessons, and this handoff. No commit, push, merge, or memory refresh has occurred.
+- Verification evidence: full `CuratedRetainPolicyTests` `32/32`; full solution tests `195/195` outside sandbox; solution build passed with `0` warnings and `0` errors; `git diff --check` passed.
+- The first sandboxed solution-test run failed only because `memory-refresh.ps1` could not read `.tools/python-packages`; the exact command passed outside sandbox, so no source fix was made for an environment access restriction.
+- Self-review found no Critical or Important defect in the retained-store boundary. The migration preserves legacy rows until destination import succeeds, conflicts fail closed, explicit `--db` preserves diagnosis, and canonical recreate-schema no longer owns retained tables.
+- Deferred Minor: default retain commands re-check the legacy canonical database on every invocation. Add a durable one-time migration-complete marker in a later focused slice so normal retain access no longer depends on opening canonical SQLite after upgrade; explicit `--db` remains the current recovery bypass.
+- Next pending action: commit this coherent boundary slice, then run commit-addressed refresh, status, and the manual pre-push gate before starting truthful lifecycle reports.

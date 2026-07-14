@@ -115,6 +115,35 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-pre-push-
 
 Good result: `status=passed`, every item in `checks` is passed, the LanceDB eval detail reports `passed_count=11` and `failed_count=0`, no Cloud, no hooks installed by the command, and no generated exports used as source.
 
+## Controlled Local Retain Lifecycle
+
+Canonical refresh uses `project-memory.sqlite`; the commands below use the separate `project-retained.sqlite` by default. Do not pass `--db` during the normal lifecycle.
+
+After reviewing a schema-v2 redacted subset, import it from committed `HEAD`:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-import.ps1 -InputReportPath docs\memory\generated\curated-retain-redacted-subset-report.json -Commit HEAD
+```
+
+Find a unique retained phrase, export the complete local retained set, then delete the selected source:
+
+```powershell
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- retain-search --project-root . --query "unique retained phrase" --json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-export.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\curated-retain-delete.ps1 -SourcePath docs/memory/example.md
+```
+
+Repeat `retain-search` with the same unique phrase. Lifecycle proof is complete only when the result is absent, while the source file still exists. Re-importing the same source path replaces its prior searchable version; it does not retain both versions.
+
+On upgrade, the first default retain command migrates legacy rows from `project-memory.sqlite` into the isolated store. If it reports that both stores contain rows, no data was deleted. Diagnose each store explicitly before deciding what to re-import or delete:
+
+```powershell
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- retain-search --project-root . --db docs\memory\generated\project-memory.sqlite --query "known legacy phrase" --json
+.\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- retain-search --project-root . --db docs\memory\generated\project-retained.sqlite --query "known retained phrase" --json
+```
+
+Do not resolve a two-store conflict by deleting either SQLite file. Export the required rows, regenerate a reviewed subset from committed sources, and use normal retain import/delete commands.
+
 ## Local Recovery
 
 Use this when local generated memory looks corrupt or stale:

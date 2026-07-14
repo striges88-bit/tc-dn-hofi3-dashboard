@@ -273,8 +273,14 @@ public sealed class MemoryStore : IDisposable
         using var transaction = _connection.BeginTransaction();
         foreach (var item in import.Items)
         {
-            Execute("DELETE FROM retained_items_fts WHERE id = $id", transaction, ("$id", item.Id));
-            Execute("DELETE FROM retained_items WHERE id = $id", transaction, ("$id", item.Id));
+            Execute(
+                "DELETE FROM retained_items_fts WHERE id IN (SELECT id FROM retained_items WHERE source_path = $source)",
+                transaction,
+                ("$source", item.SourcePath));
+            Execute(
+                "DELETE FROM retained_items WHERE source_path = $source",
+                transaction,
+                ("$source", item.SourcePath));
             Execute(
                 """
                 INSERT INTO retained_items(id, source_path, source_hash, source_blob_sha, commit_sha, tree_sha, provider, redaction_status, retained_at, text)

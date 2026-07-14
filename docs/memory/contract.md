@@ -20,7 +20,7 @@ Generated memory must never override current code, tests, ADRs, formula docs, or
 - Human-authored source: `docs/memory/*.md`, `docs/decisions/*.md`, `tasks/lessons.md`, and approved design/spec docs.
 - Generated source: only files under `docs/memory/generated/`; this directory stays ignored until a committed schema/export policy is approved.
 - Experiments: live/replay/JSONL observations stay as separate experiment summaries with links to recordings or reports. Raw JSONL and bulk runtime observations do not belong in the project memory graph.
-- Local stores: SQLite FTS5 is the canonical local generated memory store. LanceDB is an active local semantic sidecar and production-candidate semantic quality layer below SQLite. Hindsight and GBrain are historical/secondary spikes, not sources of truth.
+- Local stores: `project-memory.sqlite` is the canonical local generated memory store and is disposable/rebuildable from Git. `project-retained.sqlite` is the separate controlled local retain lifecycle store. LanceDB is an active local semantic sidecar and production-candidate semantic quality layer below canonical SQLite. Hindsight and GBrain are historical/secondary spikes, not sources of truth.
 
 ## Curated Retain Policy
 
@@ -58,6 +58,8 @@ Use `scripts/curated-retain-export-dry-run.ps1` and `scripts/curated-retain-dele
 Use `scripts/curated-retain-redacted-subset.ps1 -SourcePath <repo/path.md>` only after reviewing the dry-run findings for selected allowlisted sources. Its schema v2 distinguishes clean `candidate` records (`content_kind=commit-source-reference`, no embedded candidate/source text) from `redacted` records (`content_kind=reviewed-redacted-text`, reviewed `redacted_text`). Top-level and per-file `raw_source_text_included`, `source_derived_text_included`, `candidate_text_included`, and `redacted_text_included` flags describe report content literally. The script rejects files whose current hash no longer matches the dry-run source hash; it does not import, retain, rebuild, install hooks, call Cloud, or call Codex retain.
 
 Use `scripts/curated-retain-import.ps1` only for controlled local import from a reviewed schema-2 `redacted-subset` report. Schema-1 `dry-run` is review evidence and input to subset generation, never import authorization. Import requires the exact known generator plus present, correctly typed safety/content flags and fails closed on incomplete, review-required, blocked, failed, unknown, or explicitly blocked reports. Every source must be a canonical repository-relative allowlist path with no rooted, `.` or `..` segments, and Git blob lookup must verify that the source exists in the selected commit. SQLite `retain-import` reads clean candidates from the selected Git commit tree and stores reviewed redacted text only when every changed line is a marker using a known scanner finding type. It writes an ignored generated report and must not call external retain providers, Codex memory, Cloud, hooks, LanceDB rebuild, raw JSONL, generated exports, secrets, or build artifacts.
+
+Controlled local retain uses `docs/memory/generated/project-retained.sqlite`, not the rebuildable canonical `project-memory.sqlite`. Retain import keeps one current retained version per `source_path`; re-import replaces the prior searchable row and preserves the new commit/tree/blob/source metadata. Canonical refresh and recovery must preserve the retained database. A first-use legacy migration may move rows from the canonical database only when the destination has no retained rows; if both stores contain rows, it must fail closed without deleting either copy.
 
 ## Node Schema
 
@@ -131,6 +133,8 @@ Required tables:
 - `search_documents_fts`
 - `query_log`
 
+The separate `project-retained.sqlite` lifecycle store owns `retained_items` and `retained_items_fts`. These tables are not part of canonical recreate-schema.
+
 Typed records must preserve source grounding: `id`, `status`, `source_path`, `source_hash`, `commit_sha`, `tree_sha`, `source_blob_sha`, `indexed_at`, `created_at` or `updated_at`, `valid_from`, `valid_until`, and `confidence` where applicable. Canonical status lives in SQLite; LanceDB may copy status and commit/source metadata only for filtering, validation, and reranking.
 
 The code-memory MVP extracts lightweight C# facts directly from indexed `.cs` files without loading MSBuild or Roslyn workspaces. It records namespace/type/method symbols in `symbols`, `owns` relations in `relations`, xUnit test-method and `requires_symbol=` markers in `events`, `TODO` markers in `todos`, and `experiment_outcome=` markers in `experiments`. These records are searchable typed documents in `search_documents`; generic chunks remain fallback context, not the preferred answer when a typed symbol/event/relation exists. Generic chunks from C# files under `*.Tests` project directories blank string and char literal payloads before indexing so fixture values cannot masquerade as current project facts; declarations, identifiers, comments, and typed records remain searchable. Stale-check must validate `requires_symbol=` events against the extracted `symbols` table.
@@ -188,7 +192,7 @@ Use `scripts/memory-pre-push-check.ps1` as a manual evidence gate after `memory-
 
 `scripts/install-memory-post-commit-marker-hook.ps1` is the approved optional post-commit marker hook installer. It requires `-Confirm`, refuses unmanaged existing hooks, installs a local managed `post-commit` hook that calls only `scripts/memory-mark-needs-refresh.ps1`, and does not run rebuild. Disable the managed hook with `scripts/install-memory-post-commit-marker-hook.ps1 -Disable -Confirm`.
 
-The manual refresh script and `tools/Memory` CLI may write ignored files under `docs/memory/generated/`, including `project-memory.sqlite`. They must not rewrite human-authored docs, app code, formulas, config, or tests.
+The manual refresh script and `tools/Memory` CLI may write ignored files under `docs/memory/generated/`, including `project-memory.sqlite` and `project-retained.sqlite`. Refresh/recovery may recreate `project-memory.sqlite`, but must not recreate or delete `project-retained.sqlite`. They must not rewrite human-authored docs, app code, formulas, config, or tests.
 
 LanceDB sidecar refresh is manual during the spike. `memory-refresh-all` must not install hooks, enable Codex auto-retain, call Cloud services, crawl project files directly for LanceDB, or import raw JSONL recordings, generated exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps. Do not install a git post-commit refresh hook, after-save hook, or background updater until local clean rebuild/delete/reindex behavior and the semantic quality gate are verified and documented with the generated JSON/Markdown eval reports.
 
@@ -198,7 +202,7 @@ Do not add post-commit auto-refresh for project memory. The allowed Git helpers 
 
 ## Tool Strategy
 
-- SQLite FTS5 is the canonical local memory store for generated retrieval/status metadata. Use `tools/Memory` for `refresh-from-commit`, `status`, `search`, `explain`, and `stale-check`. Keep plain `refresh` only as a working-tree diagnostic path.
+- SQLite FTS5 is the canonical local memory store for generated retrieval/status metadata. Use `tools/Memory` for `refresh-from-commit`, `status`, `search`, `explain`, and `stale-check`. Keep plain `refresh` only as a working-tree diagnostic path. The same tooling owns isolated local `retain-import`, `retain-search`, `retain-export`, and `retain-delete`, but retained rows stay below repository truth and outside canonical rebuild.
 - LanceDB is an active local semantic sidecar spike and production-candidate semantic quality layer. It may add embeddings, hybrid search, metadata filtering, cleanup, and reranking, but SQLite remains the canonical status store and LanceDB must not own canonical status.
 - Use `scripts/lancedb-sidecar.ps1` for local `probe`, `rebuild`, `search`, `explain`, `eval`, and `cleanup`. It reads SQLite `search_documents` only and writes generated data under `docs/memory/generated/lancedb`.
 - The current LanceDB candidate uses local FastEmbed/ONNX by default with logical model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, runtime custom-model alias `embedding_runtime_model=tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean`, wrapper pins `lancedb==0.34.0`, `pyarrow==24.0.0`, and `fastembed==0.8.0`, `embedding_pooling=mean`, `embedding_pooling_baseline=mean-pooling`, and `embedding_warning_policy=production-custom-alias-no-suppression`. This baseline is accepted only while LanceDB `eval` passes `11/11`; changing package, model, runtime alias, provider, dimensions, pooling, or warning policy requires rerun cleanup/rebuild/eval and an updated baseline report.

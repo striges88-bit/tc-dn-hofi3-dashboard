@@ -24,6 +24,7 @@ public sealed record MemoryCliOptions(
     string InputReportPath,
     string OutputPath,
     string SourcePath,
+    bool DatabasePathExplicit,
     bool Json)
 {
     public static MemoryCliOptions Parse(string[] args)
@@ -51,6 +52,7 @@ public sealed record MemoryCliOptions(
 
         var projectRoot = string.Empty;
         var databasePath = string.Empty;
+        var databasePathExplicit = false;
         var query = string.Empty;
         var commit = "HEAD";
         var inputReportPath = string.Empty;
@@ -68,6 +70,7 @@ public sealed record MemoryCliOptions(
                     break;
                 case "--db":
                     databasePath = ReadValue(args, ref index, argument);
+                    databasePathExplicit = true;
                     break;
                 case "--query":
                     query = ReadValue(args, ref index, argument);
@@ -93,7 +96,7 @@ public sealed record MemoryCliOptions(
         }
 
         projectRoot = ResolveProjectRoot(projectRoot);
-        databasePath = ResolveDatabasePath(projectRoot, databasePath);
+        databasePath = MemoryDatabasePaths.Resolve(projectRoot, databasePath, command);
         inputReportPath = ResolveInputReportPath(projectRoot, inputReportPath);
         outputPath = ResolveOutputPath(projectRoot, outputPath);
 
@@ -112,7 +115,17 @@ public sealed record MemoryCliOptions(
             throw new InvalidOperationException("--source-path is required for retain-delete.");
         }
 
-        return new MemoryCliOptions(command, projectRoot, databasePath, query, commit, inputReportPath, outputPath, sourcePath, json);
+        return new MemoryCliOptions(
+            command,
+            projectRoot,
+            databasePath,
+            query,
+            commit,
+            inputReportPath,
+            outputPath,
+            sourcePath,
+            databasePathExplicit,
+            json);
     }
 
     private static string ReadValue(string[] args, ref int index, string option)
@@ -140,21 +153,6 @@ public sealed record MemoryCliOptions(
         }
 
         return resolved;
-    }
-
-    private static string ResolveDatabasePath(string projectRoot, string databasePath)
-    {
-        if (string.IsNullOrWhiteSpace(databasePath))
-        {
-            databasePath = Path.Combine(projectRoot, "docs", "memory", "generated", "project-memory.sqlite");
-        }
-
-        if (!Path.IsPathRooted(databasePath))
-        {
-            databasePath = Path.Combine(projectRoot, databasePath);
-        }
-
-        return Path.GetFullPath(databasePath);
     }
 
     private static string ResolveInputReportPath(string projectRoot, string inputReportPath)

@@ -16,6 +16,18 @@ public static class MemoryCli
                 return 0;
             }
 
+            var defaultRetainedDatabase = MemoryDatabasePaths.Retained(options.ProjectRoot);
+            if (MemoryDatabasePaths.UsesRetainedStore(options.Command)
+                && !options.DatabasePathExplicit
+                && Path.GetFullPath(options.DatabasePath).Equals(
+                    Path.GetFullPath(defaultRetainedDatabase),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                LegacyRetainedStoreMigration.MigrateIfNeeded(
+                    MemoryDatabasePaths.Canonical(options.ProjectRoot),
+                    defaultRetainedDatabase);
+            }
+
             using var store = new MemoryStore(options.DatabasePath);
 
             object response = options.Command switch
