@@ -512,6 +512,39 @@ def test_retrieval_output_filters_low_confidence_results_and_reports_freshness_g
     assert "low-confidence" in output["gap_notes"][0]
 
 
+def test_retrieval_output_rejects_partial_overlap_generic_chunk():
+    query = "legacy superseded-only phrase"
+    rows = [
+        {
+            "id": "chunk.docs-memory-retain-policy-md.2",
+            "type": "chunk",
+            "status": "current",
+            "title": "docs/memory/retain-policy.md",
+            "body": "Legacy rows can be migrated. Search again with the same phrase before deletion.",
+            "source_path": "docs/memory/retain-policy.md",
+            "source_hash": "abc",
+            "commit_sha": "commit",
+            "tree_sha": "tree",
+            "source_blob_sha": "blob",
+            "indexed_at": "2026-07-14T00:00:00Z",
+            "confidence": 0.95,
+            "_distance": 0.75,
+        }
+    ]
+    reranked = rerank_rows(rows, query, limit=5)
+
+    output = build_retrieval_output(query, reranked, raw_candidate_count=len(rows))
+
+    assert reranked[0]["token_overlap_ratio"] == 0.666667
+    assert reranked[0]["retrieval_confidence"] == 0.483334
+    assert output["results"] == []
+    assert output["minimum_retrieval_confidence"] == 0.40
+    assert output["minimum_chunk_retrieval_confidence"] == 0.50
+    assert output["freshness_check"]["rejected_low_confidence_count"] == 1
+    assert "low-confidence" in output["gap_notes"][0]
+    assert "top_threshold=0.5" in output["gap_notes"][0]
+
+
 def test_retrieval_output_keeps_source_backed_results_with_freshness_notes():
     query = "find current actual OFI formula TC-DN-HOFI3"
     rows = [
@@ -539,6 +572,7 @@ def test_retrieval_output_keeps_source_backed_results_with_freshness_notes():
     assert output["freshness_check"]["status"] == "passed"
     assert output["results"][0]["id"] == "formula_version.tc-dn-hofi3.current"
     assert output["results"][0]["retrieval_confidence"] >= 0.40
+    assert output["results"][0]["retrieval_confidence_threshold"] == 0.40
     assert output["results"][0]["freshness_status"] == "fresh"
     assert output["results"][0]["gap_notes"] == []
 
@@ -580,6 +614,7 @@ if __name__ == "__main__":
     test_eval_cases_require_empty_result_for_superseded_exclusion_case()
     test_eval_cases_include_no_answer_gap_notes_for_expected_empty_case()
     test_retrieval_output_filters_low_confidence_results_and_reports_freshness_gap_notes()
+    test_retrieval_output_rejects_partial_overlap_generic_chunk()
     test_retrieval_output_keeps_source_backed_results_with_freshness_notes()
     test_store_path_guard_allows_only_generated_child_paths()
     print("ok")

@@ -24,6 +24,7 @@ TABLE_NAME = "memory_documents"
 TOKEN_HASH_VECTOR_DIMENSIONS = 64
 CURRENT_STATUSES = ("current", "proposed")
 MIN_RETRIEVAL_CONFIDENCE = 0.40
+MIN_CHUNK_RETRIEVAL_CONFIDENCE = 0.50
 DEFAULT_EMBEDDING_PROVIDER = "fastembed"
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 TOKEN_HASH_MODEL = "local-token-hash"
@@ -772,6 +773,12 @@ def safe_call_text(instance: Any, method_name: str) -> str:
         return f"{method_name} failed: {exc}"
 
 
+def minimum_retrieval_confidence(row_type: str | None) -> float:
+    if row_type == "chunk":
+        return MIN_CHUNK_RETRIEVAL_CONFIDENCE
+    return MIN_RETRIEVAL_CONFIDENCE
+
+
 def build_retrieval_output(query: str, ranked_rows: list[dict[str, Any]], raw_candidate_count: int) -> dict[str, Any]:
     projected = [project_search_row(row) for row in ranked_rows]
     accepted: list[dict[str, Any]] = []
@@ -783,7 +790,8 @@ def build_retrieval_output(query: str, ranked_rows: list[dict[str, Any]], raw_ca
             rejected_stale += 1
             continue
 
-        if float(result.get("retrieval_confidence") or 0.0) < MIN_RETRIEVAL_CONFIDENCE:
+        threshold = float(result["retrieval_confidence_threshold"])
+        if float(result.get("retrieval_confidence") or 0.0) < threshold:
             rejected_low_confidence += 1
             continue
 
@@ -803,6 +811,7 @@ def build_retrieval_output(query: str, ranked_rows: list[dict[str, Any]], raw_ca
         "candidate_count": len(projected),
         "returned_count": len(accepted),
         "minimum_retrieval_confidence": MIN_RETRIEVAL_CONFIDENCE,
+        "minimum_chunk_retrieval_confidence": MIN_CHUNK_RETRIEVAL_CONFIDENCE,
         "gap_notes": gap_notes,
         "freshness_check": {
             "status": "passed" if rejected_stale == 0 else "failed",
@@ -839,11 +848,12 @@ def build_retrieval_gap_notes(
     notes: list[str] = []
     if rejected_low_confidence > 0:
         top = projected[0] if projected else {}
+        top_threshold = top.get("retrieval_confidence_threshold", MIN_RETRIEVAL_CONFIDENCE)
         notes.append(
-            "low-confidence: no current source-backed result met "
-            f"retrieval_confidence>={MIN_RETRIEVAL_CONFIDENCE}; "
+            "low-confidence: no current source-backed result met its type-aware threshold; "
             f"top_candidate={top.get('id')}; "
-            f"top_confidence={top.get('retrieval_confidence')}"
+            f"top_confidence={top.get('retrieval_confidence')}; "
+            f"top_threshold={top_threshold}"
         )
 
     if rejected_stale > 0:
@@ -861,10 +871,11 @@ def project_search_row(row: dict[str, Any]) -> dict[str, Any]:
     if freshness_notes:
         result_gap_notes.extend(freshness_notes)
 
+    retrieval_threshold = minimum_retrieval_confidence(row.get("type"))
     retrieval_score = row.get("retrieval_confidence")
-    if retrieval_score is None or float(retrieval_score) < MIN_RETRIEVAL_CONFIDENCE:
+    if retrieval_score is None or float(retrieval_score) < retrieval_threshold:
         result_gap_notes.append(
-            f"retrieval_confidence below threshold {MIN_RETRIEVAL_CONFIDENCE}"
+            f"retrieval_confidence below threshold {retrieval_threshold}"
         )
 
     return {
@@ -883,6 +894,7 @@ def project_search_row(row: dict[str, Any]) -> dict[str, Any]:
         "source_blob_sha": row.get("source_blob_sha"),
         "indexed_at": row.get("indexed_at"),
         "retrieval_confidence": row.get("retrieval_confidence"),
+        "retrieval_confidence_threshold": retrieval_threshold,
         "query_token_count": row.get("query_token_count"),
         "matched_query_tokens": row.get("matched_query_tokens", []),
         "token_overlap_ratio": row.get("token_overlap_ratio"),
