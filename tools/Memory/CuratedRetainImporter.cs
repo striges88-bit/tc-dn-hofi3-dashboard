@@ -7,16 +7,6 @@ namespace CryptoIndicatorApp.Memory;
 
 internal sealed class CuratedRetainImporter
 {
-    private static readonly HashSet<string> KnownRedactionTypes = new(StringComparer.Ordinal)
-    {
-        "secret_reference",
-        "env_reference",
-        "absolute_local_path",
-        "local_proxy_detail",
-        "raw_jsonl_or_dump",
-        "generated_export_reference",
-    };
-
     private static readonly string[] RequiredFalseSafetyFlags =
     [
         "external_retain_enabled",
@@ -43,7 +33,9 @@ internal sealed class CuratedRetainImporter
         var treeSha = await GitCommitMemoryIndexer.ReadTreeAsync(_projectRoot, commitSha);
         var blockingReasons = new List<string>();
         var items = new List<RetainedMemoryItem>();
+        var itemIds = new HashSet<string>(StringComparer.Ordinal);
         var retainedAt = DateTimeOffset.UtcNow.ToString("O");
+        var scanner = new CuratedRetainScanner();
 
         if (!File.Exists(inputReportPath))
         {
@@ -51,7 +43,12 @@ internal sealed class CuratedRetainImporter
             return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
         }
 
-        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(inputReportPath));
+        using var document = await TryReadReportAsync(inputReportPath, blockingReasons);
+        if (document is null)
+        {
+            return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
+        }
+
         var root = document.RootElement;
         if (RequiredFalseSafetyFlags.Any(propertyName => ReadBool(root, propertyName)))
         {
@@ -108,6 +105,14 @@ internal sealed class CuratedRetainImporter
             return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
         }
 
+        if (!root.TryGetProperty("findings", out var findingsElement)
+            || findingsElement.ValueKind != JsonValueKind.Array
+            || findingsElement.GetArrayLength() != 0)
+        {
+            AddBlockingReason(blockingReasons, "invalid_input_report_findings");
+            return new RetainImportBatch(ToRepoPath(inputReportPath), commitSha, treeSha, blockingReasons, items);
+        }
+
         if (reportStatus.Equals("review_required", StringComparison.OrdinalIgnoreCase))
         {
             AddBlockingReason(blockingReasons, "input_report_blocked");
@@ -136,20 +141,19 @@ internal sealed class CuratedRetainImporter
                 sourcePath = ReadString(fileElement, "source_path");
             }
 
-            sourcePath = NormalizePath(sourcePath);
-            if (string.IsNullOrWhiteSpace(sourcePath) || !IsSafeRelativeRepoPath(sourcePath))
+            if (!CuratedRetainSourcePolicy.IsCanonicalRepoPath(sourcePath))
             {
                 AddBlockingReason(blockingReasons, "invalid_sources_in_input_report");
                 continue;
             }
 
-            if (TestDeniedRetainPath(sourcePath))
+            if (CuratedRetainSourcePolicy.IsDenied(sourcePath))
             {
                 AddBlockingReason(blockingReasons, "denied_sources_in_input_report");
                 continue;
             }
 
-            if (!TestAllowlistedRetainPath(sourcePath))
+            if (!CuratedRetainSourcePolicy.IsAllowlisted(sourcePath))
             {
                 AddBlockingReason(blockingReasons, "invalid_sources_in_input_report");
                 continue;
@@ -202,6 +206,12 @@ internal sealed class CuratedRetainImporter
                 continue;
             }
 
+            if (!TryReadLong(fileElement, "size_bytes", out var reportedSize) || reportedSize < 0)
+            {
+                AddBlockingReason(blockingReasons, "incomplete_input_report_contract");
+                continue;
+            }
+
             var sourceBlobSha = GitCommitMemoryIndexer.ReadBlobSha(_projectRoot, commitSha, sourcePath);
             if (string.IsNullOrWhiteSpace(sourceBlobSha))
             {
@@ -211,13 +221,34 @@ internal sealed class CuratedRetainImporter
 
             var bytes = await GitCommitMemoryIndexer.ReadBlobBytesAsync(_projectRoot, sourceBlobSha);
             var sourceHash = Sha256(bytes);
-            if (!sourceHash.Equals(reportedHash, StringComparison.OrdinalIgnoreCase))
+            if (bytes.LongLength != reportedSize
+                || !sourceHash.Equals(reportedHash, StringComparison.OrdinalIgnoreCase))
             {
                 AddBlockingReason(blockingReasons, "stale_source_metadata");
                 continue;
             }
 
-            if (isRedacted && !IsReviewedRedactionOf(Encoding.UTF8.GetString(bytes), redactedText))
+            IReadOnlyList<CuratedRetainFinding> scannedFindings;
+            try
+            {
+                scannedFindings = scanner.ScanBytes(sourcePath, bytes);
+            }
+            catch (DecoderFallbackException)
+            {
+                AddBlockingReason(blockingReasons, "invalid_source_encoding");
+                continue;
+            }
+
+            if (isCandidate && scannedFindings.Count != 0)
+            {
+                AddBlockingReason(blockingReasons, "redaction_review_required");
+                continue;
+            }
+
+            if (isRedacted
+                && (!TryReadInt(fileElement, "original_finding_count", out var originalFindingCount)
+                    || originalFindingCount != scannedFindings.Count
+                    || !scanner.IsReviewedRedactionOf(bytes, redactedText, scannedFindings)))
             {
                 AddBlockingReason(blockingReasons, "invalid_redacted_text_derivation");
                 continue;
@@ -225,8 +256,16 @@ internal sealed class CuratedRetainImporter
 
             var text = isRedacted ? redactedText : Encoding.UTF8.GetString(bytes);
             hasRedactedPayload |= isRedacted;
+            var pathHash = Sha256(Encoding.UTF8.GetBytes(sourcePath));
+            var itemId = $"retained.local.{Slug(sourcePath)}.{pathHash}.{commitSha[..12]}";
+            if (!itemIds.Add(itemId))
+            {
+                AddBlockingReason(blockingReasons, "duplicate_retained_ids");
+                continue;
+            }
+
             items.Add(new RetainedMemoryItem(
-                $"retained.local.{Slug(sourcePath)}.{commitSha[..12]}",
+                itemId,
                 sourcePath,
                 sourceHash,
                 sourceBlobSha,
@@ -255,6 +294,19 @@ internal sealed class CuratedRetainImporter
         if (!reasons.Contains(reason, StringComparer.Ordinal))
         {
             reasons.Add(reason);
+        }
+    }
+
+    private static async Task<JsonDocument?> TryReadReportAsync(string path, List<string> blockingReasons)
+    {
+        try
+        {
+            return JsonDocument.Parse(await File.ReadAllTextAsync(path));
+        }
+        catch (JsonException)
+        {
+            AddBlockingReason(blockingReasons, "invalid_input_report_json");
+            return null;
         }
     }
 
@@ -316,46 +368,6 @@ internal sealed class CuratedRetainImporter
             && redactedHash.Equals(Sha256(Encoding.UTF8.GetBytes(redactedText)), StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsReviewedRedactionOf(string sourceText, string redactedText)
-    {
-        var sourceLines = NormalizeLineEndings(sourceText.TrimStart('\uFEFF')).Split('\n');
-        var redactedLines = NormalizeLineEndings(redactedText.TrimStart('\uFEFF')).Split('\n');
-        if (sourceLines.Length != redactedLines.Length)
-        {
-            return false;
-        }
-
-        var changed = false;
-        for (var index = 0; index < sourceLines.Length; index++)
-        {
-            if (sourceLines[index].Equals(redactedLines[index], StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var markerMatch = Regex.Match(
-                redactedLines[index],
-                "^\\[REDACTED:(?<types>[A-Za-z0-9_.-]+(?:,[A-Za-z0-9_.-]+)*)\\]$",
-                RegexOptions.CultureInvariant);
-            if (!markerMatch.Success
-                || markerMatch.Groups["types"].Value
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                    .Any(type => !KnownRedactionTypes.Contains(type)))
-            {
-                return false;
-            }
-
-            changed = true;
-        }
-
-        return changed;
-    }
-
-    private static string NormalizeLineEndings(string text)
-    {
-        return text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
-    }
-
     private static bool HasBooleanProperty(JsonElement element, string propertyName)
     {
         return element.TryGetProperty(propertyName, out var property)
@@ -392,79 +404,19 @@ internal sealed class CuratedRetainImporter
             && property.TryGetInt32(out value);
     }
 
+    private static bool TryReadLong(JsonElement element, string propertyName, out long value)
+    {
+        value = 0;
+        return element.TryGetProperty(propertyName, out var property)
+            && property.ValueKind == JsonValueKind.Number
+            && property.TryGetInt64(out value);
+    }
+
     private static string ReadString(JsonElement element, string propertyName)
     {
         return element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
             ? property.GetString() ?? string.Empty
             : string.Empty;
-    }
-
-    private static bool TestAllowlistedRetainPath(string relativePath)
-    {
-        var path = NormalizePath(relativePath);
-        return path.Equals("AGENTS.md", StringComparison.Ordinal)
-            || path.Equals("TC-DN-HOFI3.md", StringComparison.Ordinal)
-            || path.Equals("docs/formulas.md", StringComparison.Ordinal)
-            || path.Equals("tasks/lessons.md", StringComparison.Ordinal)
-            || (path.StartsWith("docs/decisions/", StringComparison.Ordinal) && path.EndsWith(".md", StringComparison.Ordinal))
-            || (path.StartsWith("docs/memory/", StringComparison.Ordinal)
-                && !path.StartsWith("docs/memory/generated/", StringComparison.Ordinal)
-                && path.EndsWith(".md", StringComparison.Ordinal));
-    }
-
-    private static bool IsSafeRelativeRepoPath(string relativePath)
-    {
-        if (Path.IsPathRooted(relativePath))
-        {
-            return false;
-        }
-
-        return NormalizePath(relativePath)
-            .Split('/', StringSplitOptions.RemoveEmptyEntries)
-            .All(segment => segment is not "." and not "..");
-    }
-
-    private static bool TestDeniedRetainPath(string relativePath)
-    {
-        var lower = NormalizePath(relativePath).ToLowerInvariant();
-        foreach (var prefix in new[] { ".git/", ".hindsight/", ".gbrain/", ".graphify/", ".mem0/", ".graphiti/", "recordings/", "data/", "docs/memory/generated/", "secrets/" })
-        {
-            if (lower.StartsWith(prefix, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        var segments = lower.Split('/');
-        if (segments.Any(segment => segment is "bin" or "obj" or "publish"))
-        {
-            return true;
-        }
-
-        var fileName = Path.GetFileName(lower);
-        return fileName.Equals(".env", StringComparison.Ordinal)
-            || fileName.StartsWith(".env.", StringComparison.Ordinal)
-            || lower.EndsWith(".jsonl", StringComparison.Ordinal)
-            || lower.Contains("secret", StringComparison.Ordinal)
-            || lower.Contains("credential", StringComparison.Ordinal)
-            || lower.Contains("api-key", StringComparison.Ordinal)
-            || lower.Contains("apikey", StringComparison.Ordinal)
-            || lower.Contains("token", StringComparison.Ordinal)
-            || lower.Contains("local-proxy", StringComparison.Ordinal)
-            || lower.Contains("local_proxy", StringComparison.Ordinal)
-            || lower.Contains("raw-experiment", StringComparison.Ordinal)
-            || lower.Contains("raw_experiment", StringComparison.Ordinal)
-            || lower.Contains("experiment-dump", StringComparison.Ordinal)
-            || lower.Contains("experiment_dump", StringComparison.Ordinal)
-            || lower.Contains("raw-dump", StringComparison.Ordinal)
-            || lower.Contains("raw_dump", StringComparison.Ordinal)
-            || lower.Contains("shadowsocks", StringComparison.Ordinal)
-            || lower.Contains("ss-local", StringComparison.Ordinal);
-    }
-
-    private static string NormalizePath(string value)
-    {
-        return (value ?? string.Empty).Replace('\\', '/').Trim();
     }
 
     private string ToRepoPath(string path)

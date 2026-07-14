@@ -79,3 +79,8 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - Validate curated retain paths as canonical repository-relative paths before Git lookup, and use `git rev-parse --verify` for commit:path resolution; unresolved traversal-like specs can otherwise be echoed as text and cause a later `cat-file` exception instead of a fail-closed result.
 - Treat generated redaction reports as untrusted transport: validate the exact producer/schema/status and cross-check file/finding counts; for retained redacted text, require exact content metadata, a matching text hash, and proof that every source difference is only a `[REDACTED:...]` line replacement.
 - A dry-run report is review evidence, not import authorization: require an explicitly selected schema-v2 subset, reject orphan/duplicate finding mappings, and restrict redaction markers to scanner-owned types before local retain.
+- Treat generated producer IDs and safety flags as untrusted claims: re-scan the selected Git blob before accepting candidate or redacted content.
+- Exact redaction derivation must preserve UTF-8 BOM bytes, every CRLF/CR/LF separator, unaffected line content, and final-newline state; normalization in the validator is fail-open.
+- Byte-level Git fixtures on Windows need an explicit `.gitattributes` `-text` rule when the test must preserve CRLF or BOM exactly.
+- Keep structural report-contract failures separate from source freshness and encoding failures so blocked results remain diagnosable.
+- Reject invalid UTF-8 at the shared scanner boundary; replacement-character decoding can turn a malformed candidate into different retained text and weaken secret scanning.

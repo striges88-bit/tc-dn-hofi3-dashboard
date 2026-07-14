@@ -3,14 +3,16 @@ param(
     [string]$ProjectRoot = '',
     [string]$InputReportPath = '',
     [string]$Commit = 'HEAD',
-    [string]$OutputPath = ''
+    [string]$OutputPath = '',
+    [string]$DatabasePath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
+$scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
+$toolRoot = (Resolve-Path (Join-Path $scriptRoot '..')).Path
 if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
-    $scriptRoot = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
-    $ProjectRoot = (Resolve-Path (Join-Path $scriptRoot '..')).Path
+    $ProjectRoot = $toolRoot
 }
 
 $root = (Resolve-Path $ProjectRoot).Path
@@ -19,7 +21,7 @@ if (-not (Test-Path (Join-Path $root 'CryptoIndicatorApp.sln'))) {
 }
 
 if ([string]::IsNullOrWhiteSpace($InputReportPath)) {
-    $InputReportPath = Join-Path $root 'docs\memory\generated\curated-retain-dry-run-report.json'
+    $InputReportPath = Join-Path $root 'docs\memory\generated\curated-retain-redacted-subset-report.json'
 }
 
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
@@ -31,13 +33,35 @@ if (-not [string]::IsNullOrWhiteSpace($outputDirectory)) {
     New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 }
 
-$dotnetPath = Join-Path $root '.dotnet\dotnet.exe'
+$dotnetPath = Join-Path $toolRoot '.dotnet\dotnet.exe'
 if (-not (Test-Path $dotnetPath -PathType Leaf)) {
     $dotnetPath = 'dotnet'
 }
 
-$projectPath = Join-Path $root 'tools\Memory\CryptoIndicatorApp.Memory.csproj'
-$cliOutput = & $dotnetPath run --no-restore --project $projectPath -- retain-import --project-root $root --input-report $InputReportPath --commit $Commit --json 2>&1
+$memoryArgs = @(
+    'retain-import',
+    '--project-root', $root,
+    '--input-report', $InputReportPath,
+    '--commit', $Commit,
+    '--json'
+)
+if (-not [string]::IsNullOrWhiteSpace($DatabasePath)) {
+    $memoryArgs += @('--db', $DatabasePath)
+}
+
+$toolDll = [string]$env:CRYPTO_MEMORY_TOOL_DLL
+if (-not [string]::IsNullOrWhiteSpace($toolDll)) {
+    if (-not (Test-Path $toolDll -PathType Leaf)) {
+        throw "CRYPTO_MEMORY_TOOL_DLL does not exist: $toolDll"
+    }
+
+    $cliOutput = & $dotnetPath $toolDll @memoryArgs 2>&1
+}
+else {
+    $projectPath = Join-Path $toolRoot 'tools\Memory\CryptoIndicatorApp.Memory.csproj'
+    $cliOutput = & $dotnetPath run --no-restore --project $projectPath -- @memoryArgs 2>&1
+}
+
 $cliExitCode = $LASTEXITCODE
 $cliText = ($cliOutput | Out-String).Trim()
 
@@ -48,6 +72,19 @@ catch {
     throw "retain-import did not return JSON. Exit=$cliExitCode Output=$cliText"
 }
 
+$fullOutputPath = [System.IO.Path]::GetFullPath($OutputPath)
+$rootFullPath = [System.IO.Path]::GetFullPath($root).TrimEnd('\', '/')
+$rootPrefix = $rootFullPath + [System.IO.Path]::DirectorySeparatorChar
+$outputInsideProject = $fullOutputPath.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)
+$reportedOutputPath = if ($outputInsideProject) {
+    $fullOutputPath.Substring($rootPrefix.Length).Replace('\', '/')
+}
+else {
+    $fullOutputPath
+}
+$outputIsGenerated = $outputInsideProject -and
+    $reportedOutputPath.StartsWith('docs/memory/generated/', [System.StringComparison]::Ordinal)
+
 $report = [ordered]@{
     schema_version = 1
     generated_at = (Get-Date).ToUniversalTime().ToString('o')
@@ -56,8 +93,8 @@ $report = [ordered]@{
     status = $cliResult.status
     commit = $Commit
     input_report_path = $cliResult.input_report_path
-    output_path = 'docs/memory/generated/curated-retain-import-report.json'
-    output_is_generated = $true
+    output_path = $reportedOutputPath
+    output_is_generated = $outputIsGenerated
     output_should_be_ignored = $true
     external_retain_enabled = $false
     codex_auto_retain_enabled = $false
@@ -75,9 +112,9 @@ $report = [ordered]@{
 
 $report | ConvertTo-Json -Depth 20 | Set-Content -Path $OutputPath -Encoding UTF8
 
-Write-Output "Generated docs/memory/generated/curated-retain-import-report.json"
+Write-Output "Generated $reportedOutputPath"
 Write-Output "Status: $($cliResult.status)"
 Write-Output "Imported: $($cliResult.imported_count)"
 Write-Output "External retain: disabled"
 
-exit 0
+exit $cliExitCode

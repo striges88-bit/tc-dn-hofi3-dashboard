@@ -9,6 +9,13 @@ public static class MemoryCli
         try
         {
             var options = MemoryCliOptions.Parse(args);
+            if (options.Command == MemoryCommand.RetainScan)
+            {
+                var scan = await new CuratedRetainScanner().ScanProjectAsync(options.ProjectRoot);
+                WriteResponse(scan, options.Json);
+                return 0;
+            }
+
             using var store = new MemoryStore(options.DatabasePath);
 
             object response = options.Command switch

@@ -1597,3 +1597,94 @@ Review / Results:
 - A second review found a duplicate schema-v2 `source_path` overwrite path. Its RED test observed exit `0`; GREEN now blocks the whole batch with `duplicate_sources_in_input_report`. Exact duplicate dry-run findings are also rejected, and stale controlled-retain wording in `open-questions.md` was corrected.
 - Final verification after all fixes passed all solution projects `169/169`, build with `0` warnings/errors, and `git diff --check`. Final independent review reported no Critical or Important findings.
 - The post-compact verification repeated the same complete result on the unchanged source diff: `169/169`, build with `0` warnings/errors, and clean `git diff --check`.
+
+## PR 19 Post-CI Security Review Handoff
+
+- [x] Commit and push `b0c03b985b02d100843b83f0f27c21cd0cbed8e1`.
+- [x] Rebuild commit-addressed SQLite/LanceDB memory, confirm `needs_refresh=false`, and pass all 7 manual pre-push checks with semantic eval `11/11`.
+- [x] Confirm GitHub CI run `29259820543` passes all 3 jobs and PR #19 remains ready, clean, and mergeable.
+- [x] Complete an independent review of the full `origin/main...b0c03b9` diff and verify its findings against the source.
+- [x] Add RED coverage proving every dry-run `files[]` entry must be canonical, allowlisted, and non-denied before subset generation.
+- [x] Move redaction scanning behind one deterministic tooling-owned implementation used by dry-run/subset/import; re-scan the selected commit blob so a forged schema-v2 `candidate` cannot declare itself clean.
+- [x] Define schema-v2 `findings` as an exact empty array for the current subset contract and reject missing, non-empty, unknown, duplicate, or orphan entries during import.
+- [x] Add a RED collision case and replace lossy retained-item IDs with a stable hash of the exact canonical source path; reject duplicate batch IDs before SQLite writes.
+- [x] Fix and cover the remaining contract polish: byte-preserving redaction derivation, verified `size_bytes`, strict rejection of non-canonical path spelling, duplicate `-SourcePath`, explicit schema-v2 wrapper input, propagated CLI exit code, and structured malformed-JSON failure.
+- [ ] Rerun focused RED/GREEN tests, all Memory/Infrastructure tests, solution tests/build, `git diff --check`, memory refresh/status/pre-push, CI, and final review before merging PR #19.
+
+Review / Results:
+
+- Merge is paused. The reviewer found no Critical issue, but reproduced 3 Important fail-open paths: a denylisted/unknown source can coexist in a dry-run report accepted by the subset script; a forged schema-v2 candidate can import a commit blob that the scanner would flag; and schema-v2 `findings` are ignored by the importer.
+- Source inspection confirmed the root causes: `Test-DryRunReportContract` checks file/finding consistency but not every file path against policy; `CuratedRetainImporter` trusts `original_finding_count=0` without a fresh scan; and it starts processing `files` without validating `findings`.
+- Nonblocking polish findings are retained for the remediation slice: BOM/line-ending normalization weakens exact derivation, `size_bytes` is unverified, normalized path spelling is accepted, repeated `-SourcePath` is silently deduplicated, the wrapper defaults to the forbidden schema-v1 report and always exits `0`, malformed JSON lacks a structured blocked result, and retained IDs can collide after lossy slugging.
+- Separate CI efficiency debt: the solution already contains `Memory.Tests`, then `.github/workflows/ci.yml` runs `Test Memory CLI` again; this added about 2m45s to CI run `29259820543`. Remove the duplicate step only in a focused CI polish change after correctness work.
+- Clean compact boundary: do not merge PR #19. The committed memory index matches `b0c03b9`; this handoff edit is intentionally uncommitted, so do not run `memory-refresh-all` before the next durable source commit. After `/compact`, start with the first RED policy-path test and keep all fail-open fixes in the same reviewed remediation sequence.
+- RED evidence after compact: subset path-policy theory failed `3/3` with actual `ready_for_import`; forged candidate plus schema-v2 findings contract failed `5/5` with importer exit `0`. These are behavioral failures, not compile or fixture errors.
+
+## PR 19 Scanner Contract Compact Handoff
+
+- [x] Observe RED for all three fail-open paths: untrusted/noncanonical dry-run files `3/3`, forged candidate `1/1`, and invalid schema-v2 findings `4/4`.
+- [x] Add `tools/Memory/CuratedRetainScanner.cs` with one deterministic content scanner and canonical allowlist/denylist policy.
+- [x] Add the local-only `retain-scan` CLI adapter and make dry-run/subset invoke it through `scripts/curated-retain-scanner-client.ps1`.
+- [x] Make importer re-scan selected Git commit blobs; candidates with real findings now block, and redacted marker lines/types must exactly match scanner findings.
+- [x] Require schema-v2 `findings` to be a present, exact empty JSON array before processing files.
+- [x] Confirm narrow GREEN: subset path-policy `3/3`, importer fail-open regressions `5/5`, and existing scanner golden tests `3/3`.
+- [x] Remove the now-dead PowerShell regex/scanner functions from `curated-retain-dry-run.ps1`; replace remaining duplicate requested-path policy checks in subset with the canonical scanner result and require exact canonical `-SourcePath` spelling.
+- [x] Make script tests invoke the already-built Memory DLL deterministically (the client supports `CRYPTO_MEMORY_TOOL_DLL`) so nested `dotnet run` cannot reintroduce MSBuild/NuGet lock instability.
+- [x] Rerun full `Memory.Tests` and curated Infrastructure tests with explicit console verbosity: `34/34` and `29/29` respectively before the later contract-polish RED additions.
+- [x] Run complete solution tests/build, `git diff --check`, update `tasks/lessons.md`, review the full diff, and address the remaining collision/contract-polish checklist before commit.
+
+Compact boundary:
+
+- Worktree is intentionally dirty on `codex/memory-operations-polish-final`; no commit, push, merge, or memory refresh has been performed for this remediation.
+- `tools/Memory` build passed with `0` warnings/errors; `git diff --check` is clean.
+- First command after `/compact`: inspect the dead-function ranges in `scripts/curated-retain-dry-run.ps1`, remove them, then rerun `CuratedRetainDryRunTests` before touching further importer polish.
+
+## PR 19 Contract Polish Compact Handoff
+
+- [x] Remove the legacy PowerShell content scanner and retain one .NET `CuratedRetainScanner`; dry-run golden tests passed `3/3`.
+- [x] Require exact canonical subset `-SourcePath`, use scanner membership instead of duplicate PowerShell allow/deny policy, and reject duplicate requested paths without emitting selected payload.
+- [x] Build the Memory tool as a test dependency and pass its DLL through `CRYPTO_MEMORY_TOOL_DLL`, avoiding nested `dotnet run`/NuGet locks in script tests.
+- [x] Cross-check fresh dry-run findings against scanner output while preserving the distinct `stale_source_metadata` path for files changed after review.
+- [x] Verify `size_bytes` against the selected Git blob and make retained IDs collision-resistant with the SHA-256 of the exact canonical source path; focused tests passed `2/2`.
+- [x] Confirm the duplicate `-SourcePath` RED (`ready_for_import`) and GREEN (`blocked`, `duplicate_source_path`) cycle.
+- [x] Make malformed retain-report JSON return structured CLI status `blocked`, reason `invalid_input_report_json`, and exit `2`. RED was confirmed at exit `1`; focused GREEN passed `1/1`.
+- [x] Correct `curated-retain-import.ps1`: default to `curated-retain-redacted-subset-report.json`, use the prebuilt-DLL path when provided, and propagate `$cliExitCode`. Static GREEN passed.
+- [x] Add a runtime wrapper regression proving blocked CLI JSON is written to the generated wrapper report and exit `2` is preserved; focused wrapper tests passed `2/2`.
+- [x] Finish byte/BOM/line-ending-preserving redaction derivation and tighten remaining typed report fields without growing `curated-retain-redacted-subset.ps1` beyond the source-size guardrail.
+- [x] Rerun full curated Infrastructure and Memory tests after the pending GREEN fixes, then solution tests/build, `git diff --check`, lessons, and full diff review.
+- [x] Commit the coherent remediation and only then run memory refresh/status/pre-push.
+
+Compact boundary:
+
+- Branch remains `codex/memory-operations-polish-final`; the worktree is intentionally dirty and no new commit, push, merge, or memory refresh has occurred.
+- Last complete broad evidence before the newest RED tests: curated Infrastructure `29/29`; Memory CLI `34/34`. Focused collision/size and duplicate-path GREEN tests passed afterward, but the broad suites must be rerun.
+- `git diff --check` is clean. `curated-retain-redacted-subset.ps1` is currently 509 lines, so the pending contract cleanup must bring it back near/below the 500-line guardrail rather than add more inline validation.
+- Memory status: `HEAD` and `indexed_commit` both equal `b0c03b985b02d100843b83f0f27c21cd0cbed8e1`, `needs_refresh=false`, `working_tree_dirty=true`; do not refresh before the durable remediation commit.
+- First command after `/compact`: implement a small `TryReadReportAsync` helper in `CuratedRetainImporter` that catches `JsonException` and adds `invalid_input_report_json`, then rerun `RetainImportReturnsStructuredBlockedResultForMalformedJson`.
+
+## PR 19 Exact Redaction Compact Handoff
+
+- [x] Make malformed retain-report JSON return structured `blocked`, reason `invalid_input_report_json`, and exit `2`; focused GREEN passed `1/1`.
+- [x] Correct `curated-retain-import.ps1` to default to the schema-v2 subset report, use `CRYPTO_MEMORY_TOOL_DLL`, support an isolated DB path, preserve CLI exit code, and write blocked CLI JSON; focused wrapper tests passed `2/2`.
+- [x] Preserve UTF-8 BOM, CRLF/CR/LF separators, and missing final newline when generating reviewed redacted text; focused script tests passed `2/2`.
+- [x] Extract dry-run contract validation and reject string-coerced `policy_reference` plus inconsistent summary counts/maps; mutation tests passed `10/10`.
+- [x] Rerun the broad curated Infrastructure suite (`34/34`) and full Memory CLI suite (`37/37`) before the newest RED test.
+- [x] Make importer derivation validation reject any BOM or line-ending change outside scanner-owned line replacement.
+- [x] Remove the now-unused `Get-Sha256FileHash` from `curated-retain-redacted-subset.ps1` and finish the final contract self-review.
+- [x] Rerun curated Infrastructure and full Memory tests, then solution tests/build, `git diff --check`, lessons, and full diff review.
+- [x] Commit the coherent remediation and only then run refresh/status/pre-push.
+
+Compact boundary:
+
+- Branch remains `codex/memory-operations-polish-final`; PR #19 must not be merged yet. The worktree is intentionally dirty and no new commit/push/memory refresh has occurred.
+- Current targeted RED: `RetainImportRejectsRedactionThatChangesUtf8BomOrLineEndings` expects exit `2`, but importer returns `0` after the fixture disables Git EOL normalization with `*.md -text`.
+- Root cause observed at the compact boundary: `CuratedRetainScanner.IsReviewedRedactionOf` trimmed BOM and normalized line endings before comparison, allowing changes beyond scanner-owned redaction markers.
+- Planned first implementation after that `/compact`: replace normalized comparison with exact line segments that retain each separator and first-line BOM; only finding-line content may become the exact sorted `[REDACTED:...]` marker.
+- Last complete broad evidence before this intentional RED: curated Infrastructure `34/34`; Memory CLI `37/37`; `git diff --check` clean except the existing informational csproj line-ending warning.
+- Do not run `memory-refresh-all` before the durable remediation commit; the generated memory store indexes committed `HEAD`, not this dirty worktree.
+- Exact BOM and line-ending rejection was split into independent cases and paired with a positive first-line BOM case; focused verification passed `3/3`.
+- Final self-review removed the dead subset hash helper, made wrapper output metadata truthful for custom paths, expanded retained IDs to the full canonical-path SHA-256, and closed an invalid-UTF-8 candidate fail-open with a shared scanner check.
+- Final verification passed curated Infrastructure `34/34`, Memory CLI `41/41`, all solution projects `190/190` outside sandbox, and solution build with `0` warnings/errors. The sandbox-only solution run failed solely on unreadable `.tools/python-packages`; the exact command then passed outside sandbox.
+- `git diff --check` passed; its only output is the existing informational CRLF-to-LF warning for the touched Infrastructure test project file. No generated memory, raw recording, secret, build, or local-proxy path is in the source diff.
+- The coherent remediation commit was followed by a completed commit-addressed refresh, clean `memory status`, all `7/7` manual pre-push checks, and LanceDB eval `11/11`; the same gate is rerun after the final todo-only amend so indexed metadata matches the durable SHA.
+- Residual hardening for a separate focused slice: prove that allowlisted Windows reparse-point/symlink files cannot resolve outside the repository before scanner reads. The current lexical checks are covered, but target-resolution semantics need a privilege-aware Windows regression rather than an unverified claim.

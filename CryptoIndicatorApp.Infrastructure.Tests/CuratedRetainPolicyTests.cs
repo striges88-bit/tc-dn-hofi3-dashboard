@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -216,6 +217,10 @@ public sealed class CuratedRetainPolicyTests
 
         Assert.Contains("retain-import", script, StringComparison.Ordinal);
         Assert.Contains("curated-retain-import-report.json", script, StringComparison.Ordinal);
+        Assert.Contains("curated-retain-redacted-subset-report.json", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("curated-retain-dry-run-report.json", script, StringComparison.Ordinal);
+        Assert.Contains("exit $cliExitCode", script, StringComparison.Ordinal);
+        Assert.Contains("CRYPTO_MEMORY_TOOL_DLL", script, StringComparison.Ordinal);
         Assert.Contains("external_retain_enabled = $false", script, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("codex_auto_retain_enabled = $false", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("hindsight retain", script, StringComparison.OrdinalIgnoreCase);
@@ -227,6 +232,33 @@ public sealed class CuratedRetainPolicyTests
         Assert.Contains("redaction-clean", policy, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("curated-retain-import.ps1", contract, StringComparison.Ordinal);
         Assert.Contains("curated-retain-import.ps1", scriptsReadme, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ControlledRetainImportScriptWritesBlockedResultAndPreservesCliExitCode()
+    {
+        using var temp = TemporaryDirectory.Create();
+        var inputReportPath = Path.Combine(temp.Path, "malformed-subset.json");
+        var outputReportPath = Path.Combine(temp.Path, "curated-retain-import-report.json");
+        var databasePath = Path.Combine(temp.Path, "project-memory.sqlite");
+        File.WriteAllText(inputReportPath, "{ not valid JSON");
+
+        var result = await RunProjectScriptAsync(
+            "curated-retain-import.ps1",
+            $"-ProjectRoot {Quote(Root)} -InputReportPath {Quote(inputReportPath)} -OutputPath {Quote(outputReportPath)} -DatabasePath {Quote(databasePath)}");
+
+        Assert.Equal(2, result.ExitCode);
+        Assert.True(File.Exists(outputReportPath), result.ToString());
+        using var report = JsonDocument.Parse(File.ReadAllText(outputReportPath));
+        var root = report.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(2, root.GetProperty("cli_exit_code").GetInt32());
+        Assert.Equal(Path.GetFullPath(outputReportPath), root.GetProperty("output_path").GetString());
+        Assert.False(root.GetProperty("output_is_generated").GetBoolean());
+        Assert.Equal(0, root.GetProperty("result").GetProperty("imported_count").GetInt32());
+        Assert.Contains(
+            root.GetProperty("result").GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "invalid_input_report_json");
     }
 
     [Fact]
@@ -330,6 +362,54 @@ public sealed class CuratedRetainPolicyTests
     }
 
     [Fact]
+    public async Task RedactedSubsetScriptRequiresExactCanonicalSourcePath()
+    {
+        using var temp = TemporaryDirectory.Create();
+        WriteMinimumCuratedSources(temp);
+        await RunCuratedDryRunAsync(temp.Path);
+
+        var result = await RunProjectScriptAsync(
+            "curated-retain-redacted-subset.ps1",
+            $"-ProjectRoot {Quote(temp.Path)} -SourcePath {Quote(@"docs\formulas.md")}");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-redacted-subset-report.json");
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "source_not_allowlisted");
+        Assert.Empty(root.GetProperty("files").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task RedactedSubsetScriptRejectsDuplicateSourcePaths()
+    {
+        using var temp = TemporaryDirectory.Create();
+        WriteMinimumCuratedSources(temp);
+        await RunCuratedDryRunAsync(temp.Path);
+        var subsetScriptPath = Path.Combine(Root, "scripts", "curated-retain-redacted-subset.ps1");
+        const string invocationPath = "invoke-duplicate-source.ps1";
+        temp.Write(
+            invocationPath,
+            $"& {PowerShellLiteral(subsetScriptPath)} -ProjectRoot {PowerShellLiteral(temp.Path)} -SourcePath @('AGENTS.md', 'AGENTS.md')\n");
+
+        var result = await RunPowerShellAsync(Path.Combine(temp.Path, invocationPath), string.Empty);
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-redacted-subset-report.json");
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "duplicate_source_path");
+        Assert.Empty(root.GetProperty("files").EnumerateArray());
+    }
+
+    [Fact]
     public async Task RedactedSubsetScriptRejectsSourcesChangedAfterDryRun()
     {
         using var temp = TemporaryDirectory.Create();
@@ -361,7 +441,7 @@ public sealed class CuratedRetainPolicyTests
     }
 
     [Fact]
-    public async Task RedactedSubsetScriptDoesNotWriteSourceTextWhenFindingMetadataIsInvalid()
+    public async Task RedactedSubsetScriptRejectsDryRunFindingMetadataThatDoesNotMatchScanner()
     {
         using var temp = TemporaryDirectory.Create();
         WriteMinimumCuratedSources(temp);
@@ -394,7 +474,7 @@ public sealed class CuratedRetainPolicyTests
         Assert.Equal("blocked", root.GetProperty("status").GetString());
         Assert.Contains(
             root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
-            reason => reason == "invalid_finding_line");
+            reason => reason == "invalid_input_report_contract");
         Assert.Empty(root.GetProperty("files").EnumerateArray());
         Assert.DoesNotContain("OPENAI_API_KEY", reportText, StringComparison.Ordinal);
         Assert.DoesNotContain("sk-testtoken", reportText, StringComparison.Ordinal);
@@ -410,10 +490,17 @@ public sealed class CuratedRetainPolicyTests
     [InlineData("orphan_finding")]
     [InlineData("duplicate_file")]
     [InlineData("duplicate_finding")]
+    [InlineData("policy_reference_type")]
+    [InlineData("summary_count")]
     public async Task RedactedSubsetScriptRejectsInvalidDryRunReportContract(string mutation)
     {
         using var temp = TemporaryDirectory.Create();
         WriteMinimumCuratedSources(temp);
+        if (mutation == "policy_reference_type")
+        {
+            temp.Write("AGENTS.md", "# Agents\n\nDo not store OPENAI_API_KEY values.\n");
+        }
+
         var dryRunPath = await RunCuratedDryRunAsync(temp.Path);
         var dryRun = JsonNode.Parse(File.ReadAllText(dryRunPath))!.AsObject();
 
@@ -471,10 +558,60 @@ public sealed class CuratedRetainPolicyTests
                 dryRun["findings"]!.AsArray().Add(duplicateFinding);
                 dryRun["findings"]!.AsArray().Add(duplicateFinding.DeepClone());
                 break;
+            case "policy_reference_type":
+                dryRun["findings"]!.AsArray()[0]!["policy_reference"] = "false";
+                break;
+            case "summary_count":
+                dryRun["summary"]!["file_count"] = 999;
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null);
         }
 
+        File.WriteAllText(dryRunPath, dryRun.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        var result = await RunProjectScriptAsync(
+            "curated-retain-redacted-subset.ps1",
+            $"-ProjectRoot {Quote(temp.Path)} -SourcePath AGENTS.md");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-redacted-subset-report.json");
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "invalid_input_report_contract");
+        Assert.Empty(root.GetProperty("files").EnumerateArray());
+    }
+
+    [Theory]
+    [InlineData("recordings/live.jsonl", "recordings/live.jsonl")]
+    [InlineData("README.md", "README.md")]
+    [InlineData("docs\\memory\\contract.md", "docs/memory/contract.md")]
+    public async Task RedactedSubsetScriptRejectsAnyNonCuratedFileInDryRunReport(
+        string reportedPath,
+        string physicalPath)
+    {
+        using var temp = TemporaryDirectory.Create();
+        WriteMinimumCuratedSources(temp);
+        if (!File.Exists(Path.Combine(temp.Path, physicalPath.Replace('/', Path.DirectorySeparatorChar))))
+        {
+            temp.Write(physicalPath, "# Untrusted dry-run source\n");
+        }
+
+        var dryRunPath = await RunCuratedDryRunAsync(temp.Path);
+        var dryRun = JsonNode.Parse(File.ReadAllText(dryRunPath))!.AsObject();
+        var sourceFilePath = Path.Combine(temp.Path, physicalPath.Replace('/', Path.DirectorySeparatorChar));
+        dryRun["files"]!.AsArray().Add(new JsonObject
+        {
+            ["path"] = reportedPath,
+            ["hash"] = ComputeSha256(sourceFilePath),
+            ["size_bytes"] = new FileInfo(sourceFilePath).Length,
+            ["redaction_status"] = "candidate",
+            ["finding_count"] = 0,
+        });
+        dryRun["summary"]!["file_count"] = dryRun["files"]!.AsArray().Count;
         File.WriteAllText(dryRunPath, dryRun.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
         var result = await RunProjectScriptAsync(
@@ -514,6 +651,33 @@ public sealed class CuratedRetainPolicyTests
             .GetString();
         Assert.NotNull(redactedText);
         Assert.False(redactedText.EndsWith('\n'));
+    }
+
+    [Fact]
+    public async Task RedactedSubsetScriptPreservesUtf8BomAndCrLf()
+    {
+        using var temp = TemporaryDirectory.Create();
+        WriteMinimumCuratedSources(temp);
+        const string sourceText = "# Agents\r\nOPENAI_API_KEY=sk-testtoken1234567890\r\nsafe line\r\n";
+        var utf8WithBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+        File.WriteAllBytes(
+            Path.Combine(temp.Path, "AGENTS.md"),
+            utf8WithBom.GetPreamble().Concat(utf8WithBom.GetBytes(sourceText)).ToArray());
+
+        await RunCuratedDryRunAsync(temp.Path);
+        var result = await RunProjectScriptAsync(
+            "curated-retain-redacted-subset.ps1",
+            $"-ProjectRoot {Quote(temp.Path)} -SourcePath AGENTS.md");
+
+        Assert.True(result.ExitCode == 0, result.ToString());
+        var reportPath = Path.Combine(temp.Path, "docs", "memory", "generated", "curated-retain-redacted-subset-report.json");
+        using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
+        var root = report.RootElement;
+        Assert.Equal("ready_for_import", root.GetProperty("status").GetString());
+        var redactedText = Assert.Single(root.GetProperty("files").EnumerateArray())
+            .GetProperty("redacted_text")
+            .GetString();
+        Assert.Equal("\uFEFF# Agents\r\n[REDACTED:secret_reference]\r\nsafe line\r\n", redactedText);
     }
 
     [Fact]
@@ -870,7 +1034,9 @@ public sealed class CuratedRetainPolicyTests
 
     private static async Task<ProcessResult> RunPowerShellAsync(string scriptPath, string arguments)
     {
-        var process = Process.Start(new ProcessStartInfo
+        var memoryToolDll = FindMemoryToolDll();
+        Assert.True(File.Exists(memoryToolDll), $"Missing prebuilt memory tool: {memoryToolDll}");
+        var startInfo = new ProcessStartInfo
         {
             FileName = "powershell.exe",
             Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\" {arguments}",
@@ -878,7 +1044,9 @@ public sealed class CuratedRetainPolicyTests
             RedirectStandardOutput = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-        });
+        };
+        startInfo.Environment["CRYPTO_MEMORY_TOOL_DLL"] = memoryToolDll;
+        var process = Process.Start(startInfo);
 
         Assert.NotNull(process);
         var outputTask = process!.StandardOutput.ReadToEndAsync();
@@ -910,6 +1078,11 @@ public sealed class CuratedRetainPolicyTests
         return "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
     }
 
+    private static string PowerShellLiteral(string value)
+    {
+        return "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -920,6 +1093,21 @@ public sealed class CuratedRetainPolicyTests
         }
 
         return directory?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
+    }
+
+    private static string FindMemoryToolDll()
+    {
+        var targetFrameworkDirectory = new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
+        var configuration = targetFrameworkDirectory.Parent?.Name
+            ?? throw new InvalidOperationException("Could not determine the test build configuration.");
+        return Path.Combine(
+            Root,
+            "tools",
+            "Memory",
+            "bin",
+            configuration,
+            "net8.0",
+            "CryptoIndicatorApp.Memory.dll");
     }
 
     private sealed record ProcessResult(int ExitCode, string Output, string Error)

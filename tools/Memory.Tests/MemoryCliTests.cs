@@ -525,6 +525,123 @@ public sealed class MemoryCliTests
     }
 
     [Fact]
+    public void RetainImportUsesCollisionResistantIdsForDistinctCanonicalPaths()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string firstPath = "docs/memory/a-b.md";
+        const string secondPath = "docs/memory/a_b.md";
+        const string firstText = "# First\n\nfirstcollisionretain remains independently searchable.\n";
+        const string secondText = "# Second\n\nsecondcollisionretain remains independently searchable.\n";
+        fixture.Write(firstPath, firstText);
+        fixture.Write(secondPath, secondText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(firstPath, HashText(firstText), Encoding.UTF8.GetByteCount(firstText), "candidate", 0),
+            new MemoryProjectFixture.RetainReportFile(secondPath, HashText(secondText), Encoding.UTF8.GetByteCount(secondText), "candidate", 0));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(0, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        Assert.Equal(2, importJson.RootElement.GetProperty("imported_count").GetInt32());
+        var ids = importJson.RootElement.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("id").GetString())
+            .ToArray();
+        Assert.Equal(2, ids.Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(ids, id => id!.Contains($".{HashText(firstPath)}.", StringComparison.Ordinal));
+        Assert.Contains(ids, id => id!.Contains($".{HashText(secondPath)}.", StringComparison.Ordinal));
+
+        AssertRetainSearchContains(fixture, "firstcollisionretain", firstPath);
+        AssertRetainSearchContains(fixture, "secondcollisionretain", secondPath);
+    }
+
+    [Fact]
+    public void RetainImportRejectsReportedSizeThatDoesNotMatchCommitBlob()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourcePath = "docs/memory/size-mismatch.md";
+        const string sourceText = "# Size mismatch\n\nsizemismatchretain must not import.\n";
+        fixture.Write(sourcePath, sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                sourcePath,
+                HashText(sourceText),
+                Encoding.UTF8.GetByteCount(sourceText) + 1,
+                "candidate",
+                0));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "stale_source_metadata");
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+    }
+
+    [Fact]
+    public void RetainImportRejectsCandidateWithInvalidUtf8SourceBytes()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourcePath = "docs/memory/invalid-utf8.md";
+        var sourceBytes = Encoding.UTF8.GetBytes("# Invalid UTF-8\n\ninvalidutf8retain must not import.\n")
+            .Concat(new byte[] { 0xff })
+            .ToArray();
+        var fullPath = Path.Combine(fixture.Root, sourcePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllBytes(fullPath, sourceBytes);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                sourcePath,
+                Convert.ToHexString(SHA256.HashData(sourceBytes)).ToLowerInvariant(),
+                sourceBytes.LongLength,
+                "candidate",
+                0));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "invalid_source_encoding");
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+
+        using var search = fixture.RunMemoryCli("retain-search", "--query", "invalidutf8retain", "--json");
+        Assert.Equal(0, search.ExitCode);
+        using var searchJson = JsonDocument.Parse(search.StandardOutput);
+        Assert.Empty(searchJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
+    [Fact]
+    public void RetainImportReturnsStructuredBlockedResultForMalformedJson()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        fixture.Write("docs/memory/placeholder.md", "# Placeholder\n");
+        fixture.InitializeGitRepository();
+        var reportPath = Path.Combine(fixture.Root, "docs", "memory", "generated", "malformed-retain-report.json");
+        fixture.Write("docs/memory/generated/malformed-retain-report.json", "{ not-json");
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "invalid_input_report_json");
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+    }
+
+    [Fact]
     public void RetainImportBlocksDenylistAndRedactionReviewSources()
     {
         using var fixture = MemoryProjectFixture.Create();
@@ -802,6 +919,106 @@ public sealed class MemoryCliTests
     }
 
     [Fact]
+    public void RetainImportRescansCommitBlobBeforeAcceptingCandidate()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourceText = "# Forged candidate\n\nOPENAI_API_KEY=sk-testtoken1234567890 forgedcandidate must not import.\n";
+        const string sourcePath = "docs/memory/forged-candidate.md";
+        fixture.Write(sourcePath, sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                sourcePath,
+                HashText(sourceText),
+                Encoding.UTF8.GetByteCount(sourceText),
+                "candidate",
+                0));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "redaction_review_required");
+
+        using var search = fixture.RunMemoryCli("retain-search", "--query", "forgedcandidate", "--json");
+        Assert.Equal(0, search.ExitCode);
+        using var searchJson = JsonDocument.Parse(search.StandardOutput);
+        Assert.Empty(searchJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("unknown")]
+    [InlineData("orphan")]
+    [InlineData("duplicate")]
+    public void RetainImportRejectsInvalidSchemaTwoFindingsContract(string mutation)
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        const string sourceText = "# Schema two findings\n\nschemafindings must not import from an invalid report.\n";
+        const string sourcePath = "docs/memory/schema-findings.md";
+        fixture.Write(sourcePath, sourceText);
+        fixture.InitializeGitRepository();
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                sourcePath,
+                HashText(sourceText),
+                Encoding.UTF8.GetByteCount(sourceText),
+                "candidate",
+                0));
+        var report = JsonNode.Parse(File.ReadAllText(reportPath))!.AsObject();
+        var finding = new JsonObject
+        {
+            ["source_path"] = sourcePath,
+            ["line"] = 1,
+            ["type"] = "secret_reference",
+            ["rule"] = "secret/token/api key marker",
+        };
+
+        switch (mutation)
+        {
+            case "missing":
+                report.Remove("findings");
+                break;
+            case "unknown":
+                finding["type"] = "unknown_scanner_rule";
+                report["findings"] = new JsonArray(finding);
+                break;
+            case "orphan":
+                finding["source_path"] = "docs/memory/orphan.md";
+                report["findings"] = new JsonArray(finding);
+                break;
+            case "duplicate":
+                report["findings"] = new JsonArray(finding, finding.DeepClone());
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null);
+        }
+
+        File.WriteAllText(reportPath, report.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "invalid_input_report_findings");
+
+        using var search = fixture.RunMemoryCli("retain-search", "--query", "schemafindings", "--json");
+        Assert.Equal(0, search.ExitCode);
+        using var searchJson = JsonDocument.Parse(search.StandardOutput);
+        Assert.Empty(searchJson.RootElement.GetProperty("results").EnumerateArray());
+    }
+
+    [Fact]
     public void RetainImportRejectsDuplicateSourcePathsBeforeCandidateCanOverwriteRedaction()
     {
         using var fixture = MemoryProjectFixture.Create();
@@ -871,6 +1088,82 @@ public sealed class MemoryCliTests
         Assert.Contains(
             root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
             reason => reason == "invalid_redacted_text_derivation");
+    }
+
+    [Theory]
+    [InlineData("bom")]
+    [InlineData("line_endings")]
+    public void RetainImportRejectsRedactionThatChangesUtf8BomOrLineEndings(string mutation)
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        fixture.Write(".gitattributes", "*.md -text\n");
+        const string sourcePath = "docs/memory/exact-redaction.md";
+        const string sourceText = "# Exact redaction\r\nOPENAI_API_KEY=sk-testtoken1234567890\r\nsafe line\r\n";
+        var utf8WithBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+        var sourceBytes = utf8WithBom.GetPreamble().Concat(utf8WithBom.GetBytes(sourceText)).ToArray();
+        var fullPath = Path.Combine(fixture.Root, sourcePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllBytes(fullPath, sourceBytes);
+        fixture.InitializeGitRepository();
+
+        const string exactRedaction = "\uFEFF# Exact redaction\r\n[REDACTED:secret_reference]\r\nsafe line\r\n";
+        var invalidRedaction = mutation switch
+        {
+            "bom" => exactRedaction.TrimStart('\uFEFF'),
+            "line_endings" => exactRedaction.Replace("\r\n", "\n", StringComparison.Ordinal),
+            _ => throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null),
+        };
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                sourcePath,
+                Convert.ToHexString(SHA256.HashData(sourceBytes)).ToLowerInvariant(),
+                sourceBytes.LongLength,
+                "redacted",
+                0,
+                invalidRedaction,
+                1));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(2, import.ExitCode);
+        using var importJson = JsonDocument.Parse(import.StandardOutput);
+        var root = importJson.RootElement;
+        Assert.Equal("blocked", root.GetProperty("status").GetString());
+        Assert.Equal(0, root.GetProperty("imported_count").GetInt32());
+        Assert.Contains(
+            root.GetProperty("blocking_reasons").EnumerateArray().Select(reason => reason.GetString()),
+            reason => reason == "invalid_redacted_text_derivation");
+    }
+
+    [Fact]
+    public void RetainImportAcceptsExactUtf8BomAndLineEndings()
+    {
+        using var fixture = MemoryProjectFixture.Create();
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        fixture.Write(".gitattributes", "*.md -text\n");
+        const string sourcePath = "docs/memory/exact-first-line-redaction.md";
+        const string sourceText = "OPENAI_API_KEY=sk-testtoken1234567890\r\nexactbomretain remains searchable.\r\n";
+        var utf8WithBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+        var sourceBytes = utf8WithBom.GetPreamble().Concat(utf8WithBom.GetBytes(sourceText)).ToArray();
+        var fullPath = Path.Combine(fixture.Root, sourcePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllBytes(fullPath, sourceBytes);
+        fixture.InitializeGitRepository();
+
+        const string exactRedaction = "\uFEFF[REDACTED:secret_reference]\r\nexactbomretain remains searchable.\r\n";
+        var reportPath = fixture.WriteCuratedRetainReport(
+            new MemoryProjectFixture.RetainReportFile(
+                sourcePath,
+                Convert.ToHexString(SHA256.HashData(sourceBytes)).ToLowerInvariant(),
+                sourceBytes.LongLength,
+                "redacted",
+                0,
+                exactRedaction,
+                1));
+
+        using var import = fixture.RunMemoryCli("retain-import", "--input-report", reportPath, "--commit", "HEAD", "--json");
+        Assert.Equal(0, import.ExitCode);
+        AssertRetainSearchContains(fixture, "exactbomretain", sourcePath);
     }
 
     [Fact]
@@ -1167,6 +1460,16 @@ public sealed class MemoryCliTests
                 && hit.GetProperty("source_path").GetString() == unexpectedSourcePath);
     }
 
+    private static void AssertRetainSearchContains(MemoryProjectFixture fixture, string query, string expectedSourcePath)
+    {
+        using var result = fixture.RunMemoryCli("retain-search", "--query", query, "--json");
+        Assert.Equal(0, result.ExitCode);
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        Assert.Contains(
+            document.RootElement.GetProperty("results").EnumerateArray(),
+            hit => hit.GetProperty("source_path").GetString() == expectedSourcePath);
+    }
+
     private static void AssertJsonArrayContainsAll(JsonElement array, params string[] expectedValues)
     {
         var actualValues = array.EnumerateArray()
@@ -1339,18 +1642,7 @@ public sealed class MemoryCliTests
                     redacted_text = file.RedactedText,
                     redacted_hash = string.IsNullOrEmpty(file.RedactedText) ? null : HashText(file.RedactedText),
                 }).ToArray(),
-                findings = files
-                    .Where(file => file.FindingCount > 0)
-                    .Select(file => new
-                    {
-                        type = "test_redaction_review",
-                        severity = "review",
-                        policy_reference = false,
-                        source_path = file.Path,
-                        line = 1,
-                        rule = "test finding",
-                    })
-                    .ToArray(),
+                findings = Array.Empty<object>(),
             };
             File.WriteAllText(reportPath, JsonSerializer.Serialize(report));
             return reportPath;

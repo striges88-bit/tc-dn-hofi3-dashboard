@@ -8,6 +8,7 @@ public enum MemoryCommand
     Explain,
     StaleCheck,
     Status,
+    RetainScan,
     RetainImport,
     RetainSearch,
     RetainExport,
@@ -29,7 +30,7 @@ public sealed record MemoryCliOptions(
     {
         if (args.Length == 0)
         {
-            throw new InvalidOperationException("Command is required: refresh, refresh-from-commit, search, explain, stale-check, status, retain-import, retain-search, retain-export, or retain-delete.");
+            throw new InvalidOperationException("Command is required: refresh, refresh-from-commit, search, explain, stale-check, status, retain-scan, retain-import, retain-search, retain-export, or retain-delete.");
         }
 
         var command = args[0].ToLowerInvariant() switch
@@ -40,6 +41,7 @@ public sealed record MemoryCliOptions(
             "explain" => MemoryCommand.Explain,
             "stale-check" => MemoryCommand.StaleCheck,
             "status" => MemoryCommand.Status,
+            "retain-scan" => MemoryCommand.RetainScan,
             "retain-import" => MemoryCommand.RetainImport,
             "retain-search" => MemoryCommand.RetainSearch,
             "retain-export" => MemoryCommand.RetainExport,

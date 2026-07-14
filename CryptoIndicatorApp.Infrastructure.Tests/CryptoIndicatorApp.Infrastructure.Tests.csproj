@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CryptoIndicatorApp.Infrastructure\CryptoIndicatorApp.Infrastructure.csproj" />
+    <ProjectReference Include="..\tools\Memory\CryptoIndicatorApp.Memory.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>
