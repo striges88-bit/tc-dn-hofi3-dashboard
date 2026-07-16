@@ -106,6 +106,7 @@ Expanded quality gate update 2026-06-29:
 - `eval` passed `9/9`: current OFI formula, formula owner, funding-source ADR, Binance DTO boundary, REST hot-path ban, live/replay shared pipeline, funding slow context, exchange adapter impact, and superseded/failed exclusion.
 - `eval` writes `docs/memory/generated/lancedb-sidecar-report.json` and `docs/memory/generated/lancedb-eval-report.md`; both are ignored generated evidence, not source-of-truth memory.
 - `probe`, `search`, `explain`, `cleanup`, and `rebuild` write separate command-specific JSON reports so diagnostics cannot silently replace the latest eval evidence.
+- `rebuild` is the only producer of `docs/memory/generated/lancedb-manifest.json`. The manifest binds the physical store to canonical `commit_sha`/`tree_sha`/`indexed_at`, `source_store=sqlite-fts5`, table name, non-negative `indexed_count`, and the exact embedding identity. Rebuild validates the physical row count before publishing it. Search, explain, and eval validate identity before opening the table, then validate `indexed_count == table.count_rows()` before embedding or query execution; manual pre-push and CI validate the same persisted contract after eval.
 
 Retrieval quality update 2026-07-04:
 

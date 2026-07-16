@@ -99,6 +99,67 @@ function Join-ProcessArguments {
     return [string]::Join(' ', $quoted)
 }
 
+function Find-Git {
+    $commonGitPath = 'C:\Program Files\Git\cmd\git.exe'
+    if (Test-Path -LiteralPath $commonGitPath) {
+        return $commonGitPath
+    }
+
+    return 'git'
+}
+
+function Invoke-GitText {
+    param(
+        [string]$Root,
+        [string[]]$Arguments,
+        [int]$TimeoutMilliseconds = 10000
+    )
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = Find-Git
+    $startInfo.Arguments = Join-ProcessArguments (@('-C', $Root) + $Arguments)
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) {
+            throw 'git process did not start'
+        }
+
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit($TimeoutMilliseconds)) {
+            try {
+                $process.Kill()
+            }
+            catch {
+                # The timeout remains the primary failure evidence.
+            }
+
+            throw 'git command timed out'
+        }
+
+        $process.WaitForExit()
+        $stdout = $stdoutTask.Result.Trim()
+        $stderr = $stderrTask.Result.Trim()
+        if ($process.ExitCode -ne 0) {
+            throw "git exit $($process.ExitCode): $stderr"
+        }
+        if ([string]::IsNullOrWhiteSpace($stdout)) {
+            throw 'git command returned empty output'
+        }
+
+        return $stdout
+    }
+    finally {
+        $process.Dispose()
+    }
+}
+
 function New-Step {
     param(
         [string]$Name,
@@ -292,10 +353,13 @@ $dotnetPath = Find-Dotnet -Root $root
 $memoryProject = Join-Path $root 'tools\Memory\CryptoIndicatorApp.Memory.csproj'
 $legacyRefreshScript = Join-Path $root 'scripts\memory-refresh.ps1'
 $lanceDbScript = Join-Path $root 'scripts\lancedb-sidecar.ps1'
+$requestedCommit = 'HEAD'
+$commitSha = Invoke-GitText -Root $root -Arguments @('rev-parse', '--verify', 'HEAD^{commit}')
+$treeSha = Invoke-GitText -Root $root -Arguments @('rev-parse', "$commitSha^{tree}")
 
 $steps = @(
     (New-Step -Name 'legacy-json-refresh' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $legacyRefreshScript, '-ProjectRoot', $root)),
-    (New-Step -Name 'sqlite-refresh' -FilePath $dotnetPath -Arguments @('run', '--no-restore', '--project', $memoryProject, '--', 'refresh-from-commit', '--commit', 'HEAD', '--project-root', $root, '--json') -UsesMemoryCliLock $true),
+    (New-Step -Name 'sqlite-refresh' -FilePath $dotnetPath -Arguments @('run', '--no-restore', '--project', $memoryProject, '--', 'refresh-from-commit', '--commit', $commitSha, '--project-root', $root, '--json') -UsesMemoryCliLock $true),
     (New-Step -Name 'sqlite-stale-check' -FilePath $dotnetPath -Arguments @('run', '--no-restore', '--project', $memoryProject, '--', 'stale-check', '--project-root', $root, '--json') -UsesMemoryCliLock $true),
     (New-Step -Name 'lancedb-cleanup' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $lanceDbScript, '-ProjectRoot', $root, '-Command', 'cleanup')),
     (New-Step -Name 'lancedb-rebuild' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $lanceDbScript, '-ProjectRoot', $root, '-Command', 'rebuild')),
@@ -364,6 +428,9 @@ $report = [ordered]@{
     status = $status
     project_root = Convert-ToRepoPath -Root $root -Path $root
     report_path = Convert-ToRepoPath -Root $root -Path $reportPath
+    requested_commit = $requestedCommit
+    commit_sha = $commitSha
+    tree_sha = $treeSha
     started_at = $startedAt
     finished_at = (Get-Date).ToUniversalTime().ToString('o')
     cloud_enabled = $false

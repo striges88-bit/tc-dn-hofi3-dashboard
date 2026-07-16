@@ -75,17 +75,45 @@ jobs:
       - name: Assert SQLite memory is current
         shell: powershell
         run: |
+          Set-StrictMode -Version Latest
+          . scripts\memory-pre-push-contract.ps1
           $statusJson = (dotnet run --project tools/Memory/CryptoIndicatorApp.Memory.csproj --configuration Release --no-build --no-restore -- status --project-root . --json | Out-String)
           if ($LASTEXITCODE -ne 0) {
             throw "Memory status failed with exit code $LASTEXITCODE."
           }
           $status = $statusJson | ConvertFrom-Json
           Write-Output $statusJson
-          if ($status.needs_refresh) {
+
+          $head = Get-JsonStringProperty -Object $status -Name 'head'
+          $indexedCommit = Get-JsonStringProperty -Object $status -Name 'indexed_commit'
+          $indexedTree = Get-JsonStringProperty -Object $status -Name 'indexed_tree'
+          $indexedAt = Get-JsonStringProperty -Object $status -Name 'indexed_at'
+          if ($null -eq $head -or $null -eq $indexedCommit -or $null -eq $indexedTree -or $null -eq $indexedAt) {
+            throw 'Memory status requires non-empty string head/indexed_commit/indexed_tree/indexed_at.'
+          }
+          foreach ($field in @('marker_exists', 'needs_refresh', 'working_tree_dirty')) {
+            $property = $status.PSObject.Properties[$field]
+            if ($null -eq $property -or $property.Value -isnot [bool]) {
+              throw "Memory status $field must be a JSON boolean."
+            }
+          }
+          if (-not (Test-JsonPropertyFalse -Object $status -Name 'needs_refresh')) {
             throw 'SQLite memory still needs refresh after commit-addressed refresh.'
           }
-          if ($status.indexed_commit -ne $status.head) {
-            throw "SQLite indexed_commit $($status.indexed_commit) does not match HEAD $($status.head)."
+
+          $expectedHead = (git rev-parse --verify HEAD).Trim()
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not resolve Git HEAD for the memory status contract.'
+          }
+          $expectedTree = (git rev-parse 'HEAD^{tree}').Trim()
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not resolve the Git tree for the memory status contract.'
+          }
+          if ($head -cne $expectedHead -or $indexedCommit -cne $expectedHead) {
+            throw "SQLite head/indexed_commit does not match Git HEAD $expectedHead."
+          }
+          if ($indexedTree -cne $expectedTree) {
+            throw "SQLite indexed_tree $indexedTree does not match Git tree $expectedTree."
           }
 
   memory-semantic:
@@ -164,3 +192,40 @@ jobs:
       - name: LanceDB semantic eval
         shell: powershell
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command eval
+
+      - name: Assert semantic commit and manifest contract
+        shell: powershell
+        run: |
+          Set-StrictMode -Version Latest
+          . scripts\memory-pre-push-contract.ps1
+
+          $evalReport = Read-JsonFile -Path 'docs\memory\generated\lancedb-sidecar-report.json'
+          $evalValidation = Test-LanceDbEvalReport -Report $evalReport -MinimumEvalCases 11
+          if (-not $evalValidation.passed) {
+            throw "LanceDB eval report contract failed: $($evalValidation.detail)"
+          }
+
+          $head = (git rev-parse --verify HEAD).Trim()
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not resolve Git HEAD for the semantic contract.'
+          }
+          $tree = (git rev-parse 'HEAD^{tree}').Trim()
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not resolve the Git tree for the semantic contract.'
+          }
+          $currentIdentity = [pscustomobject]@{ commit_sha = $head; tree_sha = $tree }
+
+          $freshness = Test-CommitAddressedFreshness -Root (Get-Location).Path -RefreshReport $currentIdentity -EvalReport $evalReport
+          if (-not $freshness.passed) {
+            throw "Semantic commit freshness failed: $($freshness.detail)"
+          }
+
+          $manifest = Test-SemanticIndexManifest `
+            -DatabasePath 'docs\memory\generated\project-memory.sqlite' `
+            -StorePath 'docs\memory\generated\lancedb' `
+            -ManifestPath 'docs\memory\generated\lancedb-manifest.json' `
+            -RefreshReport $currentIdentity `
+            -EvalReport $evalReport
+          if (-not $manifest.passed) {
+            throw "Semantic index manifest contract failed: $($manifest.detail)"
+          }

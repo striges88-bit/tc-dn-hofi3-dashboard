@@ -1,9 +1,11 @@
 import hashlib
+import json
 import sqlite3
 import subprocess
 import tempfile
 import warnings
 from pathlib import Path
+from types import SimpleNamespace
 
 import lancedb_sidecar
 from lancedb_sidecar import (
@@ -60,6 +62,525 @@ def test_semantic_dependency_pins_are_explicit():
     assert lancedb_sidecar.LANCEDB_PACKAGE_PIN == "lancedb==0.34.0"
     assert lancedb_sidecar.PYARROW_PACKAGE_PIN == "pyarrow==24.0.0"
     assert lancedb_sidecar.FASTEMBED_PACKAGE_PIN == "fastembed==0.8.0"
+
+
+def test_index_manifest_rejects_runtime_model_mismatch():
+    assert hasattr(lancedb_sidecar, "validate_index_manifest_contract"), (
+        "semantic sidecar must validate its persisted index manifest before query embedding"
+    )
+    manifest, canonical_identity, embedding_identity = make_valid_index_manifest_contract()
+    mismatched_runtime = {
+        **embedding_identity,
+        "embedding_runtime_model": "tc-dn-hofi3/unreviewed-runtime-model",
+    }
+
+    try:
+        lancedb_sidecar.validate_index_manifest_contract(
+            manifest,
+            canonical_identity,
+            mismatched_runtime,
+        )
+    except ValueError as exc:
+        assert "embedding_runtime_model" in str(exc)
+    else:
+        raise AssertionError("Expected runtime-model mismatch to fail closed.")
+
+
+def test_index_manifest_rejects_stale_canonical_commit():
+    manifest, canonical_identity, embedding_identity = make_valid_index_manifest_contract()
+    current_canonical_identity = {
+        **canonical_identity,
+        "commit_sha": "c" * 40,
+        "tree_sha": "d" * 40,
+        "indexed_at": "2026-07-15T00:00:00Z",
+    }
+
+    try:
+        lancedb_sidecar.validate_index_manifest_contract(
+            manifest,
+            current_canonical_identity,
+            embedding_identity,
+        )
+    except ValueError as exc:
+        assert "commit_sha" in str(exc)
+    else:
+        raise AssertionError("Expected stale commit manifest to fail closed.")
+
+
+def test_index_manifest_rejects_missing_string_or_negative_indexed_count():
+    manifest, canonical_identity, embedding_identity = make_valid_index_manifest_contract()
+    invalid_values = (None, "17", -1)
+
+    for invalid_value in invalid_values:
+        candidate = dict(manifest)
+        if invalid_value is None:
+            candidate.pop("indexed_count", None)
+        else:
+            candidate["indexed_count"] = invalid_value
+
+        try:
+            lancedb_sidecar.validate_index_manifest_contract(
+                candidate,
+                canonical_identity,
+                embedding_identity,
+            )
+        except ValueError as exc:
+            assert "indexed_count" in str(exc)
+        else:
+            raise AssertionError(f"Expected indexed_count={invalid_value!r} to fail closed.")
+
+
+def test_index_manifest_rejects_missing_lancedb_store():
+    assert hasattr(lancedb_sidecar, "load_validated_index_manifest"), (
+        "semantic sidecar must validate the physical store as part of manifest loading"
+    )
+    manifest, canonical_identity, embedding_identity = make_valid_index_manifest_contract()
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        manifest_path = root / "lancedb-index-manifest.json"
+        missing_store = root / "lancedb"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        try:
+            lancedb_sidecar.load_validated_index_manifest(
+                manifest_path,
+                missing_store,
+                canonical_identity,
+                embedding_identity,
+            )
+        except FileNotFoundError as exc:
+            assert "store" in str(exc).lower()
+        else:
+            raise AssertionError("Expected missing LanceDB store to fail closed.")
+
+
+def test_index_manifest_round_trip_uses_canonical_sqlite_identity():
+    required_api = (
+        "build_index_manifest",
+        "index_manifest_path",
+        "read_sqlite_canonical_identity",
+        "write_index_manifest",
+    )
+    assert all(hasattr(lancedb_sidecar, name) for name in required_api), (
+        "semantic rebuild must persist one manifest derived from canonical SQLite metadata"
+    )
+    _, expected_canonical, embedding_identity = make_valid_index_manifest_contract()
+
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        sqlite_path = root / "project-memory.sqlite"
+        store_path = root / "lancedb"
+        store_path.mkdir()
+        connection = sqlite3.connect(sqlite_path)
+        try:
+            connection.execute("CREATE TABLE memory_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            connection.executemany(
+                "INSERT INTO memory_metadata(key, value) VALUES(?, ?)",
+                list(expected_canonical.items()),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        canonical_identity = lancedb_sidecar.read_sqlite_canonical_identity(sqlite_path)
+        manifest = lancedb_sidecar.build_index_manifest(
+            canonical_identity,
+            embedding_identity,
+            indexed_count=17,
+        )
+        manifest_path = lancedb_sidecar.index_manifest_path(store_path)
+        lancedb_sidecar.write_index_manifest(manifest_path, manifest)
+        validated = lancedb_sidecar.load_validated_index_manifest(
+            manifest_path,
+            store_path,
+            canonical_identity,
+            embedding_identity,
+        )
+
+        assert validated["commit_sha"] == expected_canonical["commit_sha"]
+        assert validated["tree_sha"] == expected_canonical["tree_sha"]
+        assert validated["indexed_at"] == expected_canonical["indexed_at"]
+        assert validated["indexed_count"] == 17
+
+
+def test_rebuild_persists_commit_and_embedding_index_manifest():
+    _, canonical_identity, embedding_identity = make_valid_index_manifest_contract()
+
+    class FakeProvider:
+        def metadata(self):
+            return dict(embedding_identity)
+
+    class FakeTable:
+        def count_rows(self):
+            return 2
+
+    class FakeDatabase:
+        def create_table(self, name, data, mode):
+            assert name == lancedb_sidecar.TABLE_NAME
+            assert len(data) == 2
+            assert mode == "overwrite"
+            return FakeTable()
+
+    class FakeLanceDb:
+        @staticmethod
+        def connect(path):
+            assert Path(path).is_dir()
+            return FakeDatabase()
+
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        generated = root / "docs" / "memory" / "generated"
+        generated.mkdir(parents=True)
+        sqlite_path = generated / "project-memory.sqlite"
+        store_path = generated / "lancedb"
+        connection = sqlite3.connect(sqlite_path)
+        try:
+            connection.execute("CREATE TABLE memory_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            connection.executemany(
+                "INSERT INTO memory_metadata(key, value) VALUES(?, ?)",
+                list(canonical_identity.items()),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        args = SimpleNamespace(
+            project_root=str(root),
+            sqlite=str(sqlite_path),
+            store=str(store_path),
+            embedding_provider="fastembed",
+            embedding_model=DEFAULT_EMBEDDING_MODEL,
+            offline_models=True,
+            allow_network_preflight=False,
+        )
+        original_provider_from_args = lancedb_sidecar.provider_from_args
+        original_load_sqlite_records = lancedb_sidecar.load_sqlite_records
+        try:
+            lancedb_sidecar.provider_from_args = lambda unused_args: FakeProvider()
+            lancedb_sidecar.load_sqlite_records = lambda unused_root, unused_path, unused_provider: [
+                {
+                    "id": "one",
+                    "type": "rule",
+                    "status": "current",
+                    "source_path": "docs/memory/rules.md",
+                    "commit_sha": canonical_identity["commit_sha"],
+                    "source_blob_sha": "1" * 40,
+                },
+                {
+                    "id": "two",
+                    "type": "adr",
+                    "status": "current",
+                    "source_path": "docs/decisions/0001-example.md",
+                    "commit_sha": canonical_identity["commit_sha"],
+                    "source_blob_sha": "2" * 40,
+                },
+            ]
+            report = lancedb_sidecar.rebuild(args, FakeLanceDb())
+        finally:
+            lancedb_sidecar.provider_from_args = original_provider_from_args
+            lancedb_sidecar.load_sqlite_records = original_load_sqlite_records
+
+        manifest_path = lancedb_sidecar.index_manifest_path(store_path)
+        assert manifest_path.is_file()
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert manifest["commit_sha"] == canonical_identity["commit_sha"]
+        assert manifest["embedding_runtime_model"] == embedding_identity["embedding_runtime_model"]
+        assert report["commit_sha"] == canonical_identity["commit_sha"]
+        assert report["tree_sha"] == canonical_identity["tree_sha"]
+        assert report["index_manifest_status"] == "ready"
+
+
+def test_rebuild_rejects_physical_table_count_mismatch_before_writing_manifest():
+    _, canonical_identity, embedding_identity = make_valid_index_manifest_contract()
+
+    class FakeProvider:
+        def metadata(self):
+            return dict(embedding_identity)
+
+    class FakeTable:
+        def count_rows(self):
+            return 1
+
+    class FakeDatabase:
+        def create_table(self, unused_name, data, mode):
+            assert len(data) == 2
+            assert mode == "overwrite"
+            return FakeTable()
+
+    class FakeLanceDb:
+        @staticmethod
+        def connect(unused_path):
+            return FakeDatabase()
+
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        generated = root / "docs" / "memory" / "generated"
+        generated.mkdir(parents=True)
+        store_path = generated / "lancedb"
+        args = SimpleNamespace(
+            project_root=str(root),
+            sqlite=str(generated / "project-memory.sqlite"),
+            store=str(store_path),
+            embedding_provider="fastembed",
+            embedding_model=DEFAULT_EMBEDDING_MODEL,
+            offline_models=True,
+            allow_network_preflight=False,
+        )
+        original_provider_from_args = lancedb_sidecar.provider_from_args
+        original_read_identity = lancedb_sidecar.read_sqlite_canonical_identity
+        original_load_records = lancedb_sidecar.load_sqlite_records
+        try:
+            lancedb_sidecar.provider_from_args = lambda unused_args: FakeProvider()
+            lancedb_sidecar.read_sqlite_canonical_identity = lambda unused_path: dict(canonical_identity)
+            lancedb_sidecar.load_sqlite_records = lambda unused_root, unused_path, unused_provider: [
+                {"id": "one", "type": "rule", "status": "current", "source_path": "AGENTS.md"},
+                {"id": "two", "type": "adr", "status": "current", "source_path": "docs/decisions/0001.md"},
+            ]
+            try:
+                lancedb_sidecar.rebuild(args, FakeLanceDb())
+            except ValueError as exc:
+                assert "indexed_count" in str(exc)
+                assert "1" in str(exc)
+                assert "2" in str(exc)
+            else:
+                raise AssertionError("Expected rebuild to reject a physical table count mismatch.")
+        finally:
+            lancedb_sidecar.provider_from_args = original_provider_from_args
+            lancedb_sidecar.read_sqlite_canonical_identity = original_read_identity
+            lancedb_sidecar.load_sqlite_records = original_load_records
+
+        assert not lancedb_sidecar.index_manifest_path(store_path).exists()
+
+
+def test_search_rejects_manifest_model_mismatch_before_query_embedding():
+    manifest, canonical_identity, embedding_identity = make_valid_index_manifest_contract()
+    mismatched_embedding = {
+        **embedding_identity,
+        "embedding_runtime_model": "tc-dn-hofi3/unreviewed-runtime-model",
+    }
+
+    class FakeProvider:
+        embed_called = False
+
+        def metadata(self):
+            return dict(mismatched_embedding)
+
+        def embed_one(self, text):
+            self.embed_called = True
+            return [0.0] * 384
+
+    class FakeBuilder:
+        def limit(self, unused_limit):
+            return self
+
+        def to_list(self):
+            return []
+
+    class FakeTable:
+        def search(self, unused_vector):
+            return FakeBuilder()
+
+    class FakeDatabase:
+        def open_table(self, unused_name):
+            return FakeTable()
+
+    class FakeLanceDb:
+        @staticmethod
+        def connect(unused_path):
+            return FakeDatabase()
+
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        generated = root / "docs" / "memory" / "generated"
+        generated.mkdir(parents=True)
+        sqlite_path = generated / "project-memory.sqlite"
+        store_path = generated / "lancedb"
+        store_path.mkdir()
+        connection = sqlite3.connect(sqlite_path)
+        try:
+            connection.execute("CREATE TABLE memory_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            connection.executemany(
+                "INSERT INTO memory_metadata(key, value) VALUES(?, ?)",
+                list(canonical_identity.items()),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        lancedb_sidecar.write_index_manifest(lancedb_sidecar.index_manifest_path(store_path), manifest)
+
+        args = SimpleNamespace(
+            project_root=str(root),
+            sqlite=str(sqlite_path),
+            store=str(store_path),
+            output=str(generated / "search-report.json"),
+            query="actual OFI formula",
+            limit=5,
+            embedding_provider="fastembed",
+            embedding_model=DEFAULT_EMBEDDING_MODEL,
+            offline_models=True,
+            allow_network_preflight=False,
+        )
+        provider = FakeProvider()
+        original_provider_from_args = lancedb_sidecar.provider_from_args
+        try:
+            lancedb_sidecar.provider_from_args = lambda unused_args: provider
+            try:
+                lancedb_sidecar.search(args, FakeLanceDb())
+            except ValueError as exc:
+                assert "embedding_runtime_model" in str(exc)
+            else:
+                raise AssertionError("Expected search to reject mismatched index identity.")
+        finally:
+            lancedb_sidecar.provider_from_args = original_provider_from_args
+
+        assert provider.embed_called is False
+
+
+def test_eval_and_explain_validate_manifest_before_opening_table():
+    class FakeProvider:
+        def metadata(self):
+            return {"embedding_provider": "token-hash"}
+
+        def embed_one(self, unused_text):
+            raise AssertionError("query embedding ran before manifest validation")
+
+    class FakeLanceDb:
+        @staticmethod
+        def connect(unused_path):
+            raise AssertionError("LanceDB opened before manifest validation")
+
+    args = SimpleNamespace(
+        project_root=str(Path.cwd()),
+        sqlite=str(Path.cwd() / "missing.sqlite"),
+        store=str(Path.cwd() / "docs" / "memory" / "generated" / "lancedb"),
+        output=str(Path.cwd() / "docs" / "memory" / "generated" / "report.json"),
+        eval_markdown_output="",
+        query="actual OFI formula",
+        limit=5,
+        embedding_provider="token-hash",
+        embedding_model="local-token-hash",
+        offline_models=True,
+        allow_network_preflight=False,
+    )
+    original_provider_from_args = lancedb_sidecar.provider_from_args
+    original_manifest_loader = lancedb_sidecar.load_current_index_manifest
+    try:
+        lancedb_sidecar.provider_from_args = lambda unused_args: FakeProvider()
+        lancedb_sidecar.load_current_index_manifest = lambda unused_args, unused_identity: (_ for _ in ()).throw(
+            ValueError("index manifest mismatch")
+        )
+        for command in (lancedb_sidecar.eval_quality, lancedb_sidecar.explain):
+            try:
+                command(args, FakeLanceDb())
+            except ValueError as exc:
+                assert "manifest" in str(exc)
+            else:
+                raise AssertionError(f"Expected {command.__name__} to validate the index manifest.")
+    finally:
+        lancedb_sidecar.provider_from_args = original_provider_from_args
+        lancedb_sidecar.load_current_index_manifest = original_manifest_loader
+
+
+def test_search_explain_and_eval_reject_manifest_indexed_count_mismatch_before_query():
+    class FakeProvider:
+        def metadata(self):
+            return {}
+
+        def embed_one(self, unused_text):
+            raise AssertionError("query embedding ran before physical table count validation")
+
+    class FakeTable:
+        def count_rows(self):
+            return 16
+
+    manifest = {"indexed_count": 17}
+    args = SimpleNamespace(
+        project_root=str(Path.cwd()),
+        sqlite=str(Path.cwd() / "project-memory.sqlite"),
+        store=str(Path.cwd() / "docs" / "memory" / "generated" / "lancedb"),
+        output=str(Path.cwd() / "docs" / "memory" / "generated" / "report.json"),
+        eval_markdown_output="",
+        query="actual OFI formula",
+        limit=5,
+        embedding_provider="token-hash",
+        embedding_model="local-token-hash",
+        offline_models=True,
+        allow_network_preflight=False,
+    )
+    original_provider_from_args = lancedb_sidecar.provider_from_args
+    original_manifest_loader = lancedb_sidecar.load_current_index_manifest
+    original_open_table = lancedb_sidecar.open_table
+    try:
+        lancedb_sidecar.provider_from_args = lambda unused_args: FakeProvider()
+        lancedb_sidecar.load_current_index_manifest = lambda unused_args, unused_identity: manifest
+        lancedb_sidecar.open_table = lambda unused_args, unused_module: FakeTable()
+
+        for command in (lancedb_sidecar.search, lancedb_sidecar.explain, lancedb_sidecar.eval_quality):
+            try:
+                command(args, object())
+            except ValueError as exc:
+                assert "indexed_count" in str(exc)
+                assert "16" in str(exc)
+                assert "17" in str(exc)
+            else:
+                raise AssertionError(f"Expected {command.__name__} to reject physical table count mismatch.")
+    finally:
+        lancedb_sidecar.provider_from_args = original_provider_from_args
+        lancedb_sidecar.load_current_index_manifest = original_manifest_loader
+        lancedb_sidecar.open_table = original_open_table
+
+
+def test_cleanup_removes_store_and_index_manifest_together():
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        generated = root / "docs" / "memory" / "generated"
+        store_path = generated / "lancedb"
+        store_path.mkdir(parents=True)
+        manifest_path = lancedb_sidecar.index_manifest_path(store_path)
+        manifest_path.write_text("{}\n", encoding="utf-8")
+        args = SimpleNamespace(
+            project_root=str(root),
+            sqlite=str(generated / "project-memory.sqlite"),
+            store=str(store_path),
+            embedding_provider="token-hash",
+            embedding_model="local-token-hash",
+            offline_models=True,
+            allow_network_preflight=False,
+        )
+
+        report = lancedb_sidecar.cleanup(args)
+
+        assert not store_path.exists()
+        assert not manifest_path.exists()
+        assert report["deleted_existing_manifest"] is True
+
+
+def make_valid_index_manifest_contract():
+    canonical_identity = {
+        "commit_sha": "a" * 40,
+        "tree_sha": "b" * 40,
+        "indexed_at": "2026-07-14T00:00:00Z",
+    }
+    embedding_identity = {
+        "embedding_provider": "fastembed",
+        "embedding_model": DEFAULT_EMBEDDING_MODEL,
+        "embedding_runtime_model": lancedb_sidecar.FASTEMBED_RUNTIME_MODEL,
+        "embedding_dimensions": 384,
+        "embedding_package_version": "0.8.0",
+        "embedding_package_pin": "fastembed==0.8.0",
+        "embedding_pooling": "mean",
+    }
+    manifest = {
+        "schema_version": 1,
+        "generator": "tools/MemorySemantic/lancedb_sidecar.py",
+        "status": "ready",
+        "source_store": "sqlite-fts5",
+        "lancedb_table": lancedb_sidecar.TABLE_NAME,
+        "indexed_count": 17,
+        **canonical_identity,
+        **embedding_identity,
+    }
+    return manifest, canonical_identity, embedding_identity
 
 
 def test_fastembed_cache_dir_is_explicit_and_rejects_project_local_state():
@@ -680,6 +1201,17 @@ if __name__ == "__main__":
     test_default_embedding_provider_is_local_fastembed_multilingual_onnx()
     test_fastembed_baseline_metadata_is_explicit_and_eval_gated()
     test_semantic_dependency_pins_are_explicit()
+    test_index_manifest_rejects_runtime_model_mismatch()
+    test_index_manifest_rejects_stale_canonical_commit()
+    test_index_manifest_rejects_missing_string_or_negative_indexed_count()
+    test_index_manifest_rejects_missing_lancedb_store()
+    test_index_manifest_round_trip_uses_canonical_sqlite_identity()
+    test_rebuild_persists_commit_and_embedding_index_manifest()
+    test_rebuild_rejects_physical_table_count_mismatch_before_writing_manifest()
+    test_search_rejects_manifest_model_mismatch_before_query_embedding()
+    test_eval_and_explain_validate_manifest_before_opening_table()
+    test_search_explain_and_eval_reject_manifest_indexed_count_mismatch_before_query()
+    test_cleanup_removes_store_and_index_manifest_together()
     test_fastembed_cache_dir_is_explicit_and_rejects_project_local_state()
     test_network_policy_requires_offline_models_except_explicit_preflight()
     test_fastembed_mean_pooling_baseline_uses_custom_runtime_alias_without_production_suppression()

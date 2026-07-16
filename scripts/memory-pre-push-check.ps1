@@ -5,6 +5,9 @@ param(
     [string]$RefreshAllReportPath = '',
     [string]$EvalJsonReportPath = '',
     [string]$EvalMarkdownReportPath = '',
+    [string]$DatabasePath = '',
+    [string]$LanceDbStorePath = '',
+    [string]$IndexManifestPath = '',
     [int]$MinimumEvalCases = 9,
     [switch]$PlanOnly
 )
@@ -23,6 +26,12 @@ function Resolve-ScriptRoot {
 
     return (Get-Location).Path
 }
+
+$contractPath = Join-Path (Resolve-ScriptRoot) 'memory-pre-push-contract.ps1'
+if (-not (Test-Path -LiteralPath $contractPath -PathType Leaf)) {
+    throw "Missing memory pre-push contract helper: $contractPath"
+}
+. $contractPath
 
 function Resolve-ProjectRoot {
     param([string]$Candidate)
@@ -112,10 +121,11 @@ function New-CheckResult {
         [string]$Name,
         [string]$Description,
         [bool]$Passed,
-        [string]$Detail
+        [string]$Detail,
+        [object]$Evidence = $null
     )
 
-    [ordered]@{
+    $result = [ordered]@{
         name = $Name
         description = $Description
         status = if ($Passed) { 'passed' } else { 'failed' }
@@ -125,45 +135,12 @@ function New-CheckResult {
         touches_denylist = $false
         uses_generated_exports_as_source = $false
     }
-}
 
-function Test-JsonPropertyFalse {
-    param(
-        [object]$Object,
-        [string]$Name
-    )
-
-    $property = $Object.PSObject.Properties[$Name]
-    return $null -ne $property -and $property.Value -eq $false
-}
-
-function Test-JsonPropertyExists {
-    param(
-        [object]$Object,
-        [string]$Name
-    )
-
-    return $null -ne $Object.PSObject.Properties[$Name]
-}
-
-function Get-JsonPropertyValue {
-    param(
-        [object]$Object,
-        [string]$Name
-    )
-
-    $property = $Object.PSObject.Properties[$Name]
-    if ($null -eq $property) {
-        return $null
+    if ($null -ne $Evidence) {
+        $result['evidence'] = $Evidence
     }
 
-    return $property.Value
-}
-
-function Read-JsonFile {
-    param([string]$Path)
-
-    return (Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json)
+    return $result
 }
 
 function Test-ManagedPrePushHookInstalled {
@@ -186,78 +163,11 @@ function Get-ExpectedChecks {
         (New-CheckPlan -Name 'refresh-all-safety-flags' -Description 'Require refresh-all guardrail flags to stay disabled'),
         (New-CheckPlan -Name 'refresh-all-steps-completed' -Description 'Require all refresh-all steps to complete with clean stale-check'),
         (New-CheckPlan -Name 'lancedb-eval-json-exists' -Description 'Find LanceDB eval JSON report'),
+        (New-CheckPlan -Name 'commit-addressed-freshness' -Description 'Require refresh and eval evidence to match Git HEAD and tree'),
+        (New-CheckPlan -Name 'semantic-index-manifest' -Description 'Require physical SQLite/LanceDB stores and matching semantic index manifest'),
         (New-CheckPlan -Name 'lancedb-eval-passed' -Description 'Require LanceDB eval gate to pass'),
         (New-CheckPlan -Name 'lancedb-eval-markdown-exists' -Description 'Find LanceDB eval Markdown report')
     )
-}
-
-function Test-RefreshAllReport {
-    param([object]$Report)
-
-    $falseFlags = @(
-        'cloud_enabled',
-        'codex_auto_retain_enabled',
-        'auto_commit_refresh_enabled',
-        'commit_hook_installed',
-        'installs_hooks',
-        'direct_project_crawl_enabled',
-        'imports_raw_jsonl',
-        'imports_generated_exports',
-        'uses_generated_exports_as_source',
-        'imports_secrets',
-        'imports_local_proxy_details',
-        'imports_build_artifacts',
-        'touches_raw_jsonl',
-        'touches_hindsight_store',
-        'touches_secret_storage',
-        'touches_build_artifacts'
-    )
-
-    foreach ($flag in $falseFlags) {
-        if (-not (Test-JsonPropertyFalse -Object $Report -Name $flag)) {
-            return "Unexpected refresh-all flag: $flag"
-        }
-    }
-
-    foreach ($step in @($Report.steps)) {
-        if ($step.uses_cloud -ne $false -or $step.uses_hook -ne $false) {
-            return "Unexpected refresh-all step automation flag: $($step.name)"
-        }
-    }
-
-    return ''
-}
-
-function Test-RefreshAllSteps {
-    param([object]$Report)
-
-    $expectedSteps = @(
-        'legacy-json-refresh',
-        'sqlite-refresh',
-        'sqlite-stale-check',
-        'lancedb-cleanup',
-        'lancedb-rebuild',
-        'lancedb-eval'
-    )
-
-    $steps = @($Report.steps)
-    $actualSteps = @($steps | ForEach-Object { $_.name })
-    if (($actualSteps -join '|') -ne ($expectedSteps -join '|')) {
-        return "Unexpected refresh-all step order: $($actualSteps -join ', ')"
-    }
-
-    foreach ($step in $steps) {
-        if ($step.status -ne 'completed' -or $step.exit_code -ne 0) {
-            return "Refresh-all step failed: $($step.name)"
-        }
-    }
-
-    $staleStep = $steps | Where-Object { $_.name -eq 'sqlite-stale-check' } | Select-Object -First 1
-    if ($null -eq $staleStep -or ($staleStep.stdout_tail -notmatch '"issues"\s*:\s*\[\s*\]')) {
-        return 'SQLite stale-check did not report an empty issue list'
-    }
-
-    return ''
 }
 
 $root = Resolve-ProjectRoot -Candidate $ProjectRoot
@@ -286,6 +196,21 @@ $evalMarkdownPath = Resolve-RootedOrRelativePath `
     -Root $root `
     -Path $EvalMarkdownReportPath `
     -DefaultPath (Join-Path $root 'docs\memory\generated\lancedb-eval-report.md')
+
+$databasePath = Resolve-RootedOrRelativePath `
+    -Root $root `
+    -Path $DatabasePath `
+    -DefaultPath (Join-Path $root 'docs\memory\generated\project-memory.sqlite')
+
+$lanceDbStorePath = Resolve-RootedOrRelativePath `
+    -Root $root `
+    -Path $LanceDbStorePath `
+    -DefaultPath (Join-Path $root 'docs\memory\generated\lancedb')
+
+$indexManifestPath = Resolve-RootedOrRelativePath `
+    -Root $root `
+    -Path $IndexManifestPath `
+    -DefaultPath (Join-Path $root 'docs\memory\generated\lancedb-manifest.json')
 
 $startedAt = (Get-Date).ToUniversalTime().ToString('o')
 $checks = [System.Collections.Generic.List[object]]::new()
@@ -328,59 +253,19 @@ else {
         $evalReport = Read-JsonFile -Path $evalJsonPath
     }
 
-    $evalPassed = $false
-    $evalDetail = 'eval report missing'
-    if ($null -ne $evalReport) {
-        $requiredEvalProperties = @(
-            'generator',
-            'command',
-            'status',
-            'source_store',
-            'cloud_enabled',
-            'auto_commit_refresh_enabled',
-            'direct_project_crawl_enabled',
-            'commit_hook_installed',
-            'passed',
-            'failed_count',
-            'passed_count'
-        )
+    $freshness = Test-CommitAddressedFreshness -Root $root -RefreshReport $refreshReport -EvalReport $evalReport
+    $checks.Add((New-CheckResult -Name 'commit-addressed-freshness' -Description 'Require refresh and eval evidence to match Git HEAD and tree' -Passed ([bool]$freshness.passed) -Detail ([string]$freshness.detail) -Evidence $freshness.evidence))
 
-        $missingEvalProperties = @($requiredEvalProperties | Where-Object { -not (Test-JsonPropertyExists -Object $evalReport -Name $_) })
-        if ($missingEvalProperties.Count -gt 0) {
-            $statusValue = Get-JsonPropertyValue -Object $evalReport -Name 'status'
-            $commandValue = Get-JsonPropertyValue -Object $evalReport -Name 'command'
-            $evalDetail = "missing properties: $($missingEvalProperties -join ', '); status=$statusValue; command=$commandValue"
-        }
-        else {
-            $generatorValue = Get-JsonPropertyValue -Object $evalReport -Name 'generator'
-            $commandValue = Get-JsonPropertyValue -Object $evalReport -Name 'command'
-            $statusValue = Get-JsonPropertyValue -Object $evalReport -Name 'status'
-            $sourceStoreValue = Get-JsonPropertyValue -Object $evalReport -Name 'source_store'
-            $cloudEnabledValue = Get-JsonPropertyValue -Object $evalReport -Name 'cloud_enabled'
-            $autoCommitRefreshValue = Get-JsonPropertyValue -Object $evalReport -Name 'auto_commit_refresh_enabled'
-            $directProjectCrawlValue = Get-JsonPropertyValue -Object $evalReport -Name 'direct_project_crawl_enabled'
-            $commitHookInstalledValue = Get-JsonPropertyValue -Object $evalReport -Name 'commit_hook_installed'
-            $passedValue = Get-JsonPropertyValue -Object $evalReport -Name 'passed'
-            $failedCountValue = Get-JsonPropertyValue -Object $evalReport -Name 'failed_count'
-            $passedCountValue = Get-JsonPropertyValue -Object $evalReport -Name 'passed_count'
+    $manifestCheck = Test-SemanticIndexManifest `
+        -DatabasePath $databasePath `
+        -StorePath $lanceDbStorePath `
+        -ManifestPath $indexManifestPath `
+        -RefreshReport $refreshReport `
+        -EvalReport $evalReport
+    $checks.Add((New-CheckResult -Name 'semantic-index-manifest' -Description 'Require physical SQLite/LanceDB stores and matching semantic index manifest' -Passed ([bool]$manifestCheck.passed) -Detail ([string]$manifestCheck.detail)))
 
-            $evalPassed = $generatorValue -eq 'tools/MemorySemantic/lancedb_sidecar.py' -and
-                $commandValue -eq 'eval' -and
-                $statusValue -eq 'ok' -and
-                $sourceStoreValue -eq 'sqlite-fts5' -and
-                $cloudEnabledValue -eq $false -and
-                $autoCommitRefreshValue -eq $false -and
-                $directProjectCrawlValue -eq $false -and
-                $commitHookInstalledValue -eq $false -and
-                $passedValue -eq $true -and
-                $failedCountValue -eq 0 -and
-                $passedCountValue -ge $MinimumEvalCases
-
-            $evalDetail = "passed_count=$passedCountValue; failed_count=$failedCountValue"
-        }
-    }
-
-    $checks.Add((New-CheckResult -Name 'lancedb-eval-passed' -Description 'Require LanceDB eval gate to pass' -Passed $evalPassed -Detail $evalDetail))
+    $evalValidation = Test-LanceDbEvalReport -Report $evalReport -MinimumEvalCases $MinimumEvalCases
+    $checks.Add((New-CheckResult -Name 'lancedb-eval-passed' -Description 'Require LanceDB eval gate to pass' -Passed ([bool]$evalValidation.passed) -Detail ([string]$evalValidation.detail)))
 
     $evalMarkdownExists = Test-Path -LiteralPath $evalMarkdownPath
     $checks.Add((New-CheckResult -Name 'lancedb-eval-markdown-exists' -Description 'Find LanceDB eval Markdown report' -Passed $evalMarkdownExists -Detail (Convert-ToRepoPath -Root $root -Path $evalMarkdownPath)))
@@ -403,6 +288,9 @@ $report = [ordered]@{
     refresh_all_report_path = Convert-ToRepoPath -Root $root -Path $refreshReportPath
     eval_json_report_path = Convert-ToRepoPath -Root $root -Path $evalJsonPath
     eval_markdown_report_path = Convert-ToRepoPath -Root $root -Path $evalMarkdownPath
+    sqlite_database_path = Convert-ToRepoPath -Root $root -Path $databasePath
+    lancedb_store_path = Convert-ToRepoPath -Root $root -Path $lanceDbStorePath
+    index_manifest_path = Convert-ToRepoPath -Root $root -Path $indexManifestPath
     started_at = $startedAt
     finished_at = (Get-Date).ToUniversalTime().ToString('o')
     manual_only = $true

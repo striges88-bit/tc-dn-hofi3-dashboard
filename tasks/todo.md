@@ -1799,3 +1799,252 @@ Compact boundary:
 - The source-boundary correction is a separate commit after the retained-store and threshold slices; generated SQLite/LanceDB/reports remain ignored local state.
 - Commit-addressed refresh proved that 48 operational todo chunks are absent from LanceDB while eval remains `11/11`; canonical SQLite/FTS still owns exact `tasks/todo.md` retrieval.
 - If this completion record is amended into the slice commit, the same refresh/status/pre-push sequence must pass against the amended `HEAD` before any push.
+
+## PR 19 Final Multi-Agent Review
+
+- [x] Confirm PR #19 head, green CI checks, base/head SHAs, and clean local branch state.
+- [x] Review canonical SQLite and curated-retain lifecycle for data loss, stale rows, migration, path, and report-contract defects.
+- [x] Review LanceDB/FastEmbed retrieval, exclusion, freshness, reproducibility, and eval-gate behavior.
+- [x] Review PowerShell wrappers, hooks, recovery, CI, exit-code, timeout, lock, and fail-open/fail-closed behavior.
+- [x] Review the complete PR diff for security, source-of-truth, documentation, test gaps, and unresolved roadmap debt.
+- [x] Independently verify agent findings against current source and separate immediate blockers from future polish.
+- [x] Record consolidated findings and the recommended merge/remediation sequence below.
+
+Review / Results:
+
+- Reviewed range: `72cd6ba794f5caf51dab72958e02d9126bdd6fe4..f3289eb72d56cfc22529c78bf5f055fcf50e057d` (`36` files, about `3993` insertions). PR #19 is open, ready, mergeable, and all three CI jobs passed at head `f3289eb72d56cfc22529c78bf5f055fcf50e057d`. No GitHub review comments or unresolved threads exist.
+- Four independent read-only reviews covered retained SQLite lifecycle, semantic retrieval, PowerShell/CI operations, and cross-cutting security/contracts. No Critical defect was found, but several Important defects make merge premature despite green CI.
+- The local worktree was clean before this review note; only `tasks/todo.md` is now intentionally dirty. No code, generated memory, hook, database, or report was changed.
+
+Confirmed merge blockers:
+
+1. **Freshness evidence is not commit-bound.** `scripts/memory-pre-push-check.ps1` trusts old refresh/eval files without proving they match current `HEAD`; LanceDB `row_freshness` checks only non-empty metadata, not current SQLite/HEAD. `MemoryStore.Status` can also report `needs_refresh=false` when Git lookup fails. Required: a commit/tree/model manifest, strict `HEAD == indexed_commit == eval_commit`, store existence, marker, and fail-closed Git-error tests.
+2. **Semantic query identity is not checked against the built table.** Search/eval can embed a query with a provider/model/runtime/package/pooling identity different from the table and still return plausible rows. Required: fail-closed table-manifest comparison before search/explain/eval.
+3. **Destructive and curated path containment is incomplete.** Curated scanning can follow Windows reparse points outside the repo; `docs/memory/generated` as a junction can make LanceDB cleanup operate on a resolved external target; dry-run export/delete still accept traversal-like source paths; several `ToRepoPath`/doctor checks use unsafe prefix comparison. Required: central canonical-path/reparse policy and Windows junction/symlink RED tests before any destructive/read operation.
+4. **Retained-store lifecycle is not race/resume safe.** `RetainDelete` selects IDs before its transaction, so concurrent import can leave orphan FTS; legacy migration can become a permanent two-store conflict after copy-before-drop failure, rechecks canonical on every command, and migrates rows without current allowlist/metadata/secret validation. Required: one transaction for delete, resumable validated migration with durable completion state, and conflict/recovery tests.
+5. **Curated secret and report contracts remain incomplete.** Bare GitHub PAT/JWT/AWS/PEM and additional path/proxy forms can pass as clean candidates; whitespace-only `blocking_reasons`, non-object JSON root, and empty `files` are not handled by the intended structured fail-closed contract. External/Codex retain must remain disabled.
+6. **Lifecycle reports are not truthful.** Import reports `writes_report_only=true` while mutating SQLite; export/delete hard-code default generated/ignored paths for custom outputs; custom relative output resolution diverges between CLI and wrapper; stderr is merged into JSON stdout; export/delete do not propagate parseable nonzero CLI codes.
+7. **Operational process and lock handling is not yet robust.** Timeout handling can kill only a parent and then wait without a second bound while descendants continue; refresh locking does not cover the full destructive workflow and has no safe stale-lock recovery; marker lock loss can return success. Hook installers assume `.git/hooks` and do not honor `core.hooksPath` or linked worktrees. Clone recovery can leave a partial unowned directory and mask the original failure.
+8. **Gate/report JSON validation is too permissive.** PowerShell comparisons can coerce string booleans, and the CI status assertion does not require exact properties/types/non-empty SHAs. Malformed reports can therefore look successful. Required: exact schema/type validators shared by local gate and CI.
+9. **Legacy JSON refresh still crawls the working tree with an older exclusion policy.** It can hash paths under locations such as `secrets/` or `.hindsight/` while the aggregate report claims no direct crawl/secret-store touch. Remove the legacy crawl or make it consume the central denylist and truthful flags.
+10. **Semantic source/status quality has fail-open edges.** Unknown typed status currently normalizes to `current`; noncanonical source paths can bypass semantic exclusions; filtering happens after the final result limit; acceptance confidence ignores vector distance, weakening true semantic paraphrase handling and near-miss rejection.
+
+Required remediation sequence after `/compact`:
+
+- [ ] **Slice A - Commit-bound freshness gate:** add RED tests for old A reports after commit B, Git unavailable/timeout, missing store, model mismatch, and stale LanceDB manifest; implement one strict manifest/status contract used by search/eval/pre-push/CI.
+- [ ] **Slice B - Filesystem containment:** add Windows reparse/junction and traversal RED tests; centralize resolved containment; make LanceDB cleanup/output and curated reads fail before touching external paths.
+- [ ] **Slice C - Retain lifecycle integrity:** add RED tests for delete/import race, partial legacy migration, invalid legacy rows, non-object/blank-reasons/empty-batch reports, custom paths, and exit propagation; implement atomic/resumable lifecycle and truthful reports.
+- [ ] **Slice D - Operational runner/locking:** introduce one PS 5.1-compatible bounded process runner with separated streams and descendant termination; hold one workflow lock with owner/lease recovery; resolve hooks through `git rev-parse --git-path`; harden clone cleanup and legacy-crawl denylist.
+- [ ] **Slice E - Semantic correctness/reproducibility:** reject unknown statuses and noncanonical paths; filter before final limit; calibrate similarity plus lexical confidence with Russian paraphrase/near-miss evals; pin HF revision/artifact digest and a full Python lock; make rebuild atomic; report both source and retrieval confidence.
+- [ ] **Slice F - Low-risk polish:** remove duplicate `Memory.Tests` CI execution, correct docs/source-priority and `preflight` inventory, fix direct CLI schema-v2 default/empty `--db`, protect retained DB in recovery tests, remove stale unchecked handoff items, and split oversized `MemoryStore.cs`/`lancedb_sidecar.py` before adding more behavior.
+- [ ] Rerun focused RED/GREEN tests per slice; at the final boundary run all memory suites, full solution tests/build, offline semantic suite, real rebuild/eval `11/11`, `git diff --check`, commit-addressed refresh, status, pre-push, green CI, and one last independent review.
+
+Slice A execution:
+
+- [x] Observe RED: pre-push rejects refresh/eval evidence from commit A after repository `HEAD` advances to commit B. Current gate exited `0`, proving that report evidence was not bound to Git `HEAD`.
+- [x] Implement and verify the minimal commit-bound freshness check.
+- [x] Extract Git/JSON/manifest validation into the PS 5.1-compatible `scripts/memory-pre-push-contract.ps1`; the four existing commit/store/model/manifest focused tests remain GREEN and the orchestrator is back below 500 lines.
+- [ ] Add the remaining fail-closed Slice A regressions before broad verification. In progress: stale reports, unavailable Git status, missing store, model mismatch, and stale manifest are covered; strict report types, pre-push Git timeout coverage, and final shared-contract verification remain.
+
+### Slice A compact handoff
+
+Completed in the uncommitted remediation worktree:
+
+- Added `CommitBoundMemoryGateTests.PrePushRejectsCommitAReportsAfterHeadAdvancesToCommitB`; observed the intended RED (`pre-push` exited `0`) and then GREEN after adding `commit-addressed-freshness`.
+- Made canonical `memory status` fail closed when Git `HEAD` is unavailable; the new focused CLI test is GREEN.
+- Added a generated LanceDB index manifest contract in `tools/MemorySemantic/memory_index_manifest.py` with exact embedding identity and canonical SQLite commit/tree/indexed-at validation.
+- Wired semantic rebuild to write `lancedb-manifest.json`; search/explain/eval validate it before opening/querying LanceDB; cleanup removes store and manifest together.
+- Added focused Python RED/GREEN coverage for runtime-model mismatch, stale canonical commit, missing store, manifest round-trip, rebuild persistence, search ordering, eval/explain ordering, and cleanup consistency.
+- Made `memory-refresh-all.ps1` resolve `HEAD` once, pass the resolved SHA to `refresh-from-commit`, and report `requested_commit`, `commit_sha`, and `tree_sha`; its PlanOnly guardrail test is GREEN.
+- Added pre-push physical store/manifest validation with GREEN focused tests for missing LanceDB store, eval/model mismatch, and manifest commit A versus current commit B.
+
+Important current constraints:
+
+- No commit has been created and no `memory-refresh-all` has been run; generated memory still correctly describes committed `HEAD`, not this dirty slice.
+- `uv` is not visible in the current process. Pure focused Python tests were run with the bundled Codex Python; full FastEmbed/LanceDB verification still requires restoring the approved offline `uv` environment.
+- `scripts/memory-pre-push-check.ps1` is now about 652 lines. The next edit must be a behavior-preserving extraction of Git/JSON/manifest contract functions into a small script library before adding more behavior.
+- Do not merge PR #19 yet.
+
+Exact continuation after `/compact`:
+
+1. Extract `Join-ProcessArguments`, `Invoke-GitText`, JSON accessors, `Test-CommitAddressedFreshness`, `Test-SemanticIndexManifest`, and `Read-JsonFile` from `scripts/memory-pre-push-check.ps1` into a focused PS 5.1-compatible helper script; dot-source it after resolving the script root.
+2. Rerun the three focused pre-push tests: missing store, model mismatch, and stale manifest, plus the original stale report A/B test.
+3. Continue TDD with RED tests for exact manifest generator/schema/status/table, exact JSON boolean/type handling, and structured Git timeout/unavailable evidence.
+4. Finish producer/consumer docs and CI contract, then run all Slice A suites, build, `git diff --check`, review, and commit before any `memory-refresh-all`.
+
+Compact boundary:
+
+- Do not merge PR #19 yet. CI is green but it does not cover the blockers above.
+- First command after `/compact`: inspect `scripts/memory-pre-push-check.ps1` tests and add the RED case proving a refresh/eval report from commit A is rejected after `HEAD` advances to commit B; do not implement the manifest before that RED is observed.
+- Do not run `memory-refresh-all` now: the only new source is this uncommitted review/handoff, and the remediation slice has not started.
+
+### Slice A second compact handoff
+
+Completed and verified in the still-uncommitted remediation worktree:
+
+- Extracted Git, JSON, commit-freshness, eval-report, and semantic-manifest validation into the declaration-only, PS 5.1-compatible `scripts/memory-pre-push-contract.ps1`; `memory-pre-push-check.ps1` is back below the 500-line source guardrail.
+- Repeated the four original commit/store/model/stale-manifest focused tests after extraction; all remained GREEN.
+- Added a gate-level RED/GREEN theory proving that `schema_version`, `generator`, `status`, and `lancedb_table` in the LanceDB manifest are checked by exact JSON type/value in pre-push.
+- Added contract RED/GREEN coverage proving that eval booleans and counters cannot be coercible strings, and that refresh safety flags cannot use string `"false"` or numeric `0`.
+- Focused verification is GREEN: `MemoryPrePushContractTests`, `CommitBoundMemoryGateTests`, and the legacy non-eval report regression passed `15/15`.
+
+Remaining Slice A gaps found during the focused review:
+
+- Refresh step fields still use coercive comparisons: `uses_cloud`, `uses_hook`, and `exit_code` need gate-level RED cases for string lookalikes before strict validation is implemented.
+- Python manifest validation does not currently require a non-negative integer `indexed_count`; PowerShell pre-push also does not validate `source_store` or `indexed_count`. Add RED tests before changing either consumer.
+- Git timeout/unavailable failures are still flattened into free-form `detail`. Add deterministic injected-invoker RED tests for structured `operation`, `failure_code`, `timed_out`, `timeout_ms`, and `exit_code` evidence; do not use sleeps or tiny real timeouts.
+- Producer/consumer documentation and the CI exact schema/type contract are not finished.
+
+Exact continuation after `/compact`:
+
+1. Add RED gate/contract tests for refresh step `uses_cloud="false"` and `exit_code="0"`; extract/use strict refresh validation in `memory-pre-push-contract.ps1`, then repeat the current `15/15` focused set.
+2. Add Python RED tests for missing/string/negative `indexed_count` and a PowerShell gate RED for manifest `source_store`/`indexed_count`; implement the minimal exact checks.
+3. Add deterministic RED tests for structured Git timeout/unavailable evidence through an internal injected Git invoker, propagate evidence through `New-CheckResult`, and keep the CLI surface unchanged.
+4. Finish docs and CI contract, then run broader Slice A suites, solution build, `git diff --check`, review, and commit.
+5. Only after the durable source commit: run `scripts\memory-refresh-all.ps1`, memory status, and `scripts\memory-pre-push-check.ps1`.
+
+Compact boundary:
+
+- Branch remains `codex/memory-operations-polish-final`; PR #19 remains open and must not be merged yet.
+- No commit or memory refresh has been made for Slice A; generated memory still correctly describes committed `HEAD`.
+- `uv` is still unavailable in the current process, so full FastEmbed/LanceDB verification remains deferred until the approved offline environment is restored.
+
+### Slice A third compact handoff
+
+Completed in the still-uncommitted remediation worktree:
+
+- Added gate-level RED/GREEN coverage for refresh step JSON type coercion. String `uses_cloud="false"`, string `uses_hook="false"`, and string `exit_code="0"` are now rejected by the exact `refresh-all-safety-flags` or `refresh-all-steps-completed` check.
+- Moved refresh report/step validation into `scripts/memory-pre-push-contract.ps1`; focused refresh/commit/eval tests remained GREEN.
+- Added Python RED/GREEN coverage requiring manifest `indexed_count` to exist as a non-negative JSON integer; updated the valid manifest fixture accordingly.
+- Added PowerShell gate RED/GREEN coverage for exact `source_store=sqlite-fts5` and non-negative integer `indexed_count`.
+- Added deterministic structured Git evidence without sleeps: real unavailable-Git coverage plus injected HEAD timeout/tree unavailable coverage. Stable fields are `operation`, `failure_code`, `timed_out`, `timeout_ms`, nullable `exit_code`, and `error`.
+- Propagated Git failure evidence through the final `commit-addressed-freshness` pre-push check without adding evidence fields to unrelated checks.
+- Added CI RED/GREEN guardrails. Lightweight status now requires exact JSON string/boolean fields and compares HEAD/tree to Git; semantic CI runs the shared eval/freshness/manifest validators after eval with `MinimumEvalCases 11`.
+- Documented the commit-addressed manifest and Git failure evidence contract in `docs/memory/contract.md`, `docs/memory/lancedb-spike.md`, and `scripts/README.md`.
+- Focused .NET verification passed `28/28`. Focused dependency-free Python manifest validation and round-trip tests passed.
+
+Current verification constraint:
+
+- Running the whole `lancedb_sidecar_tests.py` with the bundled Codex Python stopped at `ModuleNotFoundError: fastembed`. This is an environment/dependency failure before the FastEmbed baseline test, not a failed contract assertion. No network install was attempted.
+- The approved offline `uv`/FastEmbed environment still must be restored or located before the full Python suite and real rebuild/eval can be claimed.
+
+New residual issue found during manifest review:
+
+- `indexed_count` is now required and type-checked, but search/explain/eval do not yet compare it with the opened LanceDB table's actual row count. Before calling the manifest contract fully physical, add a dependency-free RED using a fake table count, then fail closed on mismatch. Until then, treat the count as producer metadata, not proof of physical table cardinality.
+
+Exact continuation after `/compact`:
+
+1. Add a pure Python RED proving that search/explain/eval reject `manifest.indexed_count != table.count_rows()` before returning/querying results; implement the smallest shared count validator, then rerun focused manifest/search/eval tests.
+2. Run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-semantic-doctor.ps1 -TimeoutSeconds 300` without network. Locate/restore the approved offline uv environment if reported unavailable; do not download implicitly.
+3. Rerun the full offline semantic suite with the pinned environment, then run relevant Infrastructure and Memory CLI suites, full solution tests/build, PowerShell parsing, and `git diff --check`.
+4. Review the complete Slice A diff and update this checklist/results. Commit only after all available verification is GREEN.
+5. Only after commit: run `scripts\memory-refresh-all.ps1`, memory status, and `scripts\memory-pre-push-check.ps1`; then push PR #19 update and wait for CI.
+
+Current continuation progress:
+
+- [x] RED/GREEN: reject a physical LanceDB row-count mismatch before rebuild manifest publication and before search, explain, or eval query execution.
+- [x] Restore or locate the approved offline semantic environment and run the full pinned Python suite without network.
+- [ ] Run broad Slice A verification, review, commit, then refresh/status/pre-push against the commit.
+
+### Slice A fourth compact handoff
+
+Completed in the still-uncommitted remediation worktree:
+
+- Added and observed a dependency-free RED proving that search/explain/eval reached query embedding when `manifest.indexed_count=17` but `table.count_rows()=16`; GREEN now validates physical cardinality immediately after opening the table and before embedding/query execution.
+- Added a second RED proving that rebuild published a manifest when two source records produced a one-row table; GREEN now validates one physical count before manifest publication and reuses it in the rebuild report.
+- Updated the memory contract, LanceDB spike notes, and lessons with the physical-count invariant.
+- Offline doctor passed outside the sandbox with `uv 0.11.25`, `lancedb==0.34.0`, `pyarrow==24.0.0`, and `fastembed==0.8.0`; no network preflight or download was used.
+- Full offline `lancedb_sidecar_tests.py` passed (`ok`). Focused memory guardrails passed `59/59` outside the sandbox after the expected sandbox-only denial under `.tools/python-packages`. Memory CLI passed `46/46`; full solution tests passed `221/221`; solution build passed with zero warnings/errors; PowerShell parsing and `git diff --check` passed.
+- `memory status` at the compact boundary: `HEAD=indexed_commit=f3289eb72d56cfc22529c78bf5f055fcf50e057d`, indexed tree `815cc50a196edc915e670ed6cd0e0c2a703f33ce`, `needs_refresh=false`, marker absent, `working_tree_dirty=true`. This is correct because no Slice A commit or refresh has occurred.
+
+Review findings that block the Slice A commit:
+
+- [ ] Add a RED with an existing ready manifest plus a failing/mismatched rebuild. Invalidate the old manifest before destructively replacing its store so failed rebuild cannot leave trusted stale evidence; atomic store+manifest publication remains a later Slice E improvement.
+- [ ] Add canonical status REDs for missing/wrong `tree_sha` and missing `indexed_at`; status must fail closed instead of returning `needs_refresh=false` from matching `commit_sha` alone.
+- [ ] Add pre-push REDs for refresh `schema_version`, `generator`, `mode`, step names, and step statuses as wrong JSON types; replace coercive comparisons with exact shared contract validation.
+- [ ] Add REDs for embedding identity JSON types, especially positive integer `embedding_dimensions`, and require exact string fields in eval/manifest.
+- [ ] Add a deterministic RED for a `HEAD` change between Git calls; resolve the tree from the already captured commit SHA, not from a second `HEAD` expression.
+- [ ] Align manual pre-push default eval minimum with CI/current quality gate (`11`, not `9`) through RED/GREEN coverage.
+- [ ] Add a physical-count happy-path test, then extract the roughly 500 newly added manifest tests from the oversized `lancedb_sidecar_tests.py` into a focused test module while keeping the single offline suite entry point.
+- [ ] Decide and test how manual pre-push proves current canonical SQLite metadata and detects post-eval store mutation. Do not claim that file/directory existence alone is physical validation; keep a heavy semantic rerun out of the gate unless explicitly designed.
+
+Deferred to the already planned operational/semantic slices rather than expanding Slice A:
+
+- Slice D: one shared bounded process runner, structured `memory-refresh-all` Git failure reports, descendant termination, CI bounded Git calls, and the existing C# Git `ReadToEnd`/timeout debt.
+- Slice E: atomic store+manifest replacement or a stronger store fingerprint, plus mutation-after-eval integrity beyond cardinality.
+- Minor test debt: the new CLI runner must kill a timed-out process tree; add it when the shared runner/test utility is introduced.
+
+Exact continuation after `/compact`:
+
+1. Start with the existing-manifest rebuild RED; verify it fails because the old manifest survives.
+2. Implement the smallest invalidation-before-destructive-rebuild fix and rerun focused manifest tests.
+3. Continue the remaining RED/GREEN items above in order, splitting files before either `memory-pre-push-contract.ps1` or the manifest test file grows further.
+4. Rerun offline semantic, focused .NET, full solution tests/build, parser/diff checks, and full review.
+5. Commit only after all Slice A blockers are GREEN. Only after commit run `scripts\memory-refresh-all.ps1`, memory status, and `scripts\memory-pre-push-check.ps1`; then push PR #19. Do not merge PR #19 yet.
+
+Compact boundary:
+
+- Branch remains `codex/memory-operations-polish-final`; PR #19 remains open and must not be merged.
+- No Slice A commit, push, or memory refresh has occurred. Generated memory still describes committed `HEAD`.
+- `scripts/memory-pre-push-contract.ps1` is near the 500-line guardrail; do not add another behavior block there. If more shared validation is required, extract a focused module first.
+
+## External Skills And Hooks Audit Todo
+
+- [x] Inspect the current repository state, active project skill, and existing hook guardrails.
+- [x] Inventory `C:\Users\MECHREVO\Downloads\skills-main\skills` and classify overlap, portability, and project value.
+- [x] Audit `C:\Users\MECHREVO\Downloads\skills-main\hooks` for safety, side effects, and Windows compatibility.
+- [x] Propose 2-3 integration approaches with a minimal recommended design.
+- [ ] Obtain user approval before copying, adapting, enabling, or installing anything.
+- [ ] Implement only the approved project-local subset without touching unrelated memory-work changes.
+- [ ] Verify imported skills and any hook harness with isolated tests; review the complete scoped diff.
+
+### External Skills And Hooks Audit Review / Results
+
+- Audit is complete. The worktree already contains an unrelated, uncommitted memory-operations slice; integration must use an isolated worktree/branch or wait for a clean boundary.
+- No external skill or hook has been copied, enabled, or installed yet.
+- Audited 36 external skills: 0 are safe/useful to copy unchanged, 2 contain reusable ideas, and 34 are out of scope, duplicated, incomplete, or platform/vendor-specific.
+- Candidate skill adaptations are a project-specific official-source research workflow and stronger deterministic checks in `scripts/verify-project-skills.ps1`; neither should be copied verbatim.
+- The hook archive contains one POSIX `PreToolUse` guard plus its patterns and tests. It is inert on this machine because `bash` and `jq` are unavailable, it fails open, and it does not cover Windows-destructive commands.
+- Official Codex documentation confirms project-local `.codex/hooks.json`, `PreToolUse`, `commandWindows`, hash-based trust review, and exit-code-2 blocking; it also warns that interception is incomplete and is not a security boundary.
+- Recommended design: adapt only the useful ideas into project-local, Windows-native artifacts; do not install globally, do not touch `.git/hooks`, and preserve the upstream MIT notice for derived command patterns.
+
+### External Skills And Hooks Compact Handoff
+
+- This is a safe `/compact` boundary: the external archive was audited, but no skill or hook from it was copied, enabled, installed, or trusted.
+- The recommended option is awaiting user approval: add a project-local official-source research skill, strengthen deterministic skill verification, and adapt the command guard as a Windows-native project-local Codex lifecycle hook.
+- Proposed implementation branch: `codex/external-skills-hooks`, created in an isolated worktree so the active uncommitted memory-operations slice is not mixed with this work.
+- Do not install globally, edit `.git/hooks`, enable memory automation, or use the source Bash/jq guard unchanged.
+- Next response needed from the user: approve or reject the recommended option and isolated branch.
+- Memory status at the boundary: `HEAD=indexed_commit=f3289eb72d56cfc22529c78bf5f055fcf50e057d`, `indexed_tree=815cc50a196edc915e670ed6cd0e0c2a703f33ce`, `needs_refresh=false`, marker absent, `working_tree_dirty=true`.
+- Do not run `memory-refresh-all` now: the working tree is mid-slice and the durable source changes are not committed.
+
+## Memory Architecture Remediation Audit Compact Handoff
+
+- [x] Re-audit the canonical SQLite core, PowerShell/CI gate, LanceDB sidecar, curated retain lifecycle, and end-to-end architecture with five independent read-only agents.
+- [x] Verify the local branch/worktree and live PR state without changing implementation files.
+- [ ] After `/compact`, clarify whether completion may be defined as a production-ready mandatory SQLite/.NET core with LanceDB and curated retain explicitly manual/experimental.
+- [ ] Present 2-3 remediation strategies and obtain approval before editing architecture or implementation.
+
+Verified conclusions:
+
+- Keep the source order: Git code/tests/config and reviewed docs are truth; SQLite/FTS5 is the rebuildable canonical local index. Replacing the whole stack would not remove lifecycle/provenance bugs.
+- The highest-risk core defect is non-atomic SQLite refresh: `MemoryStore.Refresh()` drops the existing schema before the load transaction. A failed refresh can destroy the last good index.
+- Freshness/status logic is duplicated across C#, Python, PowerShell, mutable JSON reports, and CI. This duplication is the main reason new coercion, TOCTOU, timeout, and report-consistency defects keep appearing.
+- `memory-refresh-all` still runs the legacy working-tree JSON indexer, mixing dirty working-tree provenance with commit-addressed SQLite provenance. Remove it from the mandatory path.
+- The pre-push gate mostly validates self-described reports instead of opening and validating the canonical store. The target design should have one typed `.NET` verification path; PowerShell and CI should be thin launchers.
+- LanceDB `11/11` is a smoke test, not evidence of semantic lift. Current acceptance confidence is lexical and hard-coded type bonuses favor the eval wording; current FTS already satisfies all eight positive eval cases. LanceDB should leave required pre-push/CI and remain a manual experiment until a frozen FTS-vs-semantic comparison covers Russian paraphrases, strict no-overlap, and no-answer cases.
+- Curated retain has no current agent/runtime consumer and introduces a second persistence/security lifecycle. Freeze non-dry-run retain and external/Codex retain until a concrete consumer and owner exist; if retained rows are absent, removal is preferable to more speculative hardening.
+- Do not continue the current Slice A checklist mechanically. Preserve the dirty work, then classify it into core changes to keep versus report/semantic validation made unnecessary by the simplified boundary.
+
+Recommended target, pending user approval:
+
+1. Mandatory: one `.NET` Memory CLI; captured Git commit/tree; temp SQLite build, integrity/FTS/provenance validation, atomic replace; read-only status/search/stale-check; lightweight CI and pre-push.
+2. Optional: LanceDB manual/scheduled experiment only, promoted after measured semantic lift and atomic store publication.
+3. Frozen: curated retain writes, external/Codex retain, new hooks, background refresh, Hindsight/Graphiti/Qdrant migration, and new report-contract layers.
+
+Current state and next action:
+
+- Branch `codex/memory-operations-polish-final`; PR #19 is open/ready, merge state `CLEAN`, remote head `f3289eb72d56cfc22529c78bf5f055fcf50e057d`, and all three remote jobs are green. Local worktree remains intentionally dirty with 13 modified and 7 untracked Slice A files.
+- No implementation file, commit, push, merge, refresh, or test run was performed during this audit. Only this handoff was appended.
+- Do not merge PR #19 and do not run `memory-refresh-all` before the architecture choice and preservation/splitting plan.
+- First response after `/compact`: ask one question only: approve or reject redefining completion as `SQLite/.NET mandatory core + LanceDB/curated retain manual experimental`.

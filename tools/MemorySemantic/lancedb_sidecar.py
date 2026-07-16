@@ -17,6 +17,15 @@ from pathlib import Path
 from typing import Any, Callable
 
 from lancedb_eval_report import EVAL_CASES, evaluate_cases, render_eval_markdown
+from memory_index_manifest import (
+    build_index_manifest,
+    index_manifest_path,
+    load_validated_index_manifest,
+    read_sqlite_canonical_identity,
+    validate_index_manifest_contract,
+    validate_index_manifest_table_count,
+    write_index_manifest,
+)
 
 
 SCHEMA_VERSION = 1
@@ -179,7 +188,10 @@ def preflight(args: argparse.Namespace) -> dict[str, Any]:
 
 def rebuild(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
     provider = provider_from_args(args)
-    records = load_sqlite_records(Path(args.project_root), Path(args.sqlite), provider)
+    sqlite_path = Path(args.sqlite)
+    canonical_identity = read_sqlite_canonical_identity(sqlite_path)
+    embedding_identity = provider.metadata()
+    records = load_sqlite_records(Path(args.project_root), sqlite_path, provider)
     store_path = ensure_generated_store_path(Path(args.project_root), Path(args.store))
     deleted_existing_store = store_path.exists()
     if deleted_existing_store:
@@ -188,6 +200,16 @@ def rebuild(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
     store_path.mkdir(parents=True, exist_ok=True)
     db = lancedb_module.connect(str(store_path))
     table = db.create_table(TABLE_NAME, data=records, mode="overwrite")
+    manifest = build_index_manifest(
+        canonical_identity,
+        embedding_identity,
+        indexed_count=len(records),
+        table_name=TABLE_NAME,
+    )
+    table_count = count_table(table)
+    validate_index_manifest_table_count(manifest, table_count)
+    manifest_path = index_manifest_path(store_path)
+    write_index_manifest(manifest_path, manifest)
 
     report = build_base_report(args)
     report.update(
@@ -196,9 +218,12 @@ def rebuild(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
             "import_executed": True,
             "deleted_existing_store": deleted_existing_store,
             "indexed_count": len(records),
-            "table_count": count_table(table),
+            "table_count": table_count,
             "source_statuses": list(CURRENT_STATUSES),
-            **provider.metadata(),
+            "index_manifest_path": to_repo_path(args.project_root, str(manifest_path)),
+            "index_manifest_status": manifest["status"],
+            **canonical_identity,
+            **embedding_identity,
             "records": summarize_records(records),
         }
     )
@@ -209,8 +234,10 @@ def search(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
     if not args.query.strip():
         raise ValueError("Search requires --query.")
 
-    table = open_table(args, lancedb_module)
     provider = provider_from_args(args)
+    manifest = load_current_index_manifest(args, provider.metadata())
+    table = open_table(args, lancedb_module)
+    validate_index_manifest_table_count(manifest, count_table(table))
     vector = provider.embed_one(args.query)
     rows = table.search(vector).limit(candidate_limit(args.limit)).to_list()
     reranked = rerank_rows(rows, args.query, args.limit)
@@ -223,6 +250,7 @@ def search(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
             "import_executed": False,
             "query": args.query,
             **provider.metadata(),
+            **index_manifest_report_fields(args, manifest),
             "table_embedding": read_table_embedding_metadata(reranked or rows),
             **retrieval,
         }
@@ -234,8 +262,10 @@ def explain(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
     if not args.query.strip():
         raise ValueError("Explain requires --query.")
 
-    table = open_table(args, lancedb_module)
     provider = provider_from_args(args)
+    manifest = load_current_index_manifest(args, provider.metadata())
+    table = open_table(args, lancedb_module)
+    validate_index_manifest_table_count(manifest, count_table(table))
     builder = table.search(provider.embed_one(args.query)).limit(candidate_limit(args.limit))
     plan = safe_call_text(builder, "explain_plan")
     analysis = safe_call_text(builder, "analyze_plan")
@@ -251,6 +281,7 @@ def explain(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
             "query": args.query,
             "diagnostic": "LanceDB explain_plan/analyze_plan",
             **provider.metadata(),
+            **index_manifest_report_fields(args, manifest),
             "table_embedding": read_table_embedding_metadata(reranked or rows),
             "explain_plan": plan,
             "analyze_plan": analysis,
@@ -262,7 +293,9 @@ def explain(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
 
 def eval_quality(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any]:
     provider = provider_from_args(args)
+    manifest = load_current_index_manifest(args, provider.metadata())
     table = open_table(args, lancedb_module)
+    validate_index_manifest_table_count(manifest, count_table(table))
 
     def search_case(case: dict[str, Any]) -> list[dict[str, Any]]:
         rows = table.search(provider.embed_one(case["query"])).limit(candidate_limit(args.limit)).to_list()
@@ -279,6 +312,7 @@ def eval_quality(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any
             "eval_json_report_path": to_repo_path(args.project_root, args.output),
             "eval_markdown_report_path": to_repo_path(args.project_root, str(resolve_eval_markdown_output(args))),
             **provider.metadata(),
+            **index_manifest_report_fields(args, manifest),
             **eval_report,
         }
     )
@@ -291,9 +325,13 @@ def eval_quality(args: argparse.Namespace, lancedb_module: Any) -> dict[str, Any
 
 def cleanup(args: argparse.Namespace) -> dict[str, Any]:
     store_path = ensure_generated_store_path(Path(args.project_root), Path(args.store))
+    manifest_path = index_manifest_path(store_path)
     deleted_existing_store = store_path.exists()
+    deleted_existing_manifest = manifest_path.exists()
     if deleted_existing_store:
         shutil.rmtree(store_path)
+    if deleted_existing_manifest:
+        manifest_path.unlink()
 
     report = build_base_report(args)
     report.update(
@@ -301,6 +339,8 @@ def cleanup(args: argparse.Namespace) -> dict[str, Any]:
             "command": "cleanup",
             "import_executed": False,
             "deleted_existing_store": deleted_existing_store,
+            "deleted_existing_manifest": deleted_existing_manifest,
+            "index_manifest_path": to_repo_path(args.project_root, str(manifest_path)),
         }
     )
     return report
@@ -313,6 +353,31 @@ def open_table(args: argparse.Namespace, lancedb_module: Any) -> Any:
 
     db = lancedb_module.connect(str(store_path))
     return db.open_table(TABLE_NAME)
+
+
+def load_current_index_manifest(args: argparse.Namespace, embedding_identity: dict[str, Any]) -> dict[str, Any]:
+    sqlite_path = Path(args.sqlite)
+    store_path = ensure_generated_store_path(Path(args.project_root), Path(args.store))
+    canonical_identity = read_sqlite_canonical_identity(sqlite_path)
+    return load_validated_index_manifest(
+        index_manifest_path(store_path),
+        store_path,
+        canonical_identity,
+        embedding_identity,
+        table_name=TABLE_NAME,
+    )
+
+
+def index_manifest_report_fields(args: argparse.Namespace, manifest: dict[str, Any]) -> dict[str, Any]:
+    store_path = ensure_generated_store_path(Path(args.project_root), Path(args.store))
+    return {
+        "index_manifest_path": to_repo_path(args.project_root, str(index_manifest_path(store_path))),
+        "index_manifest_status": manifest["status"],
+        "manifest_identity_match": True,
+        "commit_sha": manifest["commit_sha"],
+        "tree_sha": manifest["tree_sha"],
+        "indexed_at": manifest["indexed_at"],
+    }
 
 
 def ensure_generated_store_path(project_root: Path, store_path: Path) -> Path:

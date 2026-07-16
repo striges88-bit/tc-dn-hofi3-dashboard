@@ -82,6 +82,8 @@ public sealed class ManualMemoryGateTests
                 "refresh-all-safety-flags",
                 "refresh-all-steps-completed",
                 "lancedb-eval-json-exists",
+                "commit-addressed-freshness",
+                "semantic-index-manifest",
                 "lancedb-eval-passed",
                 "lancedb-eval-markdown-exists",
             },
@@ -442,7 +444,7 @@ public sealed class ManualMemoryGateTests
         Assert.True(staleCheck > sqliteRefresh && staleCheck < semanticJob);
         Assert.True(finalStatusAssert > staleCheck && finalStatusAssert < semanticJob);
         Assert.Contains("ConvertFrom-Json", workflow, StringComparison.Ordinal);
-        Assert.Contains("if ($status.needs_refresh)", workflow, StringComparison.Ordinal);
+        Assert.Contains("Test-JsonPropertyFalse -Object $status -Name 'needs_refresh'", workflow, StringComparison.Ordinal);
         Assert.Contains("SQLite memory still needs refresh", workflow, StringComparison.Ordinal);
         Assert.True(dependencyCache > semanticJob && dependencyCache < semanticEval);
         Assert.True(modelCache > semanticJob && modelCache < semanticEval);

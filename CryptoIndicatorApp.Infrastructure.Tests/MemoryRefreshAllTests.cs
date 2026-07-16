@@ -12,6 +12,8 @@ public sealed class MemoryRefreshAllTests
     {
         var scriptPath = Path.Combine(Root, "scripts", "memory-refresh-all.ps1");
         Assert.True(File.Exists(scriptPath), $"Missing script: {scriptPath}");
+        var expectedHead = RunGit("rev-parse", "--verify", "HEAD").Trim();
+        var expectedTree = RunGit("rev-parse", "HEAD^{tree}").Trim();
 
         var reportPath = Path.Combine(Root, "docs", "memory", "generated", "memory-refresh-all-report.json");
         var process = Process.Start(new ProcessStartInfo
@@ -59,6 +61,9 @@ public sealed class MemoryRefreshAllTests
         Assert.Equal("plan-only", root.GetProperty("mode").GetString());
         Assert.Equal("planned", root.GetProperty("status").GetString());
         Assert.Equal(".", root.GetProperty("project_root").GetString());
+        Assert.Equal("HEAD", root.GetProperty("requested_commit").GetString());
+        Assert.Equal(expectedHead, root.GetProperty("commit_sha").GetString());
+        Assert.Equal(expectedTree, root.GetProperty("tree_sha").GetString());
         Assert.False(root.GetProperty("cloud_enabled").GetBoolean());
         Assert.False(root.GetProperty("codex_auto_retain_enabled").GetBoolean());
         Assert.False(root.GetProperty("auto_commit_refresh_enabled").GetBoolean());
@@ -120,7 +125,7 @@ public sealed class MemoryRefreshAllTests
         Assert.Contains("run --no-restore --project", sqliteRefreshCommand, StringComparison.Ordinal);
         Assert.Contains("run --no-restore --project", sqliteStaleCheckCommand, StringComparison.Ordinal);
         Assert.Contains("refresh-from-commit", sqliteRefreshCommand, StringComparison.Ordinal);
-        Assert.Contains("--commit HEAD", sqliteRefreshCommand, StringComparison.Ordinal);
+        Assert.Contains($"--commit {expectedHead}", sqliteRefreshCommand, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -339,6 +344,33 @@ public sealed class MemoryRefreshAllTests
     {
         var path = Path.Combine(Root, relativePath.Replace('/', Path.DirectorySeparatorChar));
         return File.ReadAllText(path);
+    }
+
+    private static string RunGit(params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = File.Exists(@"C:\Program Files\Git\cmd\git.exe")
+                ? @"C:\Program Files\Git\cmd\git.exe"
+                : "git",
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = Root,
+        };
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(startInfo);
+        Assert.NotNull(process);
+        Assert.True(process!.WaitForExit(TimeSpan.FromSeconds(30)), "git command timed out.");
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        Assert.True(process.ExitCode == 0, $"git failed with {process.ExitCode}: {error}");
+        return output;
     }
 
     private static string FindRepositoryRoot()

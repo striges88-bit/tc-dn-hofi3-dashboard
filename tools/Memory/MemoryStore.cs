@@ -435,6 +435,11 @@ public sealed class MemoryStore : IDisposable
     public MemoryStatusResult Status(string projectRoot)
     {
         var head = GitCommitMemoryIndexer.ReadHead(projectRoot);
+        if (string.IsNullOrWhiteSpace(head))
+        {
+            throw new InvalidOperationException("Git HEAD is unavailable; memory freshness cannot be determined.");
+        }
+
         var indexedCommit = GetMetadata("commit_sha");
         var indexedTree = GetMetadata("tree_sha");
         var indexedAt = GetMetadata("indexed_at");
@@ -442,7 +447,7 @@ public sealed class MemoryStore : IDisposable
         var markerExists = File.Exists(markerPath);
         var needsRefresh = markerExists
             || string.IsNullOrWhiteSpace(indexedCommit)
-            || (!string.IsNullOrWhiteSpace(head) && !indexedCommit.Equals(head, StringComparison.OrdinalIgnoreCase));
+            || !indexedCommit.Equals(head, StringComparison.OrdinalIgnoreCase);
 
         return new MemoryStatusResult(
             head,
