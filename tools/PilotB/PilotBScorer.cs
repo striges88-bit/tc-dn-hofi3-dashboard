@@ -30,7 +30,7 @@ public sealed class PilotBScorer
             CalculateRelativeReduction(control.RoutineMessages, treatment.RoutineMessages),
             CalculateRelativeReduction(control.AffectedRuns, treatment.AffectedRuns));
         var criticalPairs = ClassifyCriticalPairs(records);
-        var mcnemar = CalculateMcNemar(records, criticalPairs, options.MinimumMcNemarDiscordantPairs);
+        var mcnemar = CalculateMcNemar(records, options.MinimumMcNemarDiscordantPairs);
         var facts = CreateEvaluationFacts(metrics, mcnemar, criticalPairs, options);
         var predicates = BuildPredicates(facts);
 
@@ -289,7 +289,7 @@ public sealed class PilotBScorer
             runs.Count(run => run.Adjudication.Completed),
             routineMessages,
             observableMessages,
-            runs.Count(run => run.Messages.Any(message => message.Kind == PilotBMessageKind.Routine)),
+            runs.Count(IsAffected),
             messageCount == 0 ? null : (decimal)observableMessages / messageCount,
             qualityFailures,
             runs.Count(run => run.Adjudication.Clarity == PilotBClarity.Minor),
@@ -299,6 +299,9 @@ public sealed class PilotBScorer
             runs.Count(run => run.Adjudication.MandatoryUpdateOmitted),
             runs.Any(run => run.Adjudication.CriticalFailure));
     }
+
+    private static bool IsAffected(PilotBRunRecord run)
+        => run.Messages.Any(message => message.Kind == PilotBMessageKind.Routine);
 
     private static EvaluationFacts CreateEvaluationFacts(
         PilotBScoreMetrics metrics,
@@ -366,23 +369,16 @@ public sealed class PilotBScorer
 
     private static PilotBMcNemarEvidence CalculateMcNemar(
         IReadOnlyList<PilotBRunRecord> records,
-        IReadOnlyList<PilotBCriticalPair> criticalPairs,
         int minimumDiscordantPairs)
     {
         var improvements = 0;
         var regressions = 0;
-        var criticalByPair = criticalPairs.ToDictionary(pair => pair.PairId, StringComparer.Ordinal);
         foreach (var pair in records.GroupBy(record => record.PairId, StringComparer.Ordinal))
         {
-            if (criticalByPair[pair.Key].Kind != PilotBCriticalPairKind.Neither)
-            {
-                continue;
-            }
-
             var control = pair.Single(record => record.Arm == PilotBArm.Control);
             var treatment = pair.Single(record => record.Arm == PilotBArm.Treatment);
-            var controlAffected = control.Messages.Any(message => message.Kind == PilotBMessageKind.Routine);
-            var treatmentAffected = treatment.Messages.Any(message => message.Kind == PilotBMessageKind.Routine);
+            var controlAffected = IsAffected(control);
+            var treatmentAffected = IsAffected(treatment);
             if (controlAffected && !treatmentAffected)
             {
                 improvements++;

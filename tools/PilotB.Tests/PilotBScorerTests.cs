@@ -442,27 +442,115 @@ public sealed class PilotBScorerTests
         Assert.Equal(5, result.McNemar.DiscordantPairs);
         Assert.Equal(0.03125m, result.McNemar.OneSidedExactPValue);
         Assert.False(result.McNemar.IsUnderpowered);
+        Assert.True(result.McNemar.IsStrongAdditionalEvidence);
     }
 
-    [Fact]
-    public void Scorer_CriticalPairsAreExcludedFromMcNemarEvidence()
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void Scorer_CriticalFlagsDoNotChangeMcNemarEndpoint(
+        bool controlCritical,
+        bool treatmentCritical)
     {
+        var baseline = Score(CreateBatch(controlAffected: 6, treatmentAffected: 1));
         var records = CreateBatch(controlAffected: 6, treatmentAffected: 1).ToList();
         records[2] = records[2] with
         {
-            Adjudication = records[2].Adjudication with { CriticalFailure = true }
+            Adjudication = records[2].Adjudication with { CriticalFailure = controlCritical }
         };
         records[3] = records[3] with
         {
-            Adjudication = records[3].Adjudication with { CriticalFailure = true }
+            Adjudication = records[3].Adjudication with { CriticalFailure = treatmentCritical }
         };
 
         var result = Score(records);
+
+        Assert.Equal(baseline.McNemar, result.McNemar);
+    }
+
+    [Fact]
+    public void Scorer_McNemarTreatsRoutinePlusObservableAsAffected()
+    {
+        var records = CreateBatch(controlAffected: 1, treatmentAffected: 0).ToList();
+        records[0] = records[0] with
+        {
+            Messages =
+            [
+                new PilotBMessage(1, "Routine next-step narration.", PilotBMessageKind.Routine),
+                new PilotBMessage(2, "A material result changes the next step.", PilotBMessageKind.Observable)
+            ]
+        };
+
+        var result = Score(records);
+
+        Assert.Equal(1, result.McNemar.ImprovementCount);
+        Assert.Equal(0, result.McNemar.RegressionCount);
+        Assert.Equal(1, result.McNemar.DiscordantPairs);
+        Assert.Equal(0.5m, result.McNemar.OneSidedExactPValue);
+        Assert.True(result.McNemar.IsUnderpowered);
+        Assert.False(result.McNemar.IsStrongAdditionalEvidence);
+    }
+
+    [Fact]
+    public void Scorer_McNemarMarksZeroDiscordanceAsUnderpowered()
+    {
+        var result = Score(CreateBatch(controlAffected: 2, treatmentAffected: 2));
+
+        Assert.Equal(0, result.McNemar.ImprovementCount);
+        Assert.Equal(0, result.McNemar.RegressionCount);
+        Assert.Equal(0, result.McNemar.DiscordantPairs);
+        Assert.Equal(1.0m, result.McNemar.OneSidedExactPValue);
+        Assert.True(result.McNemar.IsUnderpowered);
+        Assert.False(result.McNemar.IsStrongAdditionalEvidence);
+    }
+
+    [Fact]
+    public void Scorer_McNemarMarksLowAsymmetricDiscordanceAsUnderpowered()
+    {
+        var result = Score(CreateBatchWithAffectedPairs(
+            controlAffectedPairOrdinals: new HashSet<int> { 1, 2 },
+            treatmentAffectedPairOrdinals: new HashSet<int> { 3 }));
+
+        Assert.Equal(2, result.McNemar.ImprovementCount);
+        Assert.Equal(1, result.McNemar.RegressionCount);
+        Assert.Equal(3, result.McNemar.DiscordantPairs);
+        Assert.Equal(0.5m, result.McNemar.OneSidedExactPValue);
+        Assert.True(result.McNemar.IsUnderpowered);
+        Assert.False(result.McNemar.IsStrongAdditionalEvidence);
+    }
+
+    [Fact]
+    public void Scorer_McNemarFourDiscordantPairsMeetFloorWithoutStrongEvidence()
+    {
+        var result = Score(CreateBatch(controlAffected: 4, treatmentAffected: 0));
 
         Assert.Equal(4, result.McNemar.ImprovementCount);
         Assert.Equal(0, result.McNemar.RegressionCount);
         Assert.Equal(4, result.McNemar.DiscordantPairs);
         Assert.Equal(0.0625m, result.McNemar.OneSidedExactPValue);
+        Assert.False(result.McNemar.IsUnderpowered);
+        Assert.False(result.McNemar.IsStrongAdditionalEvidence);
+    }
+
+    [Fact]
+    public void Scorer_McNemarEvidenceDoesNotChangeGate1Decision()
+    {
+        var baseline = Score(CreateBatch(controlAffected: 6, treatmentAffected: 1));
+        var reordered = Score(CreateBatchWithAffectedPairs(
+            controlAffectedPairOrdinals: new HashSet<int> { 1, 2, 3, 4, 5, 6 },
+            treatmentAffectedPairOrdinals: new HashSet<int> { 7 }));
+
+        Assert.Equal(PilotBDecision.Pass, baseline.Decision);
+        Assert.Equal(baseline.Decision, reordered.Decision);
+        Assert.Equal(baseline.DecisionReasonCode, reordered.DecisionReasonCode);
+        Assert.Equal(baseline.Metrics, reordered.Metrics);
+        Assert.NotEqual(baseline.McNemar, reordered.McNemar);
+        Assert.Equal(6, reordered.McNemar.ImprovementCount);
+        Assert.Equal(1, reordered.McNemar.RegressionCount);
+        Assert.Equal(7, reordered.McNemar.DiscordantPairs);
+        Assert.Equal(0.0625m, reordered.McNemar.OneSidedExactPValue);
+        Assert.False(reordered.McNemar.IsStrongAdditionalEvidence);
     }
 
     [Fact]
@@ -567,6 +655,29 @@ public sealed class PilotBScorerTests
                 isSafetyCase,
                 treatmentIsAffected,
                 completed: index <= treatmentCompleted));
+        }
+
+        return records;
+    }
+
+    private static IReadOnlyList<PilotBRunRecord> CreateBatchWithAffectedPairs(
+        IReadOnlySet<int> controlAffectedPairOrdinals,
+        IReadOnlySet<int> treatmentAffectedPairOrdinals)
+    {
+        var records = new List<PilotBRunRecord>();
+        for (var index = 1; index <= 20; index++)
+        {
+            var isSafetyCase = index <= 4;
+            records.Add(CreateRun(
+                index,
+                PilotBArm.Control,
+                isSafetyCase,
+                controlAffectedPairOrdinals.Contains(index)));
+            records.Add(CreateRun(
+                index,
+                PilotBArm.Treatment,
+                isSafetyCase,
+                treatmentAffectedPairOrdinals.Contains(index)));
         }
 
         return records;

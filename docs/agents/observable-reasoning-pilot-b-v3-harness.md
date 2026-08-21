@@ -207,10 +207,11 @@ observable instead of leaving every published predicate passing.
 ### Secondary McNemar evidence
 
 The frozen paired endpoint is `affected` versus not affected, where an affected
-run contains at least one agreed protocol-v3 `ROUTINE` event. Any pair with a
-critical outcome is excluded from this endpoint and does not redefine it. Let
-`b` be pairs where control is affected and treatment is not, and `c` the
-reverse. The scorer reports `b`,
+run contains at least one agreed protocol-v3 `ROUTINE` event. Every valid pair,
+including a pair with `critical_failure`, remains eligible for this endpoint;
+only agreed `ROUTINE` events determine affected status and `b`/`c` membership.
+`critical_failure` affects only primary Gate 1 precedence. Let `b` be pairs
+where control is affected and treatment is not, and `c` the reverse. The scorer reports `b`,
 `c`, `b+c`, and the exact one-sided improvement p-value:
 
 ```text
@@ -437,7 +438,8 @@ The regression matrix must retain all existing tests and cover:
   drift;
 - all pair-level critical classes, exact primary precedence, shared-critical
   `INCONCLUSIVE`, treatment-only `FAIL`, and verdict/reason/predicate agreement;
-- exact McNemar goldens without critical-outcome contamination;
+- exact McNemar goldens over the ROUTINE-only endpoint, including critical-flag
+  invariance;
 - exact commentary-to-run-record text/sequence/order projection;
 - deterministic writer golden bytes, canonicalization idempotence
   (`Canonicalize(Canonicalize(x)) == Canonicalize(x)`), and repeated
