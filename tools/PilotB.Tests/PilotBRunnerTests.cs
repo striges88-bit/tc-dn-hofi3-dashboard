@@ -134,10 +134,13 @@ public sealed class PilotBRunnerTests
         public static TestFixture Create()
         {
             var root = Directory.CreateTempSubdirectory("pilot-b-runner-test-").FullName;
+            var configuration = Directory.GetParent(
+                    Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory))?.Name
+                ?? throw new InvalidOperationException("Cannot determine the test output configuration.");
             var fakePath = Path.GetFullPath(Path.Combine(
                 AppContext.BaseDirectory,
                 "..", "..", "..", "..",
-                "PilotB.FakeCli", "bin", "Debug", "net8.0",
+                "PilotB.FakeCli", "bin", configuration, "net8.0",
                 "CryptoIndicatorApp.PilotB.FakeCli.exe"));
             Assert.True(File.Exists(fakePath), $"Fake CLI was not built: {fakePath}");
             return new TestFixture(root, fakePath);
