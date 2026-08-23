@@ -1600,3 +1600,16 @@ Foundation extraction receipt: base `72cd6ba794f5caf51dab72958e02d9126bdd6fe4`; 
 Checkpoint 1 result: the critical-exclusion red test failed as expected (`b=5` baseline versus `b=4` with unchanged ROUTINE events), then passed after the minimal scorer change. Focused Pilot B tests: 60/60 passed after the coverage and documentation checkpoints. No commit, push, PR, closure, real CLI/auth, or Pilot B run was performed.
 
 Final verification result: the sandbox full suite reproduced only the known five ACL failures in existing Memory tests while Pilot B passed; the approved outside-sandbox rerun passed all 281 tests (19+10+3+22+60+121+46). Final solution build: 0 warnings, 0 errors. `git diff --check` passed and no-index whitespace checks emitted no diagnostics for the scoped untracked scorer/test/harness files. Two-axis scoped review found and resolved one duplicated endpoint predicate; the final spec review found no missing #47 requirement. No commit, push, PR, closure, real CLI/auth, or Pilot B run was performed.
+
+## Pilot B v3 Issue #43 — fake CLI to sealed valid evidence (active)
+
+- [x] Confirm live preconditions: PR #51 is merged to `main@56c2cdf`, #42 is `COMPLETED`, #43 is open, and #46 remains explicitly deferred.
+- [x] Create clean `codex/pilot-b-runner-sealed-evidence` worktree from post-merge `main`; restore once and capture focused runner baseline (8/8).
+- [x] Add red black-box `PilotBRunner.RunAsync` tests for atomic lock/payload inventory/seal-verifier/typed semantic fingerprint behavior.
+- [x] Implement only the minimum #43 fake-CLI runner path; preserve protocol v3, run-record v3, parser/projection, scorer, WPF, real CLI/auth, and all #46 hardening boundaries.
+- [x] Update the focused harness contract with actual #43 behavior, then run focused/full Release validation, build, whitespace check, and adversarial scope review.
+- [x] Stop with local evidence only; do not commit, push, open/update a PR, or mutate GitHub without separate authorization.
+
+Implementation evidence: red guards covered missing sealed-state behavior, v3 file-manifest wire-shape preservation, and integrity-fact verification before the minimal runner path went green. Focused `PilotBRunnerTests`: 19/19. Final Release solution tests: 212/212; Release build: 0 warnings, 0 errors. Tracked and untracked scoped whitespace checks passed. Local adversarial scope audit confirmed only #43 runner/fake CLI/tests/docs/todo files changed; #46 hardening and protocol/run-record/parser/projection/scorer/WPF/real CLI-auth boundaries remain untouched. Two independent review agents produced no result before their bounded timeout and were stopped without edits. No commit, push, PR, GitHub issue mutation, real CLI, login/authentication, or Pilot B experiment was performed.
+
+Pre-commit review follow-up: fake CLI prompt dispatch is now byte-exact, timeout is an explicit required input, and sealed metadata records timeout/elapsed ticks so the independent verifier recomputes `timing_valid` instead of trusting the publisher flag. Focused `PilotBRunnerTests`: 20/20; final Release solution tests: 213/213; staged whitespace check passed. Size/ownership refactoring remains deferred to #46.

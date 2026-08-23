@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using System.Text;
-using System.Text.Json;
 
 namespace CryptoIndicatorApp.PilotB;
 
@@ -14,18 +12,37 @@ public sealed class PilotBRunner
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
-        var preflight = await PreflightAsync(options, cancellationToken);
+        var promptBytes = options.PromptBytes?.ToArray() ?? [];
+        var preflight = await PreflightAsync(options, promptBytes, cancellationToken);
         if (preflight.Result is not null)
         {
             return preflight.Result;
         }
 
         var manifest = preflight.Manifest!;
+        var manifestBytes = preflight.ManifestBytes!;
         var fixtureRoot = preflight.FixtureRoot!;
         var artifactRoot = preflight.ArtifactRoot!;
         var executablePath = preflight.ExecutablePath!;
-        var artifactPaths = CreateArtifactPaths(artifactRoot);
-        var invalidReasons = new List<string>();
+        var artifactPaths = PilotBEvidenceBundle.CreatePaths(artifactRoot);
+        FileStream? ownershipLock = null;
+        try
+        {
+            Directory.CreateDirectory(artifactRoot);
+            ownershipLock = new FileStream(
+                artifactPaths.LockPath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 1,
+                FileOptions.None);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return InvalidResult(options, ["artifact-ownership-failed"]);
+        }
+
+        var captureReasons = new List<string>();
         var startedAt = options.UtcNowProvider();
         var stopwatch = Stopwatch.StartNew();
         var timedOut = false;
@@ -35,251 +52,300 @@ public sealed class PilotBRunner
         PilotBFileManifest? preManifest = null;
         PilotBFileManifest? postManifest = null;
         var processStarted = false;
+        var sealPublished = false;
+        var lockReleased = false;
+        PilotBRunQualificationResult? qualification = null;
+        PilotBRunnerIntegrityFacts? integrity = null;
 
         try
         {
-            Directory.CreateDirectory(artifactRoot);
-            preManifest = PilotBFileManifest.Capture(fixtureRoot);
-            await File.WriteAllBytesAsync(artifactPaths.PromptPath, options.PromptBytes, cancellationToken);
-            await File.WriteAllTextAsync(artifactPaths.ManifestPath, manifest.ToSanitizedJson(), Encoding.UTF8, cancellationToken);
-            await File.WriteAllTextAsync(artifactPaths.PreManifestPath, preManifest.ToJson(), Encoding.UTF8, cancellationToken);
+            try
+            {
+                preManifest = PilotBFileManifest.Capture(fixtureRoot);
+                await PilotBEvidenceBundle.WriteNewBytesAsync(artifactPaths.PromptPath, promptBytes, cancellationToken);
+                await PilotBEvidenceBundle.WriteNewBytesAsync(artifactPaths.ManifestPath, manifestBytes, cancellationToken);
+                await PilotBEvidenceBundle.WriteNewBytesAsync(
+                    artifactPaths.PreManifestPath,
+                    System.Text.Encoding.UTF8.GetBytes(preManifest.ToJson()),
+                    cancellationToken);
 
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
+                using var process = new Process
                 {
-                    FileName = executablePath,
-                    WorkingDirectory = fixtureRoot,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardInput = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true
-                }
-            };
-            foreach (var argument in ExactInvocation)
-            {
-                process.StartInfo.ArgumentList.Add(argument);
-            }
-
-            if (!process.Start())
-            {
-                invalidReasons.Add("process-start-failed");
-            }
-            else
-            {
-                processStarted = true;
-                var outputBuffer = new MemoryStream();
-                var errorBuffer = new MemoryStream();
-                var outputTask = process.StandardOutput.BaseStream.CopyToAsync(outputBuffer, cancellationToken);
-                var errorTask = process.StandardError.BaseStream.CopyToAsync(errorBuffer, cancellationToken);
-
-                try
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = executablePath,
+                        WorkingDirectory = fixtureRoot,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardInput = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true
+                    }
+                };
+                foreach (var argument in ExactInvocation)
                 {
-                    await process.StandardInput.BaseStream.WriteAsync(options.PromptBytes, cancellationToken);
-                    process.StandardInput.Close();
-                }
-                catch (Exception) when (!cancellationToken.IsCancellationRequested)
-                {
-                    invalidReasons.Add("stdin-write-failed");
+                    process.StartInfo.ArgumentList.Add(argument);
                 }
 
-                var waitTask = process.WaitForExitAsync(cancellationToken);
-                var timeoutTask = Task.Delay(options.Timeout, cancellationToken);
-                if (await Task.WhenAny(waitTask, timeoutTask) != waitTask)
+                if (!process.Start())
                 {
-                    timedOut = true;
-                    invalidReasons.Add("timeout");
+                    AddReason(captureReasons, "process-start-failed");
+                }
+                else
+                {
+                    processStarted = true;
+                    var outputBuffer = new MemoryStream();
+                    var errorBuffer = new MemoryStream();
+                    var outputTask = process.StandardOutput.BaseStream.CopyToAsync(outputBuffer, cancellationToken);
+                    var errorTask = process.StandardError.BaseStream.CopyToAsync(errorBuffer, cancellationToken);
+
                     try
                     {
-                        process.Kill(entireProcessTree: true);
+                        await process.StandardInput.BaseStream.WriteAsync(promptBytes, cancellationToken);
+                        process.StandardInput.Close();
+                    }
+                    catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        AddReason(captureReasons, "stdin-write-failed");
+                    }
+
+                    var waitTask = process.WaitForExitAsync(cancellationToken);
+                    var timeoutTask = Task.Delay(options.Timeout, cancellationToken);
+                    if (await Task.WhenAny(waitTask, timeoutTask) != waitTask)
+                    {
+                        timedOut = true;
+                        try
+                        {
+                            process.Kill(entireProcessTree: true);
+                        }
+                        catch (InvalidOperationException)
+                        {
+                        }
+                    }
+
+                    try
+                    {
+                        await waitTask;
                     }
                     catch (InvalidOperationException)
                     {
                     }
+
+                    try
+                    {
+                        await Task.WhenAll(outputTask, errorTask);
+                    }
+                    catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        AddReason(captureReasons, "output-capture-failed");
+                    }
+
+                    stdoutBytes = outputBuffer.ToArray();
+                    stderrBytes = errorBuffer.ToArray();
+                    if (!timedOut)
+                    {
+                        exitCode = process.ExitCode;
+                    }
                 }
 
-                try
-                {
-                    await waitTask;
-                }
-                catch (InvalidOperationException)
-                {
-                }
-
-                try
-                {
-                    await Task.WhenAll(outputTask, errorTask);
-                }
-                catch (Exception) when (!cancellationToken.IsCancellationRequested)
-                {
-                    invalidReasons.Add("output-capture-failed");
-                }
-
-                stdoutBytes = outputBuffer.ToArray();
-                stderrBytes = errorBuffer.ToArray();
-                if (!timedOut)
-                {
-                    exitCode = process.ExitCode;
-                }
+                postManifest = PilotBFileManifest.Capture(fixtureRoot);
+                await PilotBEvidenceBundle.WriteNewBytesAsync(
+                    artifactPaths.PostManifestPath,
+                    System.Text.Encoding.UTF8.GetBytes(postManifest.ToJson()),
+                    cancellationToken);
+                await PilotBEvidenceBundle.WriteNewBytesAsync(artifactPaths.RawOutputPath, stdoutBytes, cancellationToken);
+                await PilotBEvidenceBundle.WriteNewBytesAsync(artifactPaths.StderrPath, stderrBytes, cancellationToken);
             }
-
-            postManifest = PilotBFileManifest.Capture(fixtureRoot);
-            await File.WriteAllTextAsync(artifactPaths.PostManifestPath, postManifest.ToJson(), Encoding.UTF8, cancellationToken);
-            await File.WriteAllBytesAsync(artifactPaths.RawOutputPath, stdoutBytes, cancellationToken);
-            await File.WriteAllBytesAsync(artifactPaths.StderrPath, stderrBytes, cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
-            invalidReasons.Add("artifact-or-boundary-capture-failed");
-        }
-
-        var transcript = PilotBTranscriptParser.Parse(stdoutBytes);
-        if (processStarted && exitCode is not 0)
-        {
-            invalidReasons.Add("nonzero-exit");
-        }
-
-        if (!transcript.IsValid)
-        {
-            foreach (var reason in transcript.InvalidReasons)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                invalidReasons.Add(reason == "missing-turn-completed" ? "partial-run" : reason);
+                throw;
+            }
+            catch (Exception)
+            {
+                AddReason(captureReasons, "artifact-or-boundary-capture-failed");
+            }
+
+            var transcript = PilotBTranscriptParser.Parse(stdoutBytes);
+            var completedAt = options.UtcNowProvider();
+            var elapsedTicks = stopwatch.Elapsed.Ticks;
+            var timingValid = !timedOut && elapsedTicks <= options.Timeout.Ticks;
+            var executableSha = SafeComputeFileHash(executablePath, captureReasons, "executable-read-failed");
+            var executableHashValid = string.Equals(executableSha, preflight.ExecutableSha256, StringComparison.OrdinalIgnoreCase);
+            var promptSha = SafeComputeFileHash(artifactPaths.PromptPath, captureReasons, "prompt-read-failed");
+            var promptBytesVerified = string.Equals(promptSha, PilotBSha256.Compute(promptBytes), StringComparison.OrdinalIgnoreCase);
+            var repositoryBoundaryValid = preflight.RepositoryBoundaryValid
+                && PilotBGitBoundary.IsExactRepositoryRoot(fixtureRoot)
+                && string.Equals(Path.GetFullPath(manifest.RepositoryRoot), fixtureRoot, StringComparison.OrdinalIgnoreCase)
+                && !PilotBFileManifest.IsWithin(fixtureRoot, artifactRoot)
+                && !PilotBFileManifest.IsWithin(fixtureRoot, executablePath);
+            var workspaceIntegrityCaptured = preManifest is not null && postManifest is not null;
+            var payloadCaptured = PilotBEvidenceBundle.PayloadArtifactsExist(artifactPaths, includeMetadata: false);
+            qualification = PilotBRunQualification.Evaluate(new PilotBRunQualificationFacts(
+                processStarted,
+                exitCode,
+                timedOut,
+                transcript,
+                timingValid,
+                executableHashValid,
+                repositoryBoundaryValid,
+                promptBytesVerified,
+                workspaceIntegrityCaptured,
+                payloadCaptured,
+                captureReasons));
+            integrity = new PilotBRunnerIntegrityFacts(
+                executableSha,
+                preflight.ArmManifestSha256 ?? string.Empty,
+                promptSha,
+                preManifest?.Sha256 ?? string.Empty,
+                postManifest?.Sha256 ?? string.Empty,
+                repositoryBoundaryValid,
+                ArtifactComplete: false,
+                timingValid,
+                AuthLaneExcluded: true,
+                WorkspaceIntegrityCaptured: workspaceIntegrityCaptured);
+
+            if (payloadCaptured
+                && preManifest is not null
+                && postManifest is not null
+                && PilotBSha256.IsSha256(executableSha)
+                && PilotBSha256.IsSha256(promptSha))
+            {
+                try
+                {
+                    var preFixtureSemanticSha = PilotBRunFingerprintWriter.ComputeFixtureSemanticSha256(preManifest);
+                    var postFixtureSemanticSha = PilotBRunFingerprintWriter.ComputeFixtureSemanticSha256(postManifest);
+                    var fingerprint = PilotBRunFingerprintWriter.Compute(new PilotBRunFingerprintInput(
+                        executableSha,
+                        promptSha,
+                        manifest,
+                        transcript,
+                        preFixtureSemanticSha,
+                        postFixtureSemanticSha,
+                        options.IsQualification,
+                        qualification,
+                        exitCode,
+                        timedOut));
+                    var metadata = new PilotBEvidenceMetadata(
+                        executablePath,
+                        options.ExpectedExecutableSha256,
+                        options.ExpectedArmManifestSha256,
+                        fixtureRoot,
+                        artifactRoot,
+                        startedAt,
+                        completedAt,
+                        ExactInvocation,
+                        manifest.ArmId,
+                        manifest.CliVersion,
+                        manifest.ModelAlias,
+                        manifest.ReasoningEffort,
+                        manifest.Sandbox,
+                        manifest.ApprovalPolicy,
+                        processStarted,
+                        exitCode,
+                        timedOut,
+                        options.Timeout.Ticks,
+                        elapsedTicks,
+                        timingValid,
+                        repositoryBoundaryValid,
+                        promptBytesVerified,
+                        executableHashValid,
+                        workspaceIntegrityCaptured,
+                        payloadCaptured,
+                        options.IsQualification,
+                        executableSha,
+                        preflight.ArmManifestSha256!,
+                        promptSha,
+                        preManifest.Sha256,
+                        postManifest.Sha256,
+                        preFixtureSemanticSha,
+                        postFixtureSemanticSha,
+                        captureReasons,
+                        qualification);
+                    await PilotBEvidenceBundle.WriteNewBytesAsync(
+                        artifactPaths.MetadataPath,
+                        PilotBEvidenceBundle.CreateMetadataBytes(metadata),
+                        cancellationToken);
+                    await PilotBEvidenceBundle.PublishSealAsync(artifactPaths, metadata, fingerprint, cancellationToken);
+                    sealPublished = true;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception)
+                {
+                    AddReason(captureReasons, "seal-publication-failed");
+                }
+            }
+        }
+        finally
+        {
+            ownershipLock.Dispose();
+            try
+            {
+                File.Delete(artifactPaths.LockPath);
+                lockReleased = !File.Exists(artifactPaths.LockPath);
+            }
+            catch
+            {
+                AddReason(captureReasons, "ownership-release-failed");
             }
         }
 
-        if (transcript.HasTurnFailed)
+        var finalTranscript = PilotBTranscriptParser.Parse(stdoutBytes);
+        var finalIntegrity = integrity ?? new PilotBRunnerIntegrityFacts("", "", "", "", "", false, false, false, true, false);
+        if (!sealPublished || !lockReleased)
         {
-            invalidReasons.Add("failed-event");
+            return UnsealedResult(
+                options,
+                exitCode,
+                timedOut,
+                finalTranscript,
+                artifactPaths,
+                finalIntegrity,
+                qualification,
+                captureReasons);
         }
 
-        var endAt = options.UtcNowProvider();
-        var timingValid = !timedOut && stopwatch.Elapsed <= options.Timeout;
-        if (!timingValid)
+        var verification = new PilotBEvidenceBundleVerifier().Verify(artifactPaths);
+        if (verification.EvidenceState != PilotBEvidenceState.Sealed || verification.Qualification is null)
         {
-            invalidReasons.Add("timing-violation");
+            return UnsealedResult(
+                options,
+                exitCode,
+                timedOut,
+                finalTranscript,
+                artifactPaths,
+                finalIntegrity,
+                qualification,
+                captureReasons.Concat(verification.InvalidReasons));
         }
 
-        var executableSha = SafeComputeFileHash(executablePath, invalidReasons, "executable-read-failed");
-        if (!string.Equals(executableSha, preflight.ExecutableSha256, StringComparison.OrdinalIgnoreCase))
-        {
-            invalidReasons.Add("executable-drift");
-        }
-
-        var preSha = preManifest?.Sha256 ?? string.Empty;
-        var postSha = postManifest?.Sha256 ?? string.Empty;
-        var promptSha = PilotBSha256.Compute(options.PromptBytes);
-        var artifactComplete = RequiredEvidenceArtifactsExist(artifactPaths);
-        if (!artifactComplete)
-        {
-            invalidReasons.Add("missing-artifact");
-        }
-
-        var distinctReasons = invalidReasons.Distinct(StringComparer.Ordinal).ToArray();
-        var status = distinctReasons.Length == 0
-            ? PilotBRunnerStatus.Valid
-            : PilotBRunnerStatus.Invalid;
-        var integrity = new PilotBRunnerIntegrityFacts(
-            executableSha,
-            preflight.ArmManifestSha256 ?? string.Empty,
-            promptSha,
-            preSha,
-            postSha,
-            preflight.RepositoryBoundaryValid,
-            artifactComplete,
-            timingValid,
-            AuthLaneExcluded: true,
-            WorkspaceIntegrityCaptured: preManifest is not null && postManifest is not null);
-
-        var fingerprint = PilotBSha256.Compute(string.Join(
-            "\n",
-            status.ToString(),
-            string.Join("|", ExactInvocation),
-            promptSha,
-            preflight.ArmManifestSha256,
-            preSha,
-            postSha,
-            PilotBSha256.Compute(stdoutBytes),
-            string.Join("|", distinctReasons)));
-
-        try
-        {
-            await File.WriteAllTextAsync(
-                artifactPaths.IntegrityPath,
-                JsonSerializer.Serialize(new
-                {
-                    schema_version = "pilot-b.integrity.v3",
-                    executable_sha256 = integrity.ExecutableSha256,
-                    arm_manifest_sha256 = integrity.ArmManifestSha256,
-                    prompt_sha256 = integrity.PromptSha256,
-                    pre_manifest_sha256 = integrity.PreManifestSha256,
-                    post_manifest_sha256 = integrity.PostManifestSha256,
-                    repository_boundary_valid = integrity.RepositoryBoundaryValid,
-                    artifact_complete = integrity.ArtifactComplete,
-                    timing_valid = integrity.TimingValid,
-                    auth_lane_excluded = integrity.AuthLaneExcluded,
-                    workspace_integrity_captured = integrity.WorkspaceIntegrityCaptured,
-                    status = status.ToString().ToLowerInvariant(),
-                    invalid_reasons = distinctReasons
-                }),
-                Encoding.UTF8,
-                cancellationToken);
-            await File.WriteAllTextAsync(
-                artifactPaths.MetadataPath,
-                JsonSerializer.Serialize(new
-                {
-                    schema_version = "pilot-b.runner-metadata.v3",
-                    arm_id = manifest.ArmId,
-                    cli_version = manifest.CliVersion,
-                    model_alias = manifest.ModelAlias,
-                    reasoning_effort = manifest.ReasoningEffort,
-                    sandbox = manifest.Sandbox,
-                    approval_policy = manifest.ApprovalPolicy,
-                    started_at_utc = startedAt.ToUniversalTime().ToString("O"),
-                    completed_at_utc = endAt.ToUniversalTime().ToString("O"),
-                    exit_code = exitCode,
-                    timed_out = timedOut,
-                    invocation = ExactInvocation,
-                    prompt_sha256 = promptSha,
-                    executable_sha256 = integrity.ExecutableSha256,
-                    qualification = options.IsQualification,
-                    scored = !options.IsQualification,
-                    status = status.ToString().ToLowerInvariant(),
-                    invalid_reasons = distinctReasons
-                }),
-                Encoding.UTF8,
-                cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception)
-        {
-            distinctReasons = distinctReasons.Append("metadata-write-failed").Distinct(StringComparer.Ordinal).ToArray();
-            status = PilotBRunnerStatus.Invalid;
-        }
-
+        var verifiedIntegrity = finalIntegrity with { ArtifactComplete = true };
         return new PilotBRunnerResult(
-            status,
+            verification.Qualification.Validity == PilotBRunValidity.Valid
+                ? PilotBRunnerStatus.Valid
+                : PilotBRunnerStatus.Invalid,
             options.IsQualification,
-            !options.IsQualification && status == PilotBRunnerStatus.Valid,
+            !options.IsQualification && verification.Qualification.Validity == PilotBRunValidity.Valid,
             exitCode,
             timedOut,
-            distinctReasons,
+            verification.Qualification.InvalidReasons,
             ExactInvocation,
-            transcript,
+            finalTranscript,
             artifactPaths,
-            integrity,
-            fingerprint);
+            verifiedIntegrity,
+            verification.SemanticFingerprint)
+        {
+            EvidenceState = PilotBEvidenceState.Sealed,
+            RunValidity = verification.Qualification.Validity,
+            Qualification = verification.Qualification
+        };
     }
 
     private static async Task<PreflightResult> PreflightAsync(
         PilotBRunnerOptions options,
+        byte[] promptBytes,
         CancellationToken cancellationToken)
     {
         var reasons = new List<string>();
@@ -298,7 +364,7 @@ public sealed class PilotBRunner
             reasons.Add("invalid-expected-manifest-sha256");
         }
 
-        if (options.PromptBytes is null || options.PromptBytes.Length == 0)
+        if (promptBytes.Length == 0)
         {
             reasons.Add("empty-prompt");
         }
@@ -342,7 +408,7 @@ public sealed class PilotBRunner
 
         if (reasons.Count > 0)
         {
-            return new PreflightResult(null, null, null, null, null, null, false, InvalidResult(options, reasons));
+            return new PreflightResult(null, null, null, null, null, null, null, false, InvalidResult(options, reasons));
         }
 
         try
@@ -386,11 +452,12 @@ public sealed class PilotBRunner
 
             if (reasons.Count > 0)
             {
-                return new PreflightResult(null, null, null, null, null, null, false, InvalidResult(options, reasons));
+                return new PreflightResult(null, null, null, null, null, null, null, false, InvalidResult(options, reasons));
             }
 
             return new PreflightResult(
                 manifest!,
+                manifestBytes,
                 fixtureRoot,
                 artifactRoot,
                 executablePath,
@@ -405,14 +472,48 @@ public sealed class PilotBRunner
         }
         catch (Exception)
         {
-            return new PreflightResult(null, null, null, null, null, null, false, InvalidResult(options, ["preflight-read-failed"]));
+            return new PreflightResult(null, null, null, null, null, null, null, false, InvalidResult(options, ["preflight-read-failed"]));
         }
+    }
+
+    private static PilotBRunnerResult UnsealedResult(
+        PilotBRunnerOptions options,
+        int? exitCode,
+        bool timedOut,
+        PilotBTranscriptParseResult transcript,
+        PilotBArtifactPaths artifacts,
+        PilotBRunnerIntegrityFacts integrity,
+        PilotBRunQualificationResult? qualification,
+        IEnumerable<string> additionalReasons)
+    {
+        var invalidReasons = (qualification?.InvalidReasons ?? [])
+            .Concat(additionalReasons)
+            .Append("evidence-unsealed")
+            .Where(reason => !string.IsNullOrWhiteSpace(reason))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return new PilotBRunnerResult(
+            PilotBRunnerStatus.Invalid,
+            options.IsQualification,
+            false,
+            exitCode,
+            timedOut,
+            invalidReasons,
+            ExactInvocation,
+            transcript,
+            artifacts,
+            integrity with { ArtifactComplete = false },
+            null)
+        {
+            EvidenceState = PilotBEvidenceState.Unsealed,
+            RunValidity = null,
+            Qualification = null
+        };
     }
 
     private static PilotBRunnerResult InvalidResult(PilotBRunnerOptions options, IEnumerable<string> reasons)
     {
         var invalidReasons = reasons.Distinct(StringComparer.Ordinal).ToArray();
-        var fingerprint = PilotBSha256.Compute(string.Join("|", "invalid", string.Join("|", invalidReasons)));
         return new PilotBRunnerResult(
             PilotBRunnerStatus.Invalid,
             options.IsQualification,
@@ -424,7 +525,12 @@ public sealed class PilotBRunner
             new PilotBTranscriptParseResult([], false, false, false, 0, ["not-executed"], []),
             PilotBArtifactPaths.Empty,
             new PilotBRunnerIntegrityFacts("", "", "", "", "", false, false, false, true, false),
-            fingerprint);
+            null)
+        {
+            EvidenceState = PilotBEvidenceState.Unsealed,
+            RunValidity = null,
+            Qualification = null
+        };
     }
 
     private static string? AbsolutePath(string value, string reason, ICollection<string> reasons)
@@ -438,18 +544,6 @@ public sealed class PilotBRunner
         return Path.GetFullPath(value);
     }
 
-    private static PilotBArtifactPaths CreateArtifactPaths(string root)
-        => new(
-            root,
-            Path.Combine(root, "output.jsonl"),
-            Path.Combine(root, "metadata.json"),
-            Path.Combine(root, "manifest.json"),
-            Path.Combine(root, "pre-manifest.json"),
-            Path.Combine(root, "post-manifest.json"),
-            Path.Combine(root, "integrity.json"),
-            Path.Combine(root, "prompt.bin"),
-            Path.Combine(root, "stderr.txt"));
-
     private static string SafeComputeFileHash(string path, ICollection<string> reasons, string failureReason)
     {
         try
@@ -458,27 +552,22 @@ public sealed class PilotBRunner
         }
         catch
         {
-            reasons.Add(failureReason);
+            AddReason(reasons, failureReason);
             return string.Empty;
         }
     }
 
-    private static bool RequiredEvidenceArtifactsExist(PilotBArtifactPaths paths)
+    private static void AddReason(ICollection<string> reasons, string reason)
     {
-        var files = new[]
+        if (!reasons.Contains(reason, StringComparer.Ordinal))
         {
-            paths.RawOutputPath,
-            paths.ManifestPath,
-            paths.PreManifestPath,
-            paths.PostManifestPath,
-            paths.PromptPath,
-            paths.StderrPath
-        };
-        return files.All(File.Exists);
+            reasons.Add(reason);
+        }
     }
 
     private sealed record PreflightResult(
         PilotBArmManifest? Manifest,
+        byte[]? ManifestBytes,
         string? FixtureRoot,
         string? ArtifactRoot,
         string? ExecutablePath,
