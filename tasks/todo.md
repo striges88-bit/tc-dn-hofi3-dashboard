@@ -1499,3 +1499,104 @@ Review / Results:
   `.\.dotnet\dotnet.exe test tools\Memory.Tests\CryptoIndicatorApp.Memory.Tests.csproj --no-restore --filter RetainImportUsesReviewedRedactedTextAndLifecycleDeletesIt`
   and
   `.\.dotnet\dotnet.exe test CryptoIndicatorApp.Infrastructure.Tests\CryptoIndicatorApp.Infrastructure.Tests.csproj --no-restore --filter RedactedSubsetScriptBuildsReviewedLocalReportOnly`.
+
+## Pilot B v3 engineering harness #30/#31 (2026-08-19) — in progress
+
+- [x] Read project instructions, issue tracker guidance, existing tools/tests, Pilot B v2 contract, and GitHub Issues #29/#30/#31.
+- [x] Record the pre-existing dirty branch/worktree; exclude it from all fixtures and preserve every unrelated path.
+- [x] Complete lifecycle preflight: #30/#31 are OPEN, `ready-for-agent`, and have no blockers; publish STARTED comments.
+- [x] Bound the slice to a versioned run-record/scorer library, one pinned-executable runner, and test-only fake CLI; defer protocol/corpus freeze, CLI install/auth, real Pilot B, Gate 2, Desktop canaries, rollout, commit, push, PR, and issue closure.
+- [x] Implement and verify run-record/JSONL parsing, Gate 1 precedence, McNemar evidence, and golden datasets.
+- [x] Implement and verify the runner, artifact/integrity contract, fake-CLI failure matrix, and deterministic rerun projection.
+- [x] Update the focused v3 harness document and complete full validation/diff review.
+
+Checkpoint 1 result: issue access restored through read-only `gh` fallback; no source or unrelated dirty file changed.
+Checkpoint 2 result: versioned run-record round-trip, strict transcript filtering, Gate 1 precedence, independent absolute/floor/instability/relative branches, and exact McNemar golden tests pass.
+Checkpoint 3 result: test-only fake CLI proves the pinned invocation; runner tests pass for hash/path drift, artifacts, boundary, malformed/partial/nonzero/timeout failures, qualification exclusion, and repeat fingerprint.
+Checkpoint 4 result: final full solution test, build, and `git diff --check` passed; issue verification comments published; no commit/push/PR/closure or real Pilot B action performed.
+
+## Pilot B architecture hardening design (2026-08-20) — decision session
+
+- [x] Keep the current hardening slice limited to Pilot B runner/scorer; defer `MemoryStore` separation to the next independent architecture slice.
+- [x] Define a sealed evidence bundle as payload evidence followed by final validation and an integrity seal published through temporary-file plus same-directory rename.
+- [x] Separate bundle sealing from run validity: both `SEALED + VALID` and `SEALED + INVALID` are allowed; only sealed runs may reach scoring.
+- [x] Bound durability to process-crash plus best-effort OS/power-interruption protection; do not claim strict hardware/filesystem durability.
+- [x] Require a fresh, single-writer artifact directory with no overwrite, resume, cleanup, or recovery responsibility in the runner.
+- [x] Define treatment-only critical regression pairwise: treatment critical and its matched control not critical.
+- [x] Define pair-level critical classification and aggregate precedence: absolute treatment failures, treatment-only regression, other FAIL conditions, then shared-critical `INCONCLUSIVE` when no stronger FAIL exists.
+- [x] Preserve unsealed artifact directories as diagnostic-only evidence; never clean, recover, reuse, or pass them to scoring.
+- [x] Define the integrity seal as an atomic commit marker binding the immutable artifact inventory to final run state and integrity facts.
+- [x] Define the Deterministic Run Fingerprint over protocol-relevant inputs, outputs, and qualification state while excluding storage-only metadata.
+- [x] Strengthen `artifact_complete=true` to mean a present, supported, complete, internally consistent, successfully verified final seal; no protocol-v3 schema field added.
+- [x] Separate evidence validity, run validity, batch validity, and the experimental Gate 1 verdict; reserve `FAIL` for valid evidence against treatment.
+- [x] Make `EvidenceBundleVerifier` the sole authority for `SEALED/artifact_complete`; runner and run-record producer must both use it, while scorer rejects false upstream attestation fail-closed.
+- [x] Keep `CriticalFailure` as an autonomous protocol-defined boolean traceable to sealed adjudication evidence; defer a machine-readable reason to a future protocol version.
+- [x] Use one small typed sequential evaluation engine; derive predicates, terminal decision, and reason from the same evaluation result without a rules framework or DSL.
+- [x] Preserve the frozen McNemar endpoint as paired affected-run status from agreed protocol-v3 `ROUTINE` events; critical outcomes affect only primary Gate 1 precedence.
+- [x] Establish artifact-directory ownership only through atomic `FileMode.CreateNew` lock acquisition; hold exclusive ownership through final publication and resolve post-preflight races only through that lock.
+- [x] Define a sealed bundle as a closed canonical artifact set with no undeclared, nested, temporary, linked, traversal, or otherwise non-canonical entries.
+- [x] Limit deterministic runner fault injection to one internal `IEvidenceBundlePublisher` boundary; test real publication and verification semantics on the actual temporary filesystem.
+- [x] Separate runner result axes into evidence state plus nullable run validity; remove stored scoring eligibility and derive downstream eligibility from sealed, valid, non-qualification state.
+- [x] On caller cancellation, terminate the owned CLI process, release resources, preserve unsealed diagnostics, and rethrow; treat runner timeout as sealable invalid evidence when capture completes.
+- [x] Make the completed `pilot-b.integrity.v3` the canonical baseline; require `pilot-b.integrity.v4` for any later incompatible schema or verification change.
+- [x] Define a versioned Semantic Arm Manifest Hash over canonical protocol-relevant properties; exclude manifest ID, repository root, formatting, and property order while retaining the independent raw manifest SHA-256 in integrity evidence.
+- [x] Use one authoritative stdout JSONL parser to produce `ParsedTranscript`; derive both scoring and semantic fingerprint projections from it while retaining raw stdout only as audit/integrity evidence.
+- [x] Exclude raw stderr bytes, length, and hash from the semantic fingerprint; represent protocol-relevant failures through terminal outcome, exit/timeout state, run validity, and deterministic invalid reasons while sealing raw stderr.
+- [x] Fix publication order: reject any pre-existing directory, acquire an atomic exclusive lock, write payload and final metadata, validate inventory, publish a flushed same-directory seal without overwrite, release the lock, then determine `SEALED` only by reopening and fully verifying the final directory.
+- [x] Require the regression matrix to cover sealing, invalid outcomes, ownership races, publication faults, cancellation/timeout, seal and inventory corruption, collisions, post-seal tamper, scorer critical precedence, and verdict/predicate consistency without removing existing coverage.
+- [x] Add mandatory test-order independence, canonicalization idempotence, and repeated publisher-to-verifier-to-fingerprint determinism across different physical directories.
+- [x] Define the Deterministic Run Fingerprint as SHA-256 over byte-exact UTF-8 from a dedicated writer for a versioned typed semantic envelope; prohibit generic arbitrary-object JSON hashing.
+- [x] Separate the pre-run domain from started runs: immutable prerequisite or ownership failure throws `PilotBPreflightException`, starts no CLI process, returns no result, and creates no evidence bundle.
+- [x] Define the stdout parser as a strict state machine over the proven pinned-CLI vocabulary while allowing its documented item lifecycle; build semantics only from authoritative completed agent messages and reject malformed, partial, impossible, trailing, or unsupported output fail-closed.
+- [x] Publish a semantic fingerprint only for successfully verified sealed evidence; publication/verifier failure returns `UNSEALED + null`, controlled run failure returns `SEALED + INVALID`, and caller cancellation preserves cancellation semantics even if child termination also fails.
+- [x] Golden-test the exact ordered mapping from `ParsedTranscript` commentary into `pilot-b.run-record.v3` messages; downstream records are projections, not a second transcript source.
+- [x] Make `RunQualification` the sole authority for run validity and ordered reason codes; runner and verifier call the same function, while physical inventory/hash/schema/seal checks remain verifier-owned.
+- [x] Update the focused harness contract and confirm that the Q1-Q35 design tree has no remaining implementation-shaping branch.
+- [ ] After Pilot B hardening, plan `MemoryStore` separation as a separate architecture slice; do not mix its implementation into Issues #30/#31.
+
+Architecture hardening design result: Q1-Q35 are consolidated in `CONTEXT.md`
+and `docs/agents/observable-reasoning-pilot-b-v3-harness.md`. No harness source,
+protocol/config/instruction, WPF, real CLI, authentication, experiment, corpus,
+Git history, or GitHub issue state was changed in this decision session.
+
+## Pilot B v3 Issue #42 — authoritative transcript projection (2026-08-20)
+
+- [x] Publish the required lifecycle `STARTED` update after the first implementation edit; Issue #42 is OPEN, `ready-for-agent`, and unblocked (`issuecomment-5351338695`).
+- [x] Replace the permissive transcript parser with one strict pinned-CLI state machine: first `thread.started`, required `turn.started`, documented item lifecycle, terminal success/failure/error, and fail-closed malformed/unknown/out-of-order/duplicate/trailing/partial cases.
+- [x] Project only authoritative completed `agent_message` commentary into unchanged `pilot-b.run-record.v3` messages; retain completed final in the semantic transcript, exclude it from narration, and preserve exact text/sequence/order with ordered reason codes.
+- [x] Add focused red→green regression/golden tests without deleting, weakening, narrowing, or reusing dirty checkout fixtures.
+- [x] Run focused tests, full solution tests, solution build, and `git diff --check` after the implementation checkpoints; review tracked and untracked PilotB diff.
+- [x] Record concise checkpoint results and final Issue #42 evidence here; leave Issue #42 OPEN and do not commit, push, PR, close, or run real CLI/Pilot B (`issuecomment-5351428229`).
+
+Preflight: exact #29/#30/#31/#42 issue bodies, state, labels, comments, and blockers read through `gh`; baseline branch/worktree preserved. Initial sandbox full-test attempt hit 5 unrelated ACL failures in existing Infrastructure memory tests; the approved outside-sandbox rerun passed all 257 tests (19+10+3+22+36+121+46). Solution build: 0 warnings/0 errors. `git diff --check`: passed.
+
+Checkpoint 2 result: strict parser state machine and terminal outcomes are covered by focused red→green tests for valid lifecycle, malformed/unknown output, partial EOF, out-of-order prefix, duplicate starts/terminal, trailing output, failure/fatal terminal, unsupported item, and lifecycle-only item events. Focused tests: 36/36 passed.
+Checkpoint 3 result: `PilotBRunRecordProjection` maps only parsed commentary to unchanged run-record message fields, takes adjudication kinds explicitly, preserves exact text/sequence/order, and retains final output only in semantic transcript. Projection golden is included in the 36 focused tests.
+Final result: Issue #42 verification comment published; #42 remains OPEN with `ready-for-agent`. Planned implementation files are limited to the PilotB parser/contracts/projection boundary and focused tests, plus this scoped checklist; pre-existing dirty paths remain preserved. No commit, push, PR, closure, real CLI, or Pilot B run performed.
+
+## Pilot B v3 Issue #44 — deterministic Gate 1 evaluation engine (2026-08-21)
+
+- [x] Re-read #30, #42, and #44; #42 is implementation-verified and remains OPEN only because closure was out of scope. Publish #44 `STARTED` after the user resolved that lifecycle interpretation.
+- [x] Preserve the intentionally dirty baseline and confirm the public TDD seam: `new PilotBScorer().Score(records)` -> `PilotBScoreResult`.
+- [x] Run the focused baseline: `CryptoIndicatorApp.PilotB.Tests` 36/36 passed.
+- [x] Add red golden coverage for the four pair-critical classes, exact precedence, threshold boundaries, and verdict/reason/predicate agreement.
+- [x] Replace arm-aggregated critical handling with one typed sequential evaluation result; preserve frozen run-record v3, thresholds, parser/projection, runner, verifier, fake CLI, WPF, and configuration boundaries.
+- [x] Update only the scoring-semantics clarification in the Pilot B v3 harness document.
+- [x] Run focused tests after every red-to-green checkpoint; then full solution tests, build, `git diff --check`, scoped diff review, and publish #44 `VERIFIED` without closure.
+
+Preflight evidence: #42 has a `VERIFIED` implementation comment (focused 36/36, full 257/257, 0-warning build, diff check); the user confirmed it is complete, so its intentionally open issue state is not treated as a technical blocker for #44. Baseline branch/worktree remains preserved; no commit, push, PR, real CLI/auth, or Pilot B run is authorized.
+
+Final evidence: red goldens reproduced the former shared-as-treatment-only failure, absolute-vs-treatment-only precedence error, shared-vs-relative precedence error, and critical-pair McNemar contamination. Green focused suite: 53/53. The sandbox full suite reproduced five unrelated Memory-test ACL failures while PilotB passed; the approved outside-sandbox final run passed all 274 tests (19+10+3+22+53+121+46). Final solution build: 0 warnings, 0 errors. `git diff --check` and no-index whitespace checks for the scoped untracked scorer/test/doc files passed. Scoped review found no remaining Issue #44 defect or out-of-scope change. GitHub checkboxes and the final VERIFIED evidence were re-read at https://github.com/striges88-bit/tc-dn-hofi3-dashboard/issues/44#issuecomment-5372662898. No commit, push, PR, closure, real CLI/auth, or Pilot B run was performed.
+
+Foundation extraction receipt: base `72cd6ba794f5caf51dab72958e02d9126bdd6fe4`; predecessor blobs — scorer `47d58dc8e3ce172ddd66cd0e35b2fa6684476ad9`, scorer tests `8bafe4072e4d09306caaead043707fe0e23b84ef`, harness `122f53b636d960458cf94c48079db6a36771000f`; restore passed, focused PilotB `53/53`, full solution `274/274` outside sandbox, build `0 warnings / 0 errors`, `git diff --check` passed. #47 intentionally not imported; it remains the four-file follow-up.
+
+## Pilot B v3 Issue #47 — exact McNemar secondary evidence (2026-08-22)
+
+- [x] Re-read #47 and #44 VERIFIED evidence, preserve the dirty baseline, and confirm the public TDD seam: `new PilotBScorer().Score(records)` -> `PilotBScoreResult.McNemar`.
+- [x] Replace the former critical-pair exclusion with the frozen ROUTINE-only endpoint: every valid pair remains eligible; `CriticalFailure` affects only Gate 1 and never McNemar inclusion or `b`/`c`.
+- [x] Add red→green goldens for ROUTINE-plus-OBSERVABLE membership, zero/low/asymmetric discordance, the four-versus-five threshold, exact decimal p-values, strong-evidence gating, all critical-flag combinations, Gate 1 invariance, and repeated canonical results.
+- [x] Update only the focused harness semantics; retain the #44 historical evidence as historical and do not change protocol v3, run-record v3, parser/projection, runner, fake CLI, WPF, config, or Gate 1 semantics.
+
+Checkpoint 1 result: the critical-exclusion red test failed as expected (`b=5` baseline versus `b=4` with unchanged ROUTINE events), then passed after the minimal scorer change. Focused Pilot B tests: 60/60 passed after the coverage and documentation checkpoints. No commit, push, PR, closure, real CLI/auth, or Pilot B run was performed.
+
+Final verification result: the sandbox full suite reproduced only the known five ACL failures in existing Memory tests while Pilot B passed; the approved outside-sandbox rerun passed all 281 tests (19+10+3+22+60+121+46). Final solution build: 0 warnings, 0 errors. `git diff --check` passed and no-index whitespace checks emitted no diagnostics for the scoped untracked scorer/test/harness files. Two-axis scoped review found and resolved one duplicated endpoint predicate; the final spec review found no missing #47 requirement. No commit, push, PR, closure, real CLI/auth, or Pilot B run was performed.
