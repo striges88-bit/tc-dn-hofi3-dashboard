@@ -428,7 +428,7 @@ public static class PilotBTranscriptParser
 
             if (string.Equals(phase, "commentary", StringComparison.Ordinal))
             {
-                var message = new PilotBTranscriptMessage(commentary.Count + 1, text!, phase!);
+                var message = new PilotBTranscriptMessage(semanticMessages.Count + 1, text!, phase!);
                 commentary.Add(message);
                 semanticMessages.Add(message);
                 return;

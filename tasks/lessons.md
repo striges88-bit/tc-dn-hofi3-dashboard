@@ -65,3 +65,4 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - C# memory extraction must attach xUnit test events only to methods whose own declaration match contains `[Fact]` or `[Theory]`; scanning a loose text window around a method can turn nearby helpers into false current test events.
 - C# memory extraction must blank string and char literals before regex-based symbol/marker parsing; otherwise C# fixture source embedded in tests can become false current project memory and create duplicate IDs during commit-addressed refresh.
 - C# memory symbol IDs must include containing type scope and a parameter-type signature for methods; type name plus namespace or method name plus parameter count is not unique enough for real test helpers and overloads.
+- Transcript parser message sequence must come from the shared semantic-message collection; commentary-local counting can duplicate sequence values when final output precedes commentary.

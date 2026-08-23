@@ -30,6 +30,26 @@ public sealed class PilotBTranscriptParserTests
     }
 
     [Fact]
+    public void Parser_UsesGlobalSemanticSequenceWhenFinalPrecedesCommentary()
+    {
+        const string jsonl = """
+            {"type":"thread.started","thread_id":"thread-1"}
+            {"type":"turn.started","turn_id":"turn-1"}
+            {"type":"item.completed","item":{"type":"agent_message","phase":"final","text":"final first"}}
+            {"type":"item.completed","item":{"type":"agent_message","phase":"commentary","text":"commentary second"}}
+            {"type":"turn.completed"}
+            """;
+
+        var result = PilotBTranscriptParser.Parse(jsonl);
+
+        Assert.True(result.IsValid, string.Join("|", result.InvalidReasons));
+        Assert.Equal([1, 2], result.SemanticMessages.Select(message => message.Sequence));
+        Assert.Equal(["final", "commentary"], result.SemanticMessages.Select(message => message.Phase));
+        Assert.Equal([1], result.FinalMessages.Select(message => message.Sequence));
+        Assert.Equal([2], result.Commentary.Select(message => message.Sequence));
+    }
+
+    [Fact]
     public void Parser_ReportsPartialTranscriptWithDeterministicTerminalOutcome()
     {
         const string jsonl = """
