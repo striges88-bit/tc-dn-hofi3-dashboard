@@ -30,7 +30,7 @@ public static class PilotBRunQualification
         {
             Add(reasons, "timeout");
         }
-        else if (facts.ExitCode is not 0)
+        else if (facts.ProcessStarted && facts.ExitCode is not 0)
         {
             Add(reasons, "nonzero-exit");
         }

@@ -415,14 +415,12 @@ internal static class PilotBEvidenceBundle
     }
 
     private static PilotBRunValidity ParseValidity(string value)
-    {
-        if (!Enum.TryParse<PilotBRunValidity>(value, ignoreCase: true, out var parsed))
+        => value switch
         {
-            throw new FormatException("Run validity is invalid.");
-        }
-
-        return parsed;
-    }
+            "valid" => PilotBRunValidity.Valid,
+            "invalid" => PilotBRunValidity.Invalid,
+            _ => throw new FormatException("Run validity is invalid.")
+        };
 
     private static void Require(JsonElement root, string name, string expected)
     {
@@ -449,23 +447,25 @@ public sealed class PilotBEvidenceBundleVerifier
             var paths = PilotBEvidenceBundle.CreatePaths(root);
             VerifyFilesystemInventory(paths);
 
-            var seal = PilotBEvidenceBundle.ParseSeal(File.ReadAllBytes(paths.SealPath));
-            Require(string.Equals(ReadString(File.ReadAllBytes(paths.SealPath), "evidence_state"), "sealed", StringComparison.Ordinal), "seal-state-invalid");
-            Require(ReadBool(File.ReadAllBytes(paths.SealPath), "artifact_complete"), "seal-artifact-incomplete");
+            var sealBytes = File.ReadAllBytes(paths.SealPath);
+            var seal = PilotBEvidenceBundle.ParseSeal(sealBytes);
+            Require(string.Equals(ReadString(sealBytes, "evidence_state"), "sealed", StringComparison.Ordinal), "seal-state-invalid");
+            Require(ReadBool(sealBytes, "artifact_complete"), "seal-artifact-incomplete");
             Require(PilotBSha256.IsSha256(seal.SemanticFingerprint), "seal-fingerprint-invalid");
 
-            var inventory = PilotBEvidenceBundle.CapturePayloadInventory(paths);
+            var payloads = CapturePayloadSnapshots(paths);
+            var inventory = CapturePayloadInventory(payloads);
             Require(InventoryMatches(inventory, seal.PayloadInventory), "payload-inventory-mismatch");
 
-            var metadata = PilotBEvidenceBundle.ParseMetadata(File.ReadAllBytes(paths.MetadataPath));
-            var manifestBytes = File.ReadAllBytes(paths.ManifestPath);
+            var metadata = PilotBEvidenceBundle.ParseMetadata(payloads["metadata.json"]);
+            var manifestBytes = payloads["manifest.json"];
             var manifestSha = PilotBSha256.Compute(manifestBytes);
             var manifest = PilotBArmManifest.Parse(manifestBytes);
-            var transcript = PilotBTranscriptParser.Parse(File.ReadAllBytes(paths.RawOutputPath));
-            var preManifest = PilotBFileManifest.Parse(File.ReadAllBytes(paths.PreManifestPath));
-            var postManifest = PilotBFileManifest.Parse(File.ReadAllBytes(paths.PostManifestPath));
+            var transcript = PilotBTranscriptParser.Parse(payloads["output.jsonl"]);
+            var preManifest = PilotBFileManifest.Parse(payloads["pre-manifest.json"]);
+            var postManifest = PilotBFileManifest.Parse(payloads["post-manifest.json"]);
             var executableSha = PilotBSha256.ComputeFile(metadata.ExecutablePath);
-            var promptSha = PilotBSha256.ComputeFile(paths.PromptPath);
+            var promptSha = PilotBSha256.Compute(payloads["prompt.bin"]);
 
             var executableHashValid = string.Equals(executableSha, metadata.ExecutableSha256, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(executableSha, metadata.ExpectedExecutableSha256, StringComparison.OrdinalIgnoreCase);
@@ -596,6 +596,26 @@ public sealed class PilotBEvidenceBundleVerifier
 
         return true;
     }
+
+    private static IReadOnlyDictionary<string, byte[]> CapturePayloadSnapshots(PilotBArtifactPaths paths)
+    {
+        var payloads = new Dictionary<string, byte[]>(PilotBEvidenceBundle.PayloadNames.Count, StringComparer.Ordinal);
+        foreach (var name in PilotBEvidenceBundle.PayloadNames)
+        {
+            payloads.Add(name, File.ReadAllBytes(Path.Combine(paths.Root, name)));
+        }
+
+        return payloads;
+    }
+
+    private static IReadOnlyList<PilotBPayloadInventoryEntry> CapturePayloadInventory(
+        IReadOnlyDictionary<string, byte[]> payloads)
+        => PilotBEvidenceBundle.PayloadNames
+            .Select(name => new PilotBPayloadInventoryEntry(
+                name,
+                payloads[name].LongLength,
+                PilotBSha256.Compute(payloads[name])))
+            .ToArray();
 
     private static bool QualificationMatches(PilotBRunQualificationResult left, PilotBRunQualificationResult right)
         => left.Validity == right.Validity

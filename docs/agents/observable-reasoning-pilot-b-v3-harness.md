@@ -292,6 +292,13 @@ the final state recorded by the seal. Physical inventory, file hashes, schema
 support, and seal consistency belong only to the verifier, not to
 `RunQualification`.
 
+The v3 evidence wire accepts only exact lowercase `valid` and `invalid` values
+for both `integrity.json.run_validity` and
+`metadata.json.run_qualification.validity`. During verification, the seal and
+each of the seven canonical payloads are read once into byte snapshots; payload
+lengths, hashes, parsing, qualification, and fingerprint projection all use
+those same bytes.
+
 Controlled malformed/partial/nonzero/timeout or drift outcomes may therefore
 be `SEALED + INVALID` when their evidence is fully captured and verified.
 Publication or verification failure is `UNSEALED + null` and has no trusted
@@ -428,10 +435,11 @@ fixture projection is used only by the fingerprint writer.
 The broader hardening described above remains a target design, not an implied
 claim that #43 completes it. In particular, typed preflight exceptions,
 initial-existing-directory rejection, ownership-race arbitration, abandoned
-lock/no-reuse policy, reparse-point hardening, enum validation, and a
-size-only `RunAsync` refactor remain explicitly deferred to #46. No protocol
-v3, run-record v3, parser/projection, scorer, WPF, real CLI, or authentication
-behavior is changed by this slice.
+lock/no-reuse policy, reparse-point hardening, broader arm-manifest/preflight
+enum validation, and a size-only `RunAsync` refactor remain explicitly deferred
+to #46. Evidence-wire validity parsing is fixed in #43 and is not part of that
+deferral. No protocol v3, run-record v3, parser/projection, scorer, WPF, real
+CLI, or authentication behavior is changed by this slice.
 
 ## Fixture policy
 

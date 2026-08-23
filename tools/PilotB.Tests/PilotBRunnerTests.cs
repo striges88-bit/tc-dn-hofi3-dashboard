@@ -1,6 +1,7 @@
 using System.Text;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using CryptoIndicatorApp.PilotB;
 
 namespace CryptoIndicatorApp.PilotB.Tests;
@@ -178,6 +179,73 @@ public sealed class PilotBRunnerTests
         var tampered = new PilotBEvidenceBundleVerifier().Verify(payloadResult.Artifacts);
         Assert.Equal(PilotBEvidenceState.Unsealed, tampered.EvidenceState);
         Assert.Null(tampered.SemanticFingerprint);
+    }
+
+    [Theory]
+    [InlineData("\"Valid\"")]
+    [InlineData("\"0\"")]
+    [InlineData("\"undefined\"")]
+    [InlineData("null")]
+    public async Task EvidenceVerifier_RejectsNoncanonicalSealValidity(string jsonValue)
+    {
+        using var fixture = TestFixture.Create();
+        var result = await new PilotBRunner().RunAsync(fixture.CreateRequest("pilot-b.fake.valid"));
+        var sealJson = await File.ReadAllTextAsync(result.Artifacts.IntegrityPath);
+        var tamperedSeal = sealJson.Replace(
+            "\"run_validity\":\"valid\"",
+            $"\"run_validity\":{jsonValue}",
+            StringComparison.Ordinal);
+        Assert.NotEqual(sealJson, tamperedSeal);
+        await File.WriteAllTextAsync(result.Artifacts.IntegrityPath, tamperedSeal);
+
+        var verified = new PilotBEvidenceBundleVerifier().Verify(result.Artifacts);
+
+        Assert.Equal(PilotBEvidenceState.Unsealed, verified.EvidenceState);
+        Assert.Null(verified.Qualification);
+        Assert.Null(verified.SemanticFingerprint);
+    }
+
+    [Theory]
+    [InlineData("\"Valid\"")]
+    [InlineData("\"0\"")]
+    public async Task EvidenceVerifier_RejectsNoncanonicalQualificationValidity(string jsonValue)
+    {
+        using var fixture = TestFixture.Create();
+        var result = await new PilotBRunner().RunAsync(fixture.CreateRequest("pilot-b.fake.valid"));
+        await ReplaceMetadataQualificationValidityAsync(result.Artifacts, jsonValue);
+
+        var verified = new PilotBEvidenceBundleVerifier().Verify(result.Artifacts);
+
+        Assert.Equal(PilotBEvidenceState.Unsealed, verified.EvidenceState);
+        Assert.Null(verified.Qualification);
+        Assert.Null(verified.SemanticFingerprint);
+    }
+
+    [Fact]
+    public void RunQualification_FailedProcessStart_DoesNotReportNonzeroExit()
+    {
+        var transcript = PilotBTranscriptParser.Parse(Encoding.UTF8.GetBytes("""
+            {"type":"thread.started","thread_id":"thread-1"}
+            {"type":"turn.started"}
+            {"type":"item.completed","item":{"type":"agent_message","phase":"final","text":"Done."}}
+            {"type":"turn.completed"}
+            """));
+
+        var result = PilotBRunQualification.Evaluate(new PilotBRunQualificationFacts(
+            ProcessStarted: false,
+            ExitCode: null,
+            TimedOut: false,
+            transcript,
+            TimingValid: true,
+            ExecutableHashValid: true,
+            RepositoryBoundaryValid: true,
+            PromptBytesVerified: true,
+            WorkspaceIntegrityCaptured: true,
+            PayloadCaptured: true,
+            AdditionalInvalidReasons: []));
+
+        Assert.Equal(PilotBRunValidity.Invalid, result.Validity);
+        Assert.Equal(["process-start-failed"], result.InvalidReasons);
     }
 
     [Fact]
@@ -477,5 +545,27 @@ public sealed class PilotBRunnerTests
 
             await Task.Delay(10);
         }
+    }
+
+    private static async Task ReplaceMetadataQualificationValidityAsync(
+        PilotBArtifactPaths artifacts,
+        string jsonValue)
+    {
+        var metadataJson = await File.ReadAllTextAsync(artifacts.MetadataPath);
+        var tamperedMetadata = metadataJson.Replace(
+            "\"validity\":\"valid\"",
+            $"\"validity\":{jsonValue}",
+            StringComparison.Ordinal);
+        Assert.NotEqual(metadataJson, tamperedMetadata);
+        await File.WriteAllTextAsync(artifacts.MetadataPath, tamperedMetadata);
+        var metadataBytes = await File.ReadAllBytesAsync(artifacts.MetadataPath);
+
+        var seal = JsonNode.Parse(await File.ReadAllBytesAsync(artifacts.IntegrityPath))!.AsObject();
+        var metadataEntry = seal["payload_inventory"]!.AsArray()
+            .Select(node => node!.AsObject())
+            .Single(entry => entry["path"]!.GetValue<string>() == "metadata.json");
+        metadataEntry["length"] = metadataBytes.LongLength;
+        metadataEntry["sha256"] = PilotBSha256.Compute(metadataBytes);
+        await File.WriteAllTextAsync(artifacts.IntegrityPath, seal.ToJsonString());
     }
 }
