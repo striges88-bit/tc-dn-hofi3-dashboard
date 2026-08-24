@@ -1,14 +1,13 @@
 using System.Text;
-using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using CryptoIndicatorApp.PilotB;
+using TestFixture = CryptoIndicatorApp.PilotB.Tests.PilotBRunnerTestFixture;
 
 namespace CryptoIndicatorApp.PilotB.Tests;
 
 public sealed class PilotBRunnerTests
 {
-    private const string Hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private static readonly DateTimeOffset FixedNow = new(2026, 8, 19, 9, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -317,28 +316,28 @@ public sealed class PilotBRunnerTests
             ExpectedExecutableSha256 = new string('b', 64)
         };
 
-        var relativeResult = await new PilotBRunner().RunAsync(relative);
-        var driftedResult = await new PilotBRunner().RunAsync(drifted);
+        var relativeException = await Assert.ThrowsAsync<PilotBPreflightException>(
+            () => new PilotBRunner().RunAsync(relative));
+        var driftedException = await Assert.ThrowsAsync<PilotBPreflightException>(
+            () => new PilotBRunner().RunAsync(drifted));
 
-        Assert.Equal(PilotBRunnerStatus.Invalid, relativeResult.Status);
-        Assert.Contains("executable-not-absolute", relativeResult.InvalidReasons);
-        Assert.Equal(PilotBRunnerStatus.Invalid, driftedResult.Status);
-        Assert.Contains("executable-hash-mismatch", driftedResult.InvalidReasons);
+        Assert.Equal([PilotBPreflightReasonCodes.ExecutableNotAbsolute], relativeException.ReasonCodes);
+        Assert.Equal([PilotBPreflightReasonCodes.ExecutableHashMismatch], driftedException.ReasonCodes);
     }
 
     [Fact]
     public async Task Runner_RejectsEveryImmutablePreflightInputBeforeEvidenceOwnership()
     {
         using var fixture = TestFixture.Create();
-        var cases = new (string Name, Func<PilotBRunnerOptions, PilotBRunnerOptions> Change)[]
+        var cases = new (string Name, string Reason, Func<PilotBRunnerOptions, PilotBRunnerOptions> Change)[]
         {
-            ("executable", options => options with { ExecutablePath = "fake.exe" }),
-            ("manifest-path", options => options with { ArmManifestPath = "arm-manifest.json" }),
-            ("manifest-hash", options => options with { ExpectedArmManifestSha256 = new string('b', 64) }),
-            ("fixture", options => options with { FixtureRoot = "fixture" }),
-            ("artifact", options => options with { ArtifactDirectory = "artifacts" }),
-            ("prompt", options => options with { PromptBytes = [] }),
-            ("timeout", options => options with { Timeout = TimeSpan.Zero })
+            ("executable", PilotBPreflightReasonCodes.ExecutableNotAbsolute, options => options with { ExecutablePath = "fake.exe" }),
+            ("manifest-path", PilotBPreflightReasonCodes.ManifestNotAbsolute, options => options with { ArmManifestPath = "arm-manifest.json" }),
+            ("manifest-hash", PilotBPreflightReasonCodes.ManifestHashMismatch, options => options with { ExpectedArmManifestSha256 = new string('b', 64) }),
+            ("fixture", PilotBPreflightReasonCodes.FixtureNotAbsolute, options => options with { FixtureRoot = "fixture" }),
+            ("artifact", PilotBPreflightReasonCodes.ArtifactNotAbsolute, options => options with { ArtifactDirectory = "artifacts" }),
+            ("prompt", PilotBPreflightReasonCodes.EmptyPrompt, options => options with { PromptBytes = [] }),
+            ("timeout", PilotBPreflightReasonCodes.InvalidTimeout, options => options with { Timeout = TimeSpan.Zero })
         };
 
         foreach (var testCase in cases)
@@ -346,11 +345,10 @@ public sealed class PilotBRunnerTests
             var request = fixture.CreateRequest("pilot-b.fake.valid");
             var untouchedArtifactPath = request.ArtifactDirectory;
 
-            var result = await new PilotBRunner().RunAsync(testCase.Change(request));
+            var exception = await Assert.ThrowsAsync<PilotBPreflightException>(
+                () => new PilotBRunner().RunAsync(testCase.Change(request)));
 
-            Assert.Equal(PilotBRunnerStatus.Invalid, result.Status);
-            Assert.Equal(PilotBEvidenceState.Unsealed, result.EvidenceState);
-            Assert.Equal(PilotBArtifactPaths.Empty, result.Artifacts);
+            Assert.Equal([testCase.Reason], exception.ReasonCodes);
             Assert.False(Directory.Exists(untouchedArtifactPath), testCase.Name);
         }
     }
@@ -410,10 +408,10 @@ public sealed class PilotBRunnerTests
             ArtifactDirectory = Path.Combine(fixture.FixtureRoot, "artifacts")
         };
 
-        var result = await new PilotBRunner().RunAsync(request);
+        var exception = await Assert.ThrowsAsync<PilotBPreflightException>(
+            () => new PilotBRunner().RunAsync(request));
 
-        Assert.Equal(PilotBRunnerStatus.Invalid, result.Status);
-        Assert.Contains("boundary-contamination", result.InvalidReasons);
+        Assert.Equal([PilotBPreflightReasonCodes.BoundaryContamination], exception.ReasonCodes);
     }
 
     [Fact]
@@ -428,109 +426,6 @@ public sealed class PilotBRunnerTests
         Assert.Equal(first.DeterministicFingerprint, second.DeterministicFingerprint);
         Assert.Equal(first.Transcript.IntermediateMessages, second.Transcript.IntermediateMessages);
         Assert.Equal(first.IntegrityFacts, second.IntegrityFacts);
-    }
-
-    private sealed class TestFixture : IDisposable
-    {
-        private TestFixture(string root, string fakeExecutablePath)
-        {
-            Root = root;
-            FakeExecutablePath = fakeExecutablePath;
-            FixtureRoot = Path.Combine(root, "fixture");
-            Directory.CreateDirectory(FixtureRoot);
-            InitializeGitRepository(FixtureRoot);
-            File.WriteAllText(Path.Combine(FixtureRoot, "README.txt"), "disposable fixture\n");
-            ManifestPath = Path.Combine(root, "arm-manifest.json");
-            File.WriteAllText(ManifestPath, CreateManifest(FixtureRoot));
-        }
-
-        public string Root { get; }
-        public string FakeExecutablePath { get; }
-        public string FixtureRoot { get; }
-        public string ManifestPath { get; }
-
-        public static TestFixture Create()
-        {
-            var root = Directory.CreateTempSubdirectory("pilot-b-runner-test-").FullName;
-            var configuration = Directory.GetParent(
-                    Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory))?.Name
-                ?? throw new InvalidOperationException("Cannot determine the test output configuration.");
-            var fakePath = Path.GetFullPath(Path.Combine(
-                AppContext.BaseDirectory,
-                "..", "..", "..", "..",
-                "PilotB.FakeCli", "bin", configuration, "net8.0",
-                "CryptoIndicatorApp.PilotB.FakeCli.exe"));
-            Assert.True(File.Exists(fakePath), $"Fake CLI was not built: {fakePath}");
-            return new TestFixture(root, fakePath);
-        }
-
-        public PilotBRunnerOptions CreateRequest(string prompt)
-        {
-            return new PilotBRunnerOptions
-            {
-                ExecutablePath = FakeExecutablePath,
-                ExpectedExecutableSha256 = PilotBSha256.ComputeFile(FakeExecutablePath),
-                ArmManifestPath = ManifestPath,
-                ExpectedArmManifestSha256 = PilotBSha256.ComputeFile(ManifestPath),
-                FixtureRoot = FixtureRoot,
-                ArtifactDirectory = Path.Combine(Root, $"artifacts-{Guid.NewGuid():N}"),
-                PromptBytes = Encoding.UTF8.GetBytes(prompt),
-                Timeout = TimeSpan.FromSeconds(2),
-                IsQualification = true,
-                UtcNowProvider = () => FixedNow
-            };
-        }
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Root))
-            {
-                Directory.Delete(Root, recursive: true);
-            }
-        }
-
-        private static string CreateManifest(string fixtureRoot)
-        {
-            return $$"""
-                {
-                  "schema_version": "pilot-b.arm-manifest.v3",
-                  "manifest_id": "test-manifest",
-                  "arm_id": "treatment",
-                  "cli_version": "test-cli-0.0.1",
-                  "protocol_sha256": "{{Hash}}",
-                  "model_alias": "gpt-5.6-sol",
-                  "reasoning_effort": "max",
-                  "sandbox": "native-windows",
-                  "approval_policy": "never",
-                  "repository_root": "{{fixtureRoot.Replace("\\", "\\\\")}}",
-                  "global_instructions_sha256": "{{Hash}}",
-                  "project_instructions_sha256": "{{Hash}}",
-                  "skills_manifest_sha256": "{{Hash}}",
-                  "mutable_authentication_lane": "excluded-from-manifest-hash"
-                }
-                """;
-        }
-
-        private static void InitializeGitRepository(string root)
-        {
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "git",
-                    WorkingDirectory = root,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardError = true,
-                    RedirectStandardOutput = true
-                }
-            };
-            process.StartInfo.ArgumentList.Add("init");
-            process.StartInfo.ArgumentList.Add("--quiet");
-            Assert.True(process.Start());
-            Assert.True(process.WaitForExit(5000));
-            Assert.Equal(0, process.ExitCode);
-        }
     }
 
     private static async Task WaitForFileAsync(string path)

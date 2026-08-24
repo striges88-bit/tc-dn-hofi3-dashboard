@@ -245,6 +245,9 @@ before launch and again after exit. The fixture must have a `.git` boundary;
 the manifest repository root must equal it; the executable, source manifest,
 and artifact root must remain outside it. The arm manifest carries the required
 CLI/model/reasoning/sandbox/approval and non-secret instruction/skill facts.
+Preflight accepts only exact lowercase `control` or `treatment` arm IDs and a
+non-empty, non-whitespace repository root; it does not invent allowed sets for
+the other manifest fields.
 Mutable authentication content is excluded and never read or copied.
 
 ### Pre-run and run domains
@@ -254,7 +257,8 @@ prerequisite: absolute/canonical boundaries, expected hashes, supported arm
 manifest, prompt bytes, timeout, fixture boundary, and absence of the requested
 artifact path. Failure throws typed `PilotBPreflightException`, returns no
 `PilotBRunnerResult`, starts no process, and creates no runner-owned evidence
-bundle.
+bundle. Its ordered, deduplicated reason codes identify the rejected immutable
+prerequisite.
 
 After immutable preflight, the runner attempts exclusive artifact ownership.
 Directory existence or `CreateDirectory` success is not ownership. Ownership
@@ -264,6 +268,11 @@ is rejected; a race after preflight is resolved only by lock acquisition.
 Failure throws `PilotBPreflightException` with
 `ArtifactOwnershipConflict`, starts no run, and never cleans or reuses the
 contended path.
+
+The deterministic race regression still calls public `PilotBRunner.RunAsync`.
+An internal per-runner checkpoint only synchronizes both completed preflights;
+the default checkpoint is already complete, adds no global state, and does not
+replace the concrete filesystem or process boundary.
 
 Only after ownership is acquired does the run domain begin. Its valid result
 combinations are:
@@ -432,14 +441,14 @@ not timestamps, absolute paths, raw transcript formatting, or auth data.
 `pilot-b.file-manifest.v3` retains its existing payload wire shape; its semantic
 fixture projection is used only by the fingerprint writer.
 
-The broader hardening described above remains a target design, not an implied
-claim that #43 completes it. In particular, typed preflight exceptions,
-initial-existing-directory rejection, ownership-race arbitration, abandoned
-lock/no-reuse policy, reparse-point hardening, broader arm-manifest/preflight
-enum validation, and a size-only `RunAsync` refactor remain explicitly deferred
-to #46. Evidence-wire validity parsing is fixed in #43 and is not part of that
-deferral. No protocol v3, run-record v3, parser/projection, scorer, WPF, real
-CLI, or authentication behavior is changed by this slice.
+Issue #46 implements only this pre-run boundary: typed rejection, any initially
+existing file/directory/reparse artifact path, atomic ownership-race
+arbitration, and no overwrite/resume/recovery/reuse/cleanup. The concrete
+ownership boundary also rejects a late contender if a completed payload set is
+already present. Evidence-wire validity parsing remains the #43 behavior;
+seal/verifier semantics, cancellation, controlled-invalid outcomes,
+parser/projection, scorer, protocol/schema, WPF, real CLI, and authentication
+are unchanged. This slice does not claim that parent #31 is complete.
 
 ## Fixture policy
 
