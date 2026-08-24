@@ -1640,3 +1640,16 @@ RED evidence: the typed-exception slice first failed to compile because the cont
 Final verification: focused preflight 14/14; full PilotB 94/94; Release solution 234/234 (19+10+3+22+94+71+15); Release build 0 warnings/0 errors; tracked and untracked whitespace checks passed. The final Spec review reported no findings. Standards findings for lost ownership diagnostics, broad I/O-as-conflict classification, and duplicate fixture plumbing were fixed; the remaining observation concerned unchanged post-start lock-release reason handling and was rejected because this slice explicitly preserves started-run/seal semantics. Exact scope is nine files: runner/contracts/arm manifest, one concrete ownership extraction, two focused test files plus shared test fixture, harness, and this todo section. No stage, commit, push, PR, merge, Issue closure, real CLI/auth, or Pilot B execution was performed.
 
 GitHub lifecycle: Issue #46 acceptance was re-read at 7/7 and `VERIFIED` evidence was published at `issuecomment-5391257022`; #46 and parent #31 remain OPEN. The worktree stops at the reviewed, verified, uncommitted nine-file diff required by the Goal contract.
+
+### PR #53 CodeRabbit remediation
+
+- [x] Add one deterministic real-filesystem RED regression proving a nonempty artifact directory is rejected before the reserved lock path is opened.
+- [x] Add only the non-authoritative pre-lock emptiness check; preserve the post-lock atomic race arbiter.
+- [x] Run focused/full Release tests, Release build, whitespace, and exact-scope review.
+- [ ] Publish the authorized follow-up commit, pass the memory gate, push the existing branch, answer both review threads, and wait for CI.
+
+RED evidence: `OwnershipAcquire_NonemptyDirectoryRejectsBeforeOpeningReservedLockPath` failed with `ArtifactOwnershipUnavailable` instead of `ArtifactOwnershipConflict`, proving the reserved lock path was opened before nonempty-directory rejection.
+
+GREEN evidence: the new regression passed 1/1 and the full focused `PilotBRunnerPreflightTests` set passed 15/15 after the minimal pre-lock check; the post-lock enumeration remains the authoritative race arbiter.
+
+Validation evidence: full PilotB Release tests passed 95/95; Release solution tests passed 235/235 (19+10+3+22+95+71+15); Release build completed with 0 warnings and 0 errors. `git diff --check` passed, and exact-scope review found only the three authorized remediation files. The unrelated Unix-value-20 suggestion remains intentionally unapplied: .NET 8 constructs the Unix `EEXIST` `IOException` from raw errno rather than the internal PAL enum, and this project/CI path is Windows-only.

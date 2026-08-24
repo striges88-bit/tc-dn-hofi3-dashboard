@@ -31,6 +31,11 @@ internal static class PilotBArtifactOwnership
             }
 
             var lockPath = Path.Combine(artifactRoot, ".pilot-b-write-lock");
+            if (Directory.EnumerateFileSystemEntries(artifactRoot).Any())
+            {
+                throw new ArtifactOwnershipConflictException("Artifact directory cannot be reused.");
+            }
+
             try
             {
                 ownership = new FileStream(

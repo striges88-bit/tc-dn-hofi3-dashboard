@@ -180,6 +180,26 @@ public sealed class PilotBRunnerPreflightTests
         Assert.False(File.Exists(Path.Combine(artifactRoot, ".pilot-b-write-lock")));
     }
 
+    [Fact]
+    public void OwnershipAcquire_NonemptyDirectoryRejectsBeforeOpeningReservedLockPath()
+    {
+        using var fixture = PilotBRunnerPreflightFixture.Create();
+        var artifactRoot = Path.Combine(fixture.Root, "published-artifacts-with-lock-trap");
+        Directory.CreateDirectory(artifactRoot);
+        var sentinelPath = Path.Combine(artifactRoot, "integrity.json");
+        File.WriteAllText(sentinelPath, "sentinel");
+        var lockPath = Path.Combine(artifactRoot, ".pilot-b-write-lock");
+        Directory.CreateDirectory(lockPath);
+
+        var exception = Assert.Throws<PilotBPreflightException>(
+            () => PilotBArtifactOwnership.Acquire(artifactRoot));
+
+        Assert.Equal([PilotBPreflightReasonCodes.ArtifactOwnershipConflict], exception.ReasonCodes);
+        Assert.IsAssignableFrom<IOException>(exception.InnerException);
+        Assert.Equal("sentinel", File.ReadAllText(sentinelPath));
+        Assert.True(Directory.Exists(lockPath));
+    }
+
     private static async Task<RunnerOutcome> ObserveRunnerAsync(PilotBRunner runner, PilotBRunnerOptions request)
     {
         try
