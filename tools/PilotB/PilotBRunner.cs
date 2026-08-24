@@ -6,6 +6,18 @@ public sealed class PilotBRunner
 {
     private static readonly IReadOnlyList<string> ExactInvocation =
         ["codex", "exec", "--ephemeral", "--json"];
+    private readonly Func<Task> beforeOwnershipAcquisition;
+
+    public PilotBRunner()
+        : this(static () => Task.CompletedTask)
+    {
+    }
+
+    internal PilotBRunner(Func<Task> beforeOwnershipAcquisition)
+    {
+        this.beforeOwnershipAcquisition = beforeOwnershipAcquisition
+            ?? throw new ArgumentNullException(nameof(beforeOwnershipAcquisition));
+    }
 
     public async Task<PilotBRunnerResult> RunAsync(
         PilotBRunnerOptions options,
@@ -14,33 +26,14 @@ public sealed class PilotBRunner
         ArgumentNullException.ThrowIfNull(options);
         var promptBytes = options.PromptBytes?.ToArray() ?? [];
         var preflight = await PreflightAsync(options, promptBytes, cancellationToken);
-        if (preflight.Result is not null)
-        {
-            return preflight.Result;
-        }
-
         var manifest = preflight.Manifest!;
         var manifestBytes = preflight.ManifestBytes!;
         var fixtureRoot = preflight.FixtureRoot!;
         var artifactRoot = preflight.ArtifactRoot!;
         var executablePath = preflight.ExecutablePath!;
+        await beforeOwnershipAcquisition();
         var artifactPaths = PilotBEvidenceBundle.CreatePaths(artifactRoot);
-        FileStream? ownershipLock = null;
-        try
-        {
-            Directory.CreateDirectory(artifactRoot);
-            ownershipLock = new FileStream(
-                artifactPaths.LockPath,
-                FileMode.CreateNew,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 1,
-                FileOptions.None);
-        }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
-        {
-            return InvalidResult(options, ["artifact-ownership-failed"]);
-        }
+        var ownershipLock = PilotBArtifactOwnership.Acquire(artifactRoot);
 
         var captureReasons = new List<string>();
         var startedAt = options.UtcNowProvider();
@@ -349,53 +342,53 @@ public sealed class PilotBRunner
         CancellationToken cancellationToken)
     {
         var reasons = new List<string>();
-        var executablePath = AbsolutePath(options.ExecutablePath, "executable-not-absolute", reasons);
-        var manifestPath = AbsolutePath(options.ArmManifestPath, "manifest-not-absolute", reasons);
-        var fixtureRoot = AbsolutePath(options.FixtureRoot, "fixture-not-absolute", reasons);
-        var artifactRoot = AbsolutePath(options.ArtifactDirectory, "artifact-not-absolute", reasons);
+        var executablePath = AbsolutePath(options.ExecutablePath, PilotBPreflightReasonCodes.ExecutableNotAbsolute, reasons);
+        var manifestPath = AbsolutePath(options.ArmManifestPath, PilotBPreflightReasonCodes.ManifestNotAbsolute, reasons);
+        var fixtureRoot = AbsolutePath(options.FixtureRoot, PilotBPreflightReasonCodes.FixtureNotAbsolute, reasons);
+        var artifactRoot = AbsolutePath(options.ArtifactDirectory, PilotBPreflightReasonCodes.ArtifactNotAbsolute, reasons);
 
         if (!PilotBSha256.IsSha256(options.ExpectedExecutableSha256))
         {
-            reasons.Add("invalid-expected-executable-sha256");
+            reasons.Add(PilotBPreflightReasonCodes.InvalidExpectedExecutableSha256);
         }
 
         if (!PilotBSha256.IsSha256(options.ExpectedArmManifestSha256))
         {
-            reasons.Add("invalid-expected-manifest-sha256");
+            reasons.Add(PilotBPreflightReasonCodes.InvalidExpectedManifestSha256);
         }
 
         if (promptBytes.Length == 0)
         {
-            reasons.Add("empty-prompt");
+            reasons.Add(PilotBPreflightReasonCodes.EmptyPrompt);
         }
 
         if (options.Timeout <= TimeSpan.Zero)
         {
-            reasons.Add("invalid-timeout");
+            reasons.Add(PilotBPreflightReasonCodes.InvalidTimeout);
         }
 
-        if (executablePath is null || !File.Exists(executablePath))
+        if (executablePath is not null && !File.Exists(executablePath))
         {
-            reasons.Add("executable-missing");
+            reasons.Add(PilotBPreflightReasonCodes.ExecutableMissing);
         }
 
-        if (manifestPath is null || !File.Exists(manifestPath))
+        if (manifestPath is not null && !File.Exists(manifestPath))
         {
-            reasons.Add("manifest-missing");
+            reasons.Add(PilotBPreflightReasonCodes.ManifestMissing);
         }
 
-        if (fixtureRoot is null || !Directory.Exists(fixtureRoot))
+        if (fixtureRoot is not null && !Directory.Exists(fixtureRoot))
         {
-            reasons.Add("fixture-missing");
+            reasons.Add(PilotBPreflightReasonCodes.FixtureMissing);
         }
-        else if (!PilotBGitBoundary.IsExactRepositoryRoot(fixtureRoot))
+        else if (fixtureRoot is not null && !PilotBGitBoundary.IsExactRepositoryRoot(fixtureRoot))
         {
-            reasons.Add("repository-boundary-invalid");
+            reasons.Add(PilotBPreflightReasonCodes.RepositoryBoundaryInvalid);
         }
 
-        if (artifactRoot is not null && Directory.Exists(artifactRoot) && Directory.EnumerateFileSystemEntries(artifactRoot).Any())
+        if (artifactRoot is not null && FileSystemEntryExists(artifactRoot))
         {
-            reasons.Add("artifact-directory-not-empty");
+            reasons.Add(PilotBPreflightReasonCodes.ArtifactPathAlreadyExists);
         }
 
         if (fixtureRoot is not null
@@ -403,12 +396,12 @@ public sealed class PilotBRunner
                 || (manifestPath is not null && PilotBFileManifest.IsWithin(fixtureRoot, manifestPath))
                 || (artifactRoot is not null && PilotBFileManifest.IsWithin(fixtureRoot, artifactRoot))))
         {
-            reasons.Add("boundary-contamination");
+            reasons.Add(PilotBPreflightReasonCodes.BoundaryContamination);
         }
 
         if (reasons.Count > 0)
         {
-            return new PreflightResult(null, null, null, null, null, null, null, false, InvalidResult(options, reasons));
+            throw new PilotBPreflightException(reasons);
         }
 
         try
@@ -416,14 +409,14 @@ public sealed class PilotBRunner
             var executableSha = PilotBSha256.ComputeFile(executablePath!);
             if (!string.Equals(executableSha, options.ExpectedExecutableSha256, StringComparison.OrdinalIgnoreCase))
             {
-                reasons.Add("executable-hash-mismatch");
+                reasons.Add(PilotBPreflightReasonCodes.ExecutableHashMismatch);
             }
 
             var manifestBytes = await File.ReadAllBytesAsync(manifestPath!, cancellationToken);
             var manifestSha = PilotBSha256.Compute(manifestBytes);
             if (!string.Equals(manifestSha, options.ExpectedArmManifestSha256, StringComparison.OrdinalIgnoreCase))
             {
-                reasons.Add("manifest-hash-mismatch");
+                reasons.Add(PilotBPreflightReasonCodes.ManifestHashMismatch);
             }
 
             PilotBArmManifest? manifest = null;
@@ -433,26 +426,26 @@ public sealed class PilotBRunner
             }
             catch (Exception) when (!cancellationToken.IsCancellationRequested)
             {
-                reasons.Add("malformed-manifest");
+                reasons.Add(PilotBPreflightReasonCodes.MalformedManifest);
             }
 
             if (manifest is not null)
             {
                 if (!string.Equals(Path.GetFullPath(manifest.RepositoryRoot), fixtureRoot, StringComparison.OrdinalIgnoreCase))
                 {
-                    reasons.Add("boundary-contamination");
+                    reasons.Add(PilotBPreflightReasonCodes.BoundaryContamination);
                 }
 
-                if (!string.Equals(manifest.ArmId, "control", StringComparison.OrdinalIgnoreCase)
-                    && !string.Equals(manifest.ArmId, "treatment", StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(manifest.ArmId, "control", StringComparison.Ordinal)
+                    && !string.Equals(manifest.ArmId, "treatment", StringComparison.Ordinal))
                 {
-                    reasons.Add("invalid-arm-id");
+                    reasons.Add(PilotBPreflightReasonCodes.InvalidArmId);
                 }
             }
 
             if (reasons.Count > 0)
             {
-                return new PreflightResult(null, null, null, null, null, null, null, false, InvalidResult(options, reasons));
+                throw new PilotBPreflightException(reasons);
             }
 
             return new PreflightResult(
@@ -463,16 +456,19 @@ public sealed class PilotBRunner
                 executablePath,
                 executableSha,
                 manifestSha,
-                true,
-                null);
+                true);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (Exception)
+        catch (PilotBPreflightException)
         {
-            return new PreflightResult(null, null, null, null, null, null, null, false, InvalidResult(options, ["preflight-read-failed"]));
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new PilotBPreflightException([PilotBPreflightReasonCodes.PreflightReadFailed], exception);
         }
     }
 
@@ -511,28 +507,6 @@ public sealed class PilotBRunner
         };
     }
 
-    private static PilotBRunnerResult InvalidResult(PilotBRunnerOptions options, IEnumerable<string> reasons)
-    {
-        var invalidReasons = reasons.Distinct(StringComparer.Ordinal).ToArray();
-        return new PilotBRunnerResult(
-            PilotBRunnerStatus.Invalid,
-            options.IsQualification,
-            false,
-            null,
-            false,
-            invalidReasons,
-            ExactInvocation,
-            new PilotBTranscriptParseResult([], false, false, false, 0, ["not-executed"], []),
-            PilotBArtifactPaths.Empty,
-            new PilotBRunnerIntegrityFacts("", "", "", "", "", false, false, false, true, false),
-            null)
-        {
-            EvidenceState = PilotBEvidenceState.Unsealed,
-            RunValidity = null,
-            Qualification = null
-        };
-    }
-
     private static string? AbsolutePath(string value, string reason, ICollection<string> reasons)
     {
         if (string.IsNullOrWhiteSpace(value) || !Path.IsPathFullyQualified(value))
@@ -541,7 +515,36 @@ public sealed class PilotBRunner
             return null;
         }
 
-        return Path.GetFullPath(value);
+        try
+        {
+            return Path.GetFullPath(value);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            reasons.Add(reason);
+            return null;
+        }
+    }
+
+    private static bool FileSystemEntryExists(string path)
+    {
+        try
+        {
+            _ = File.GetAttributes(path);
+            return true;
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return false;
+        }
+        catch (Exception exception)
+        {
+            throw new PilotBPreflightException([PilotBPreflightReasonCodes.PreflightReadFailed], exception);
+        }
     }
 
     private static string SafeComputeFileHash(string path, ICollection<string> reasons, string failureReason)
@@ -573,6 +576,5 @@ public sealed class PilotBRunner
         string? ExecutablePath,
         string? ExecutableSha256,
         string? ArmManifestSha256,
-        bool RepositoryBoundaryValid,
-        PilotBRunnerResult? Result);
+        bool RepositoryBoundaryValid);
 }

@@ -83,6 +83,7 @@ public sealed record PilotBArmManifest(
             || string.IsNullOrWhiteSpace(manifest.ReasoningEffort)
             || string.IsNullOrWhiteSpace(manifest.Sandbox)
             || string.IsNullOrWhiteSpace(manifest.ApprovalPolicy)
+            || string.IsNullOrWhiteSpace(manifest.RepositoryRoot)
             || !PilotBSha256.IsSha256(manifest.ProtocolSha256)
             || !PilotBSha256.IsSha256(manifest.GlobalInstructionsSha256)
             || !PilotBSha256.IsSha256(manifest.ProjectInstructionsSha256)
