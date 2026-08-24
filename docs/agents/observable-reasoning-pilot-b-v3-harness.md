@@ -292,6 +292,13 @@ the final state recorded by the seal. Physical inventory, file hashes, schema
 support, and seal consistency belong only to the verifier, not to
 `RunQualification`.
 
+The v3 evidence wire accepts only exact lowercase `valid` and `invalid` values
+for both `integrity.json.run_validity` and
+`metadata.json.run_qualification.validity`. During verification, the seal and
+each of the seven canonical payloads are read once into byte snapshots; payload
+lengths, hashes, parsing, qualification, and fingerprint projection all use
+those same bytes.
+
 Controlled malformed/partial/nonzero/timeout or drift outcomes may therefore
 be `SEALED + INVALID` when their evidence is fully captured and verified.
 Publication or verification failure is `UNSEALED + null` and has no trusted
@@ -370,6 +377,8 @@ post_fixture_semantic_sha256
 qualification marker
 run_validity
 ordered qualification reason codes
+exit_code
+timed_out
 ```
 
 SHA-256 strings use one canonical lowercase representation. Qualification
@@ -405,6 +414,32 @@ A runner-controlled timeout is a normal failure fact. The runner terminates the
 owned process and, when capture and publication can complete, returns
 `SEALED + INVALID`. If process termination or publication cannot establish a
 closed immutable artifact set, the result is `UNSEALED + null`.
+
+### Issue #43 implemented runner slice
+
+Issue #43 implements the test-only fake-CLI path through the existing
+`PilotBRunner.RunAsync` boundary. It keeps the exact pinned invocation, stores
+the original validated arm-manifest bytes, claims a `FileMode.CreateNew` write
+lock, writes the seven payloads once, publishes the final seal through a
+same-directory temporary file and no-overwrite rename, then reopens the bundle
+with `EvidenceBundleVerifier` before returning a trusted result.
+
+The runner separates evidence state from run validity: a valid fake transcript
+returns `SEALED + VALID`; controlled malformed, partial, nonzero-exit, and
+timeout fake outcomes return `SEALED + INVALID` when the captured bundle can be
+verified. The dedicated fingerprint writer projects validated semantic data,
+not timestamps, absolute paths, raw transcript formatting, or auth data.
+`pilot-b.file-manifest.v3` retains its existing payload wire shape; its semantic
+fixture projection is used only by the fingerprint writer.
+
+The broader hardening described above remains a target design, not an implied
+claim that #43 completes it. In particular, typed preflight exceptions,
+initial-existing-directory rejection, ownership-race arbitration, abandoned
+lock/no-reuse policy, reparse-point hardening, broader arm-manifest/preflight
+enum validation, and a size-only `RunAsync` refactor remain explicitly deferred
+to #46. Evidence-wire validity parsing is fixed in #43 and is not part of that
+deferral. No protocol v3, run-record v3, parser/projection, scorer, WPF, real
+CLI, or authentication behavior is changed by this slice.
 
 ## Fixture policy
 

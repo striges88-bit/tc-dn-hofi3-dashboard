@@ -1600,3 +1600,27 @@ Foundation extraction receipt: base `72cd6ba794f5caf51dab72958e02d9126bdd6fe4`; 
 Checkpoint 1 result: the critical-exclusion red test failed as expected (`b=5` baseline versus `b=4` with unchanged ROUTINE events), then passed after the minimal scorer change. Focused Pilot B tests: 60/60 passed after the coverage and documentation checkpoints. No commit, push, PR, closure, real CLI/auth, or Pilot B run was performed.
 
 Final verification result: the sandbox full suite reproduced only the known five ACL failures in existing Memory tests while Pilot B passed; the approved outside-sandbox rerun passed all 281 tests (19+10+3+22+60+121+46). Final solution build: 0 warnings, 0 errors. `git diff --check` passed and no-index whitespace checks emitted no diagnostics for the scoped untracked scorer/test/harness files. Two-axis scoped review found and resolved one duplicated endpoint predicate; the final spec review found no missing #47 requirement. No commit, push, PR, closure, real CLI/auth, or Pilot B run was performed.
+
+## Pilot B v3 Issue #43 — fake CLI to sealed valid evidence (active)
+
+- [x] Confirm live preconditions: PR #51 is merged to `main@56c2cdf`, #42 is `COMPLETED`, #43 is open, and #46 remains explicitly deferred.
+- [x] Create clean `codex/pilot-b-runner-sealed-evidence` worktree from post-merge `main`; restore once and capture focused runner baseline (8/8).
+- [x] Add red black-box `PilotBRunner.RunAsync` tests for atomic lock/payload inventory/seal-verifier/typed semantic fingerprint behavior.
+- [x] Implement only the minimum #43 fake-CLI runner path; preserve protocol v3, run-record v3, parser/projection, scorer, WPF, real CLI/auth, and all #46 hardening boundaries.
+- [x] Update the focused harness contract with actual #43 behavior, then run focused/full Release validation, build, whitespace check, and adversarial scope review.
+- [x] Stop with local evidence only; do not commit, push, open/update a PR, or mutate GitHub without separate authorization.
+
+Pre-follow-up implementation evidence: red guards covered missing sealed-state behavior, v3 file-manifest wire-shape preservation, and integrity-fact verification before the minimal runner path went green. Pre-follow-up focused `PilotBRunnerTests`: 19/19. Pre-follow-up Release solution tests: 212/212; Release build: 0 warnings, 0 errors. Tracked and untracked scoped whitespace checks passed. Local adversarial scope audit confirmed only #43 runner/fake CLI/tests/docs/todo files changed; #46 hardening and protocol/run-record/parser/projection/scorer/WPF/real CLI-auth boundaries remain untouched. Two independent review agents produced no result before their bounded timeout and were stopped without edits. No commit, push, PR, GitHub issue mutation, real CLI, login/authentication, or Pilot B experiment was performed.
+
+Prior final result before the CodeRabbit follow-up: fake CLI prompt dispatch is now byte-exact, timeout is an explicit required input, and sealed metadata records timeout/elapsed ticks so the independent verifier recomputes `timing_valid` instead of trusting the publisher flag. Focused `PilotBRunnerTests`: 20/20; final Release solution tests: 213/213; staged whitespace check passed. Size/ownership refactoring remains deferred to #46.
+
+### PR #52 CodeRabbit remediation
+
+- [x] Recheck live Issue #43, closed blocker #42, draft PR #52, CI, and all four unresolved review comments at `a9f5fea`.
+- [x] Add red regressions for noncanonical seal/qualification validity and failed process start without a false exit reason.
+- [x] Parse only exact lowercase evidence-wire validity and derive inventory, parsing, qualification, and fingerprinting from one byte snapshot per sealed artifact.
+- [x] Preserve filesystem closure/reparse checks and existing post-seal tamper coverage without a race test, filesystem abstraction, or fault framework.
+- [x] Clarify evidence-wire validity ownership here and in the focused harness while keeping broader arm-manifest/preflight enum hardening deferred to #46.
+- [x] Run focused/full Release verification, build, whitespace, exact-scope, and adversarial review gates without staging or publication.
+
+Remediation evidence: RED `PilotBRunnerTests` failed exactly 5 new cases while 22 passed; GREEN focused tests passed 27/27. Full PilotB tests passed 80/80; Release solution tests passed 220/220 (19+10+3+22+80+71+15); Release build completed with 0 warnings and 0 errors. The feature worktree has no local `.dotnet` runtime, so the same commands used the existing repo-local runtime at `%USERPROFILE%\Desktop\PRJCT-INDIC\.dotnet\dotnet.exe`. The single-read invariant is proven by verifier structure and final diff review rather than a flaky concurrent race. Broader #46 preflight/manifest hardening remains unresolved by design; no real CLI/auth or experiment was run.

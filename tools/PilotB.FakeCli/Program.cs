@@ -8,10 +8,14 @@ if (args is not ["codex", "exec", "--ephemeral", "--json"])
 
 using var input = new MemoryStream();
 await Console.OpenStandardInput().CopyToAsync(input);
-var prompt = Encoding.UTF8.GetString(input.ToArray()).Trim();
+var prompt = Encoding.UTF8.GetString(input.ToArray());
 
 switch (prompt)
 {
+    case "pilot-b.fake.delayed-valid":
+        await Task.Delay(TimeSpan.FromMilliseconds(750));
+        goto case "pilot-b.fake.valid";
+
     case "pilot-b.fake.valid":
         Console.WriteLine("{\"type\":\"thread.started\",\"thread_id\":\"fake-thread\"}");
         Console.WriteLine("{\"type\":\"turn.started\"}");
