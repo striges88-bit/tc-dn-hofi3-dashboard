@@ -352,11 +352,16 @@ unsealed.
 
 A sealed bundle is a closed artifact set. Verification requires exact equality
 between the canonical expected inventory and filesystem contents: every
-required regular file exists at its canonical relative name; no undeclared,
-nested, temporary, linked/reparse, traversal, or other entry exists; every
-recorded byte length and SHA-256 matches; schema/version and final-state facts
-are consistent. Any later addition, deletion, replacement, or modification
-makes re-verification fail. Presence of `integrity.json` alone is never enough.
+required regular single-link file exists at its canonical relative name; no
+undeclared, nested, temporary, hard-linked, reparse, traversal, or other entry
+exists; every recorded byte length and SHA-256 matches; schema/version and
+final-state facts are consistent. The bundle root itself cannot be a reparse
+point. Metadata, seal, inventory-entry, qualification, and integrity-fact JSON
+objects require their exact v3 property sets, including rejection of unknown
+or duplicate properties. On Windows, the verifier rejects both reparse points
+and files whose native link count exceeds one. Any later addition, deletion,
+replacement, or modification makes re-verification fail. Presence of
+`integrity.json` alone is never enough.
 
 `EvidenceBundleVerifier` is the sole authority for `SEALED` and
 `artifact_complete=true`. The runner calls it after publication; the run-record
@@ -469,6 +474,20 @@ and does not determine sealing. Atomic write/rename, no-overwrite behavior,
 ownership races, inventory closure, and tamper detection are tested separately
 against the concrete publisher/verifier on real temporary filesystems; no
 `IFileSystem`, mock filesystem, rules engine, or fault framework is added.
+
+Issue #45 extracts that one publisher boundary from the runner. The concrete
+publisher retains `FileMode.CreateNew` for all seven payloads and metadata,
+validates the pre-seal payload set while the ownership lock is held, and
+requires on-disk metadata to parse under the exact v3 schema and byte-match the
+canonical bytes for the supplied typed metadata. Metadata validation and all
+payload lengths/hashes are derived from the same one-read immutable byte
+snapshots. It then writes and durably flushes `integrity.json.tmp`, closes it,
+and renames it without overwrite.
+Reserved temp/final seal collisions are handled by those native
+create-new/rename operations, while any other undeclared pre-seal entry fails
+before a temporary seal is created. The runner still returns a fingerprint
+only after a separate `PilotBEvidenceBundleVerifier` pass; injected publication
+failure or post-publication tamper returns `UNSEALED + null`.
 
 The regression matrix must retain all existing tests and cover:
 
