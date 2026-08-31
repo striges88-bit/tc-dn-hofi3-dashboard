@@ -6,15 +6,30 @@ public sealed class PilotBRunner
 {
     private static readonly IReadOnlyList<string> ExactInvocation =
         ["codex", "exec", "--ephemeral", "--json"];
+    private readonly IEvidenceBundlePublisher evidencePublisher;
     private readonly Func<Task> beforeOwnershipAcquisition;
 
     public PilotBRunner()
-        : this(static () => Task.CompletedTask)
+        : this(new PilotBEvidenceBundlePublisher(), static () => Task.CompletedTask)
     {
     }
 
     internal PilotBRunner(Func<Task> beforeOwnershipAcquisition)
+        : this(new PilotBEvidenceBundlePublisher(), beforeOwnershipAcquisition)
     {
+    }
+
+    internal PilotBRunner(IEvidenceBundlePublisher evidencePublisher)
+        : this(evidencePublisher, static () => Task.CompletedTask)
+    {
+    }
+
+    private PilotBRunner(
+        IEvidenceBundlePublisher evidencePublisher,
+        Func<Task> beforeOwnershipAcquisition)
+    {
+        this.evidencePublisher = evidencePublisher
+            ?? throw new ArgumentNullException(nameof(evidencePublisher));
         this.beforeOwnershipAcquisition = beforeOwnershipAcquisition
             ?? throw new ArgumentNullException(nameof(beforeOwnershipAcquisition));
     }
@@ -55,9 +70,9 @@ public sealed class PilotBRunner
             try
             {
                 preManifest = PilotBFileManifest.Capture(fixtureRoot);
-                await PilotBEvidenceBundle.WriteNewBytesAsync(artifactPaths.PromptPath, promptBytes, cancellationToken);
-                await PilotBEvidenceBundle.WriteNewBytesAsync(artifactPaths.ManifestPath, manifestBytes, cancellationToken);
-                await PilotBEvidenceBundle.WriteNewBytesAsync(
+                await evidencePublisher.WriteNewBytesAsync(artifactPaths.PromptPath, promptBytes, cancellationToken);
+                await evidencePublisher.WriteNewBytesAsync(artifactPaths.ManifestPath, manifestBytes, cancellationToken);
+                await evidencePublisher.WriteNewBytesAsync(
                     artifactPaths.PreManifestPath,
                     System.Text.Encoding.UTF8.GetBytes(preManifest.ToJson()),
                     cancellationToken);
@@ -142,12 +157,12 @@ public sealed class PilotBRunner
                 }
 
                 postManifest = PilotBFileManifest.Capture(fixtureRoot);
-                await PilotBEvidenceBundle.WriteNewBytesAsync(
+                await evidencePublisher.WriteNewBytesAsync(
                     artifactPaths.PostManifestPath,
                     System.Text.Encoding.UTF8.GetBytes(postManifest.ToJson()),
                     cancellationToken);
-                await PilotBEvidenceBundle.WriteNewBytesAsync(artifactPaths.RawOutputPath, stdoutBytes, cancellationToken);
-                await PilotBEvidenceBundle.WriteNewBytesAsync(artifactPaths.StderrPath, stderrBytes, cancellationToken);
+                await evidencePublisher.WriteNewBytesAsync(artifactPaths.RawOutputPath, stdoutBytes, cancellationToken);
+                await evidencePublisher.WriteNewBytesAsync(artifactPaths.StderrPath, stderrBytes, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -254,11 +269,11 @@ public sealed class PilotBRunner
                         postFixtureSemanticSha,
                         captureReasons,
                         qualification);
-                    await PilotBEvidenceBundle.WriteNewBytesAsync(
+                    await evidencePublisher.WriteNewBytesAsync(
                         artifactPaths.MetadataPath,
                         PilotBEvidenceBundle.CreateMetadataBytes(metadata),
                         cancellationToken);
-                    await PilotBEvidenceBundle.PublishSealAsync(artifactPaths, metadata, fingerprint, cancellationToken);
+                    await evidencePublisher.PublishSealAsync(artifactPaths, metadata, fingerprint, cancellationToken);
                     sealPublished = true;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

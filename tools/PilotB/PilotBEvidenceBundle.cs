@@ -75,29 +75,15 @@ internal static class PilotBEvidenceBundle
             Path.Combine(root, "prompt.bin"),
             Path.Combine(root, "stderr.txt"));
 
-    public static async Task WriteNewBytesAsync(string path, ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken)
-    {
-        await using var stream = new FileStream(
-            path,
-            FileMode.CreateNew,
-            FileAccess.Write,
-            FileShare.None,
-            bufferSize: 4096,
-            FileOptions.Asynchronous);
-        await stream.WriteAsync(bytes, cancellationToken);
-        await stream.FlushAsync(cancellationToken);
-        stream.Flush(flushToDisk: true);
-    }
-
     public static bool PayloadArtifactsExist(PilotBArtifactPaths paths, bool includeMetadata)
     {
         var names = includeMetadata ? PayloadNames : PayloadNames.Where(name => name != "metadata.json");
         return names.All(name => File.Exists(Path.Combine(paths.Root, name)));
     }
 
-    public static IReadOnlyList<PilotBPayloadInventoryEntry> CapturePayloadInventory(PilotBArtifactPaths paths)
+    public static IReadOnlyDictionary<string, byte[]> CapturePayloadSnapshots(PilotBArtifactPaths paths)
     {
-        var entries = new List<PilotBPayloadInventoryEntry>(PayloadNames.Count);
+        var payloads = new Dictionary<string, byte[]>(PayloadNames.Count, StringComparer.Ordinal);
         foreach (var name in PayloadNames)
         {
             var path = Path.Combine(paths.Root, name);
@@ -111,12 +97,25 @@ internal static class PilotBEvidenceBundle
                 throw new FormatException("Evidence payloads cannot be linked files.");
             }
 
-            var file = new FileInfo(path);
-            entries.Add(new PilotBPayloadInventoryEntry(name, file.Length, PilotBSha256.ComputeFile(path)));
+            if (PilotBEvidenceFileIdentity.HasMultipleHardLinks(path))
+            {
+                throw new FormatException("Evidence payloads cannot be hard-linked files.");
+            }
+
+            payloads.Add(name, File.ReadAllBytes(path));
         }
 
-        return entries;
+        return payloads;
     }
+
+    public static IReadOnlyList<PilotBPayloadInventoryEntry> CapturePayloadInventory(
+        IReadOnlyDictionary<string, byte[]> payloads)
+        => PayloadNames
+            .Select(name => new PilotBPayloadInventoryEntry(
+                name,
+                payloads[name].LongLength,
+                PilotBSha256.Compute(payloads[name])))
+            .ToArray();
 
     public static byte[] CreateMetadataBytes(PilotBEvidenceMetadata metadata)
     {
@@ -178,70 +177,14 @@ internal static class PilotBEvidenceBundle
         return stream.ToArray();
     }
 
-    public static async Task PublishSealAsync(
-        PilotBArtifactPaths paths,
-        PilotBEvidenceMetadata metadata,
-        string semanticFingerprint,
-        CancellationToken cancellationToken)
-    {
-        var inventory = CapturePayloadInventory(paths);
-        var temporaryPath = paths.SealPath + ".tmp";
-        await using (var stream = new FileStream(
-                         temporaryPath,
-                         FileMode.CreateNew,
-                         FileAccess.Write,
-                         FileShare.None,
-                         bufferSize: 4096,
-                         FileOptions.Asynchronous))
-        {
-            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = false }))
-            {
-                writer.WriteStartObject();
-                writer.WriteString("schema_version", "pilot-b.integrity.v3");
-                writer.WriteString("evidence_state", "sealed");
-                writer.WriteString("run_validity", metadata.Qualification.Validity.ToString().ToLowerInvariant());
-                writer.WriteBoolean("qualification_marker", metadata.IsQualification);
-                WriteStrings(writer, "invalid_reasons", metadata.Qualification.InvalidReasons);
-                writer.WriteBoolean("artifact_complete", true);
-                writer.WriteString("semantic_fingerprint", semanticFingerprint);
-                writer.WriteStartArray("payload_inventory");
-                foreach (var entry in inventory)
-                {
-                    writer.WriteStartObject();
-                    writer.WriteString("path", entry.Path);
-                    writer.WriteNumber("length", entry.Length);
-                    writer.WriteString("sha256", entry.Sha256);
-                    writer.WriteEndObject();
-                }
-                writer.WriteEndArray();
-                writer.WriteStartObject("integrity_facts");
-                writer.WriteString("executable_sha256", metadata.ExecutableSha256);
-                writer.WriteString("arm_manifest_sha256", metadata.ArmManifestSha256);
-                writer.WriteString("prompt_sha256", metadata.PromptSha256);
-                writer.WriteString("pre_manifest_sha256", metadata.PreManifestSha256);
-                writer.WriteString("post_manifest_sha256", metadata.PostManifestSha256);
-                writer.WriteBoolean("repository_boundary_valid", metadata.RepositoryBoundaryValid);
-                writer.WriteBoolean("artifact_complete", true);
-                writer.WriteBoolean("timing_valid", metadata.TimingValid);
-                writer.WriteBoolean("auth_lane_excluded", true);
-                writer.WriteBoolean("workspace_integrity_captured", metadata.WorkspaceIntegrityCaptured);
-                writer.WriteEndObject();
-                writer.WriteEndObject();
-                await writer.FlushAsync(cancellationToken);
-            }
-
-            stream.Flush(flushToDisk: true);
-        }
-
-        File.Move(temporaryPath, paths.SealPath, overwrite: false);
-    }
-
     public static PilotBEvidenceMetadata ParseMetadata(ReadOnlySpan<byte> utf8Json)
     {
         using var document = JsonDocument.Parse(utf8Json.ToArray());
         var root = document.RootElement;
+        PilotBEvidenceSchema.RequireMetadata(root);
         Require(root, "schema_version", "pilot-b.runner-metadata.v3");
         var qualification = RequiredObject(root, "run_qualification");
+        PilotBEvidenceSchema.RequireQualification(qualification);
         return new PilotBEvidenceMetadata(
             RequiredString(root, "executable_path"),
             RequiredString(root, "expected_executable_sha256"),
@@ -286,12 +229,18 @@ internal static class PilotBEvidenceBundle
     {
         using var document = JsonDocument.Parse(utf8Json.ToArray());
         var root = document.RootElement;
+        PilotBEvidenceSchema.RequireSeal(root);
         Require(root, "schema_version", "pilot-b.integrity.v3");
-        var inventory = RequiredArray(root, "payload_inventory").EnumerateArray().Select(entry => new PilotBPayloadInventoryEntry(
-            RequiredString(entry, "path"),
-            RequiredLong(entry, "length"),
-            RequiredString(entry, "sha256"))).ToArray();
+        var inventory = RequiredArray(root, "payload_inventory").EnumerateArray().Select(entry =>
+        {
+            PilotBEvidenceSchema.RequireInventoryEntry(entry);
+            return new PilotBPayloadInventoryEntry(
+                RequiredString(entry, "path"),
+                RequiredLong(entry, "length"),
+                RequiredString(entry, "sha256"));
+        }).ToArray();
         var integrityFacts = RequiredObject(root, "integrity_facts");
+        PilotBEvidenceSchema.RequireIntegrityFacts(integrityFacts);
         return new PilotBSealData(
             ParseValidity(RequiredString(root, "run_validity")),
             RequiredBool(root, "qualification_marker"),
@@ -429,6 +378,7 @@ internal static class PilotBEvidenceBundle
             throw new FormatException($"'{name}' does not match the expected schema.");
         }
     }
+
 }
 
 public sealed class PilotBEvidenceBundleVerifier
@@ -453,8 +403,8 @@ public sealed class PilotBEvidenceBundleVerifier
             Require(ReadBool(sealBytes, "artifact_complete"), "seal-artifact-incomplete");
             Require(PilotBSha256.IsSha256(seal.SemanticFingerprint), "seal-fingerprint-invalid");
 
-            var payloads = CapturePayloadSnapshots(paths);
-            var inventory = CapturePayloadInventory(payloads);
+            var payloads = PilotBEvidenceBundle.CapturePayloadSnapshots(paths);
+            var inventory = PilotBEvidenceBundle.CapturePayloadInventory(payloads);
             Require(InventoryMatches(inventory, seal.PayloadInventory), "payload-inventory-mismatch");
 
             var metadata = PilotBEvidenceBundle.ParseMetadata(payloads["metadata.json"]);
@@ -558,6 +508,8 @@ public sealed class PilotBEvidenceBundleVerifier
             throw new PilotBEvidenceVerificationException("artifact-directory-missing");
         }
 
+        Require((File.GetAttributes(paths.Root) & FileAttributes.ReparsePoint) == 0, "artifact-root-reparse-point");
+
         var expected = PilotBEvidenceBundle.PayloadNames.Append(Path.GetFileName(paths.SealPath)).OrderBy(name => name, StringComparer.Ordinal).ToArray();
         var actual = Directory.EnumerateFileSystemEntries(paths.Root, "*", SearchOption.TopDirectoryOnly)
             .Select(Path.GetFileName)
@@ -572,6 +524,7 @@ public sealed class PilotBEvidenceBundleVerifier
             var path = Path.Combine(paths.Root, name);
             Require(File.Exists(path), "artifact-file-missing");
             Require((File.GetAttributes(path) & FileAttributes.ReparsePoint) == 0, "artifact-reparse-point");
+            Require(!PilotBEvidenceFileIdentity.HasMultipleHardLinks(path), "artifact-hard-link");
         }
     }
 
@@ -596,26 +549,6 @@ public sealed class PilotBEvidenceBundleVerifier
 
         return true;
     }
-
-    private static IReadOnlyDictionary<string, byte[]> CapturePayloadSnapshots(PilotBArtifactPaths paths)
-    {
-        var payloads = new Dictionary<string, byte[]>(PilotBEvidenceBundle.PayloadNames.Count, StringComparer.Ordinal);
-        foreach (var name in PilotBEvidenceBundle.PayloadNames)
-        {
-            payloads.Add(name, File.ReadAllBytes(Path.Combine(paths.Root, name)));
-        }
-
-        return payloads;
-    }
-
-    private static IReadOnlyList<PilotBPayloadInventoryEntry> CapturePayloadInventory(
-        IReadOnlyDictionary<string, byte[]> payloads)
-        => PilotBEvidenceBundle.PayloadNames
-            .Select(name => new PilotBPayloadInventoryEntry(
-                name,
-                payloads[name].LongLength,
-                PilotBSha256.Compute(payloads[name])))
-            .ToArray();
 
     private static bool QualificationMatches(PilotBRunQualificationResult left, PilotBRunQualificationResult right)
         => left.Validity == right.Validity
