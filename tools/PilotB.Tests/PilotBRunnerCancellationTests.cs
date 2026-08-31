@@ -153,6 +153,7 @@ public sealed class PilotBRunnerCancellationTests
         {
             cancellation.Cancel();
             await KillIfRunningAsync(ownedProcess);
+            await ObserveCompletionAsync(execution);
             ownedProcess?.Dispose();
         }
     }
@@ -188,6 +189,7 @@ public sealed class PilotBRunnerCancellationTests
         {
             cancellation.Cancel();
             await KillIfRunningAsync(ownedProcess);
+            await ObserveCompletionAsync(execution);
             ownedProcess?.Dispose();
         }
     }
@@ -266,6 +268,14 @@ public sealed class PilotBRunnerCancellationTests
         }
 
         await process.WaitForExitAsync().WaitAsync(OperationTimeout);
+    }
+
+    private static async Task ObserveCompletionAsync(Task execution)
+    {
+        _ = await Record.ExceptionAsync(async () =>
+        {
+            await execution;
+        });
     }
 
     private static string MarkerPath(PilotBRunnerTestFixture fixture, string markerName)
