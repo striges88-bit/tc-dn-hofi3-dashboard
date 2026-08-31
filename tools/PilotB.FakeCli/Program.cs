@@ -1,4 +1,12 @@
+using System.Diagnostics;
 using System.Text;
+
+if (args is ["--pilot-b-fake-child", var childMarkerPath])
+{
+    await WriteProcessMarkerAsync(childMarkerPath);
+    await Task.Delay(Timeout.InfiniteTimeSpan);
+    return 0;
+}
 
 if (args is not ["codex", "exec", "--ephemeral", "--json"])
 {
@@ -12,6 +20,43 @@ var prompt = Encoding.UTF8.GetString(input.ToArray());
 
 switch (prompt)
 {
+    case "pilot-b.fake.cancel-before-output":
+        await WriteProcessMarkerAsync(GetMarkerPath(".pilot-b-fake-parent-ready"));
+        await Task.Delay(Timeout.InfiniteTimeSpan);
+        return 0;
+
+    case "pilot-b.fake.cancel-during-output":
+        Console.WriteLine("{\"type\":\"thread.started\",\"thread_id\":\"fake-cancel-thread\"}");
+        await Console.Out.FlushAsync();
+        await WriteProcessMarkerAsync(GetMarkerPath(".pilot-b-fake-parent-ready"));
+        await Task.Delay(Timeout.InfiniteTimeSpan);
+        return 0;
+
+    case "pilot-b.fake.cancel-with-child":
+        var childMarker = GetMarkerPath(".pilot-b-fake-child-ready");
+        await WriteProcessMarkerAsync(GetMarkerPath(".pilot-b-fake-parent-ready"));
+        using (var child = new Process
+               {
+                   StartInfo = new ProcessStartInfo
+                   {
+                       FileName = Environment.ProcessPath
+                           ?? throw new InvalidOperationException("Cannot resolve the fake CLI process path."),
+                       UseShellExecute = false,
+                       CreateNoWindow = true
+                   }
+               })
+        {
+            child.StartInfo.ArgumentList.Add("--pilot-b-fake-child");
+            child.StartInfo.ArgumentList.Add(childMarker);
+            if (!child.Start())
+            {
+                return 66;
+            }
+
+            await child.WaitForExitAsync();
+            return child.ExitCode;
+        }
+
     case "pilot-b.fake.delayed-valid":
         await Task.Delay(TimeSpan.FromMilliseconds(750));
         goto case "pilot-b.fake.valid";
@@ -46,4 +91,18 @@ switch (prompt)
     default:
         Console.Error.WriteLine("unknown fake prompt");
         return 65;
+}
+
+static string GetMarkerPath(string fileName)
+{
+    var markerDirectory = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, "..", "markers"));
+    Directory.CreateDirectory(markerDirectory);
+    return Path.Combine(markerDirectory, fileName);
+}
+
+static async Task WriteProcessMarkerAsync(string markerPath)
+{
+    using var process = Process.GetCurrentProcess();
+    var startedAtTicks = process.StartTime.ToUniversalTime().Ticks;
+    await File.WriteAllTextAsync(markerPath, $"{Environment.ProcessId}|{startedAtTicks}");
 }
