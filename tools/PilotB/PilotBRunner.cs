@@ -6,32 +6,56 @@ public sealed class PilotBRunner
 {
     private static readonly IReadOnlyList<string> ExactInvocation =
         ["codex", "exec", "--ephemeral", "--json"];
+    private const string ProcessTreeTerminationFailureDataKey = "PilotB.ProcessTreeTerminationFailure";
+    private static readonly TimeSpan ProcessShutdownTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan CaptureAbortTimeout = TimeSpan.FromSeconds(1);
     private readonly IEvidenceBundlePublisher evidencePublisher;
     private readonly Func<Task> beforeOwnershipAcquisition;
+    private readonly IPilotBProcessTreeTerminator processTreeTerminator;
 
     public PilotBRunner()
-        : this(new PilotBEvidenceBundlePublisher(), static () => Task.CompletedTask)
+        : this(
+            new PilotBEvidenceBundlePublisher(),
+            static () => Task.CompletedTask,
+            new PilotBProcessTreeTerminator())
     {
     }
 
     internal PilotBRunner(Func<Task> beforeOwnershipAcquisition)
-        : this(new PilotBEvidenceBundlePublisher(), beforeOwnershipAcquisition)
+        : this(
+            new PilotBEvidenceBundlePublisher(),
+            beforeOwnershipAcquisition,
+            new PilotBProcessTreeTerminator())
     {
     }
 
     internal PilotBRunner(IEvidenceBundlePublisher evidencePublisher)
-        : this(evidencePublisher, static () => Task.CompletedTask)
+        : this(
+            evidencePublisher,
+            static () => Task.CompletedTask,
+            new PilotBProcessTreeTerminator())
+    {
+    }
+
+    internal PilotBRunner(IPilotBProcessTreeTerminator processTreeTerminator)
+        : this(
+            new PilotBEvidenceBundlePublisher(),
+            static () => Task.CompletedTask,
+            processTreeTerminator)
     {
     }
 
     private PilotBRunner(
         IEvidenceBundlePublisher evidencePublisher,
-        Func<Task> beforeOwnershipAcquisition)
+        Func<Task> beforeOwnershipAcquisition,
+        IPilotBProcessTreeTerminator processTreeTerminator)
     {
         this.evidencePublisher = evidencePublisher
             ?? throw new ArgumentNullException(nameof(evidencePublisher));
         this.beforeOwnershipAcquisition = beforeOwnershipAcquisition
             ?? throw new ArgumentNullException(nameof(beforeOwnershipAcquisition));
+        this.processTreeTerminator = processTreeTerminator
+            ?? throw new ArgumentNullException(nameof(processTreeTerminator));
     }
 
     public async Task<PilotBRunnerResult> RunAsync(
@@ -102,48 +126,90 @@ public sealed class PilotBRunner
                 else
                 {
                     processStarted = true;
-                    var outputBuffer = new MemoryStream();
-                    var errorBuffer = new MemoryStream();
-                    var outputTask = process.StandardOutput.BaseStream.CopyToAsync(outputBuffer, cancellationToken);
-                    var errorTask = process.StandardError.BaseStream.CopyToAsync(errorBuffer, cancellationToken);
+                    using var outputBuffer = new MemoryStream();
+                    using var errorBuffer = new MemoryStream();
+                    using var captureCancellation = new CancellationTokenSource();
+                    var outputTask = process.StandardOutput.BaseStream.CopyToAsync(
+                        outputBuffer,
+                        captureCancellation.Token);
+                    var errorTask = process.StandardError.BaseStream.CopyToAsync(
+                        errorBuffer,
+                        captureCancellation.Token);
 
                     try
                     {
-                        await process.StandardInput.BaseStream.WriteAsync(promptBytes, cancellationToken);
-                        process.StandardInput.Close();
-                    }
-                    catch (Exception) when (!cancellationToken.IsCancellationRequested)
-                    {
-                        AddReason(captureReasons, "stdin-write-failed");
-                    }
-
-                    var waitTask = process.WaitForExitAsync(cancellationToken);
-                    var timeoutTask = Task.Delay(options.Timeout, cancellationToken);
-                    if (await Task.WhenAny(waitTask, timeoutTask) != waitTask)
-                    {
-                        timedOut = true;
                         try
                         {
-                            process.Kill(entireProcessTree: true);
+                            await process.StandardInput.BaseStream.WriteAsync(promptBytes, cancellationToken);
+                            process.StandardInput.Close();
                         }
-                        catch (InvalidOperationException)
+                        catch (Exception) when (!cancellationToken.IsCancellationRequested)
                         {
+                            AddReason(captureReasons, "stdin-write-failed");
                         }
-                    }
 
-                    try
-                    {
+                        var waitTask = process.WaitForExitAsync();
+                        var timeoutTask = Task.Delay(options.Timeout);
+                        var cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                        var completedTask = await Task.WhenAny(waitTask, timeoutTask, cancellationTask);
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            await cancellationTask;
+                        }
+
+                        if (completedTask == timeoutTask)
+                        {
+                            timedOut = true;
+                            try
+                            {
+                                process.Kill(entireProcessTree: true);
+                            }
+                            catch (InvalidOperationException)
+                            {
+                            }
+                        }
+
                         await waitTask;
-                    }
-                    catch (InvalidOperationException)
-                    {
-                    }
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            await cancellationTask;
+                        }
 
-                    try
-                    {
-                        await Task.WhenAll(outputTask, errorTask);
+                        var captureTask = Task.WhenAll(outputTask, errorTask);
+                        completedTask = await Task.WhenAny(captureTask, cancellationTask);
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            await cancellationTask;
+                        }
+
+                        await captureTask;
                     }
-                    catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                    catch (OperationCanceledException cancellationException)
+                        when (cancellationToken.IsCancellationRequested)
+                    {
+                        await TerminateAfterCallerCancellationAsync(
+                            process,
+                            outputTask,
+                            errorTask,
+                            captureCancellation,
+                            cancellationException);
+                        throw;
+                    }
+                    catch (Exception exception) when (cancellationToken.IsCancellationRequested)
+                    {
+                        var cancellationException = new OperationCanceledException(
+                            "The Pilot B run was canceled.",
+                            exception,
+                            cancellationToken);
+                        await TerminateAfterCallerCancellationAsync(
+                            process,
+                            outputTask,
+                            errorTask,
+                            captureCancellation,
+                            cancellationException);
+                        throw cancellationException;
+                    }
+                    catch (Exception)
                     {
                         AddReason(captureReasons, "output-capture-failed");
                     }
@@ -572,6 +638,60 @@ public sealed class PilotBRunner
         {
             AddReason(reasons, failureReason);
             return string.Empty;
+        }
+    }
+
+    private async Task TerminateAfterCallerCancellationAsync(
+        Process process,
+        Task outputTask,
+        Task errorTask,
+        CancellationTokenSource captureCancellation,
+        OperationCanceledException cancellationException)
+    {
+        var captureTask = Task.WhenAll(outputTask, errorTask);
+        Exception? terminationFailure = null;
+        try
+        {
+            processTreeTerminator.Terminate(process);
+            await process.WaitForExitAsync().WaitAsync(ProcessShutdownTimeout);
+            await captureTask.WaitAsync(ProcessShutdownTimeout);
+        }
+        catch (Exception exception)
+        {
+            terminationFailure = exception;
+            try
+            {
+                cancellationException.Data[ProcessTreeTerminationFailureDataKey] = exception;
+            }
+            catch
+            {
+            }
+        }
+
+        if (terminationFailure is not null)
+        {
+            captureCancellation.Cancel();
+            TryDispose(process.StandardInput);
+            TryDispose(process.StandardOutput);
+            TryDispose(process.StandardError);
+            try
+            {
+                await captureTask.WaitAsync(CaptureAbortTimeout);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static void TryDispose(IDisposable disposable)
+    {
+        try
+        {
+            disposable.Dispose();
+        }
+        catch
+        {
         }
     }
 

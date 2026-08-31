@@ -417,17 +417,39 @@ fingerprint across timestamps and physical directories.
 
 ### Cancellation and timeout
 
-Caller cancellation terminates the owned CLI process tree, closes capture
-resources, abandons publication, preserves the partial directory as unsealed
-diagnostic evidence, and rethrows `OperationCanceledException`. A process-tree
-termination failure never masks cancellation; it is retained as secondary
-exception/diagnostic context when possible. The runner performs no cleanup,
-recovery, or reuse.
+Caller cancellation has a separate wait signal from the runner timeout. The
+caller token is checked before timeout classification, so cancellation cannot
+become a timeout result. While the owned process is still in scope, one narrow
+internal process-tree terminator calls `Kill(entireProcessTree: true)`; the
+runner then bounded-waits for the root process and capture pipes. An
+already-exited root plus already-closed captures is successful termination.
+Capture tasks use a runner-owned token rather than the caller token, allowing
+stdout/stderr pipes to drain after successful termination. If termination or
+capture closure fails or exceeds the bounded grace period, that token closes
+the outstanding captures so the failure cannot keep the cancellation task
+alive.
+
+When cancellation itself raises `OperationCanceledException`, the runner
+rethrows that same exception with the caller token. If an ordinary capture
+error races with an already-requested caller cancellation, the runner preserves
+that error as the inner exception of a caller-token `OperationCanceledException`.
+A termination failure never replaces either form and is retained under
+`OperationCanceledException.Data["PilotB.ProcessTreeTerminationFailure"]`.
+Publication is abandoned: already-written files remain as an unsealed
+diagnostic directory, while no final metadata, seal, or trusted fingerprint is
+published by the tested cancellation paths. The ownership lock is released,
+but the runner performs no cleanup, recovery, or reuse of the partial bundle.
+Deterministic fake-CLI tests use bounded readiness/PID polling outside the Git
+fixture and prove cancellation before output, during flushed output, with a
+child process, and with injected termination failure; every test owns fallback
+cleanup for its observed PIDs.
 
 A runner-controlled timeout is a normal failure fact. The runner terminates the
 owned process and, when capture and publication can complete, returns
 `SEALED + INVALID`. If process termination or publication cannot establish a
-closed immutable artifact set, the result is `UNSEALED + null`.
+closed immutable artifact set, the result is `UNSEALED + null`. Issue #48 does
+not change that existing classification; the expanded controlled-invalid
+matrix remains Issue #49.
 
 ### Issue #43 implemented runner slice
 
@@ -468,10 +490,12 @@ emits deterministic qualification transcripts for valid, malformed, partial,
 timeout, and failed-run cases. It is not a replacement for the standalone
 Codex CLI and is never used to claim experiment or causal evidence.
 
-Fault injection exists only at the evidence-publication boundary through the
-minimal internal `IEvidenceBundlePublisher`. It is not a filesystem abstraction
-and does not determine sealing. Atomic write/rename, no-overwrite behavior,
-ownership races, inventory closure, and tamper detection are tested separately
+Filesystem/publication fault injection exists only through the minimal internal
+`IEvidenceBundlePublisher`. Issue #48 adds one separate narrow process-tree
+terminator solely to inject cancellation-termination failure; neither seam is a
+filesystem or generic process abstraction and neither determines sealing.
+Atomic write/rename, no-overwrite behavior, ownership races, inventory closure,
+and tamper detection are tested separately
 against the concrete publisher/verifier on real temporary filesystems; no
 `IFileSystem`, mock filesystem, rules engine, or fault framework is added.
 
