@@ -415,11 +415,11 @@ public sealed class PilotBEvidenceBundleVerifier
             var preManifest = PilotBFileManifest.Parse(payloads["pre-manifest.json"]);
             var postManifest = PilotBFileManifest.Parse(payloads["post-manifest.json"]);
             var executableSha = PilotBSha256.ComputeFile(metadata.ExecutablePath);
-            var promptSha = PilotBSha256.Compute(payloads["prompt.bin"]);
+            var capturedPromptSha = PilotBSha256.Compute(payloads["prompt.bin"]);
 
             var executableHashValid = string.Equals(executableSha, metadata.ExecutableSha256, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(executableSha, metadata.ExpectedExecutableSha256, StringComparison.OrdinalIgnoreCase);
-            var promptBytesVerified = string.Equals(promptSha, metadata.PromptSha256, StringComparison.OrdinalIgnoreCase);
+            var promptBytesVerified = string.Equals(capturedPromptSha, metadata.PromptSha256, StringComparison.OrdinalIgnoreCase);
             var repositoryBoundaryValid = string.Equals(Path.GetFullPath(metadata.ArtifactRoot), root, StringComparison.OrdinalIgnoreCase)
                 && PilotBGitBoundary.IsExactRepositoryRoot(metadata.FixtureRoot)
                 && string.Equals(Path.GetFullPath(manifest.RepositoryRoot), Path.GetFullPath(metadata.FixtureRoot), StringComparison.OrdinalIgnoreCase)
@@ -449,7 +449,7 @@ public sealed class PilotBEvidenceBundleVerifier
             var expectedIntegrityFacts = new PilotBRunnerIntegrityFacts(
                 executableSha,
                 manifestSha,
-                promptSha,
+                metadata.PromptSha256,
                 preManifest.Sha256,
                 postManifest.Sha256,
                 repositoryBoundaryValid,
@@ -478,7 +478,7 @@ public sealed class PilotBEvidenceBundleVerifier
 
             var fingerprint = PilotBRunFingerprintWriter.Compute(new PilotBRunFingerprintInput(
                 executableSha,
-                promptSha,
+                metadata.PromptSha256,
                 manifest,
                 transcript,
                 PilotBRunFingerprintWriter.ComputeFixtureSemanticSha256(preManifest),

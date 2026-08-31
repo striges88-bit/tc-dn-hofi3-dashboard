@@ -301,6 +301,13 @@ the final state recorded by the seal. Physical inventory, file hashes, schema
 support, and seal consistency belong only to the verifier, not to
 `RunQualification`.
 
+Reason precedence is fixed: process start, timeout or nonzero exit, parser
+reasons in encounter order (`missing-turn-completed` projects as
+`partial-run`), terminal failure, timing, executable, repository boundary,
+prompt bytes, workspace capture, payload capture, then additional capture
+reasons. The first occurrence wins, so runner, metadata, seal, and verifier
+publish one ordered deduplicated vector.
+
 The v3 evidence wire accepts only exact lowercase `valid` and `invalid` values
 for both `integrity.json.run_validity` and
 `metadata.json.run_qualification.validity`. During verification, the seal and
@@ -312,6 +319,12 @@ Controlled malformed/partial/nonzero/timeout or drift outcomes may therefore
 be `SEALED + INVALID` when their evidence is fully captured and verified.
 Publication or verification failure is `UNSEALED + null` and has no trusted
 fingerprint.
+
+`metadata.json.prompt_sha256` and the semantic fingerprint retain the hash of
+the original exact prompt bytes supplied to the runner. The payload inventory
+separately binds the bytes captured in `prompt.bin`. This lets the verifier
+independently reconstruct `prompt_bytes_verified=false` and seal a controlled
+post-start prompt drift as invalid without changing the v3 wire shape.
 
 ### Canonical artifact set and publication
 
@@ -451,6 +464,15 @@ closed immutable artifact set, the result is `UNSEALED + null`. Issue #48 does
 not change that existing classification; the expanded controlled-invalid
 matrix remains Issue #49.
 
+Issue #49 routes timeout through the same narrow process-tree terminator used
+for caller cancellation and bounded-waits for the root and capture pipes.
+Successful termination, including the fake parent/child tree, proceeds to
+publication and independent verification. A thrown termination operation or a
+tree that does not stop within the grace period aborts publication, records a
+stable timeout-termination reason, returns no validity or fingerprint, and
+leaves any still-running fake process to explicit test-owned cleanup before
+fixture disposal.
+
 ### Issue #43 implemented runner slice
 
 Issue #43 implements the test-only fake-CLI path through the existing
@@ -487,13 +509,18 @@ temporary test artifacts; no raw transcript is tracked in Git.
 
 The checked-in fake CLI is test-only. It verifies the exact invocation and
 emits deterministic qualification transcripts for valid, malformed, partial,
-timeout, and failed-run cases. It is not a replacement for the standalone
-Codex CLI and is never used to claim experiment or causal evidence.
+unsupported, out-of-order, terminal-failure, clean-transcript nonzero, timeout,
+and cancellation cases. Disposable executable copies and the existing
+publisher seam inject post-start executable, prompt, and repository-boundary
+drift without mutating the checked-in fake executable. It is not a replacement
+for the standalone Codex CLI and is never used to claim experiment or causal
+evidence.
 
 Filesystem/publication fault injection exists only through the minimal internal
-`IEvidenceBundlePublisher`. Issue #48 adds one separate narrow process-tree
-terminator solely to inject cancellation-termination failure; neither seam is a
-filesystem or generic process abstraction and neither determines sealing.
+`IEvidenceBundlePublisher`. Issue #48 introduced one separate narrow
+process-tree terminator for caller-cancellation faults; Issue #49 reuses that
+same seam for runner-timeout termination faults. Neither seam is a filesystem
+or generic process abstraction and neither determines sealing.
 Atomic write/rename, no-overwrite behavior, ownership races, inventory closure,
 and tamper detection are tested separately
 against the concrete publisher/verifier on real temporary filesystems; no

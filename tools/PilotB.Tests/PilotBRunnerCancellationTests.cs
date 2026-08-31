@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using CryptoIndicatorApp.PilotB;
 
 namespace CryptoIndicatorApp.PilotB.Tests;
@@ -12,6 +13,18 @@ public sealed class PilotBRunnerCancellationTests
     private static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan MarkerTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(10);
+    private static readonly TimeSpan ControlledTimeout = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan ChildTreeTimeout = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan FaultInjectionTimeout = TimeSpan.FromMilliseconds(500);
+    private static readonly string[] ControlledTimeoutInvalidReasons =
+    [
+        "timeout",
+        "empty-transcript",
+        "missing-thread-started",
+        "missing-turn-started",
+        "partial-run",
+        "timing-violation"
+    ];
 
     [Fact]
     public async Task Runner_CallerCancellationBeforeOutput_TerminatesOwnedProcessAndRethrows()
@@ -218,6 +231,121 @@ public sealed class PilotBRunnerCancellationTests
         Assert.True(process.HasExited);
     }
 
+    [Fact]
+    public async Task Runner_ControlledTimeout_UsesProcessTreeTerminatorAndSealsExactInvalidEvidence()
+    {
+        using var fixture = PilotBRunnerTestFixture.Create();
+        var terminator = new RecordingProcessTreeTerminator();
+        var request = fixture.CreateRequest("pilot-b.fake.timeout") with
+        {
+            Timeout = ControlledTimeout
+        };
+
+        var result = await new PilotBRunner(terminator).RunAsync(request);
+
+        Assert.True(terminator.WasCalled);
+        await AssertSealedTimeoutAgreementAsync(result);
+    }
+
+    [Fact]
+    public async Task Runner_ControlledTimeout_TerminatesOwnedParentAndChildBeforeSealing()
+    {
+        using var fixture = PilotBRunnerTestFixture.Create();
+        var request = fixture.CreateRequest("pilot-b.fake.cancel-with-child") with
+        {
+            Timeout = ChildTreeTimeout
+        };
+        Process? parentProcess = null;
+        Process? childProcess = null;
+        var publisher = new SealObservationPublisher(
+            () => parentProcess?.HasExited == true && childProcess?.HasExited == true);
+        var execution = new PilotBRunner(publisher).RunAsync(request);
+
+        try
+        {
+            parentProcess = await WaitForProcessMarkerAsync(
+                MarkerPath(fixture, ParentReadyMarker));
+            childProcess = await WaitForProcessMarkerAsync(
+                MarkerPath(fixture, ChildReadyMarker));
+
+            var result = await execution.WaitAsync(OperationTimeout);
+
+            Assert.True(publisher.TreeExitedBeforePublication);
+            Assert.True(parentProcess.HasExited);
+            Assert.True(childProcess.HasExited);
+            await AssertSealedTimeoutAgreementAsync(result);
+        }
+        finally
+        {
+            await KillIfRunningAsync(parentProcess);
+            await KillIfRunningAsync(childProcess);
+            await ObserveCompletionAsync(execution);
+            parentProcess?.Dispose();
+            childProcess?.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Runner_ControlledTimeout_WhenTerminationThrows_ReturnsBoundedUnsealedResult()
+    {
+        using var fixture = PilotBRunnerTestFixture.Create();
+        var failure = new IOException("Injected timeout termination failure.");
+        var request = fixture.CreateRequest("pilot-b.fake.cancel-before-output") with
+        {
+            Timeout = FaultInjectionTimeout
+        };
+        var execution = new PilotBRunner(new ThrowingProcessTreeTerminator(failure))
+            .RunAsync(request);
+        Process? ownedProcess = null;
+
+        try
+        {
+            ownedProcess = await WaitForProcessMarkerAsync(
+                MarkerPath(fixture, ParentReadyMarker));
+
+            var result = await execution.WaitAsync(OperationTimeout);
+
+            AssertUnsealedTimeoutResult(result, "timeout-termination-failed");
+            Assert.False(ownedProcess.HasExited);
+        }
+        finally
+        {
+            await KillIfRunningAsync(ownedProcess);
+            await ObserveCompletionAsync(execution);
+            ownedProcess?.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task Runner_ControlledTimeout_WhenProcessDoesNotStop_ReturnsBoundedUnsealedResult()
+    {
+        using var fixture = PilotBRunnerTestFixture.Create();
+        var request = fixture.CreateRequest("pilot-b.fake.cancel-before-output") with
+        {
+            Timeout = FaultInjectionTimeout
+        };
+        var execution = new PilotBRunner(new NonTerminatingProcessTreeTerminator())
+            .RunAsync(request);
+        Process? ownedProcess = null;
+
+        try
+        {
+            ownedProcess = await WaitForProcessMarkerAsync(
+                MarkerPath(fixture, ParentReadyMarker));
+
+            var result = await execution.WaitAsync(OperationTimeout);
+
+            AssertUnsealedTimeoutResult(result, "timeout-termination-incomplete");
+            Assert.False(ownedProcess.HasExited);
+        }
+        finally
+        {
+            await KillIfRunningAsync(ownedProcess);
+            await ObserveCompletionAsync(execution);
+            ownedProcess?.Dispose();
+        }
+    }
+
     private static async Task<Process> WaitForProcessMarkerAsync(string markerPath)
     {
         var deadline = DateTimeOffset.UtcNow.Add(MarkerTimeout);
@@ -281,12 +409,68 @@ public sealed class PilotBRunnerCancellationTests
     private static string MarkerPath(PilotBRunnerTestFixture fixture, string markerName)
         => Path.Combine(fixture.Root, "markers", markerName);
 
+    private static async Task AssertSealedTimeoutAgreementAsync(PilotBRunnerResult result)
+    {
+        Assert.Equal(PilotBEvidenceState.Sealed, result.EvidenceState);
+        Assert.Equal(PilotBRunValidity.Invalid, result.RunValidity);
+        Assert.Equal(ControlledTimeoutInvalidReasons, result.InvalidReasons);
+        Assert.DoesNotContain("nonzero-exit", result.InvalidReasons);
+
+        using var metadata = JsonDocument.Parse(
+            await File.ReadAllBytesAsync(result.Artifacts.MetadataPath));
+        Assert.Equal(
+            ControlledTimeoutInvalidReasons,
+            metadata.RootElement.GetProperty("run_qualification")
+                .GetProperty("invalid_reasons")
+                .EnumerateArray()
+                .Select(reason => reason.GetString()!)
+                .ToArray());
+
+        using var seal = JsonDocument.Parse(
+            await File.ReadAllBytesAsync(result.Artifacts.SealPath));
+        Assert.Equal(
+            ControlledTimeoutInvalidReasons,
+            seal.RootElement.GetProperty("invalid_reasons")
+                .EnumerateArray()
+                .Select(reason => reason.GetString()!)
+                .ToArray());
+
+        var verification = new PilotBEvidenceBundleVerifier().Verify(result.Artifacts);
+        Assert.Equal(PilotBEvidenceState.Sealed, verification.EvidenceState);
+        Assert.Equal(ControlledTimeoutInvalidReasons, verification.Qualification!.InvalidReasons);
+        Assert.Equal(result.DeterministicFingerprint, verification.SemanticFingerprint);
+    }
+
     private static void AssertUnsealedDiagnostics(string artifactDirectory)
     {
         Assert.True(Directory.Exists(artifactDirectory));
         Assert.True(File.Exists(Path.Combine(artifactDirectory, "prompt.bin")));
         Assert.True(File.Exists(Path.Combine(artifactDirectory, "manifest.json")));
         Assert.True(File.Exists(Path.Combine(artifactDirectory, "pre-manifest.json")));
+        AssertNoFinalPublication(artifactDirectory);
+    }
+
+    private static void AssertUnsealedTimeoutResult(PilotBRunnerResult result, string terminationReason)
+    {
+        Assert.Equal(PilotBEvidenceState.Unsealed, result.EvidenceState);
+        Assert.Null(result.RunValidity);
+        Assert.Null(result.Qualification);
+        Assert.Null(result.DeterministicFingerprint);
+        Assert.False(result.IntegrityFacts.ArtifactComplete);
+        Assert.Contains("timeout", result.InvalidReasons);
+        Assert.Contains(terminationReason, result.InvalidReasons);
+        Assert.Contains("evidence-unsealed", result.InvalidReasons);
+        Assert.True(File.Exists(result.Artifacts.PromptPath));
+        Assert.True(File.Exists(result.Artifacts.ManifestPath));
+        Assert.True(File.Exists(result.Artifacts.PreManifestPath));
+        Assert.True(File.Exists(result.Artifacts.PostManifestPath));
+        Assert.True(File.Exists(result.Artifacts.RawOutputPath));
+        Assert.True(File.Exists(result.Artifacts.StderrPath));
+        AssertNoFinalPublication(result.Artifacts.Root);
+    }
+
+    private static void AssertNoFinalPublication(string artifactDirectory)
+    {
         Assert.False(File.Exists(Path.Combine(artifactDirectory, "metadata.json")));
         Assert.False(File.Exists(Path.Combine(artifactDirectory, "integrity.json")));
         Assert.False(File.Exists(Path.Combine(artifactDirectory, "integrity.json.tmp")));
@@ -318,6 +502,42 @@ public sealed class PilotBRunnerCancellationTests
     {
         public void Terminate(Process process)
         {
+        }
+    }
+
+    private sealed class RecordingProcessTreeTerminator : IPilotBProcessTreeTerminator
+    {
+        private readonly PilotBProcessTreeTerminator inner = new();
+
+        public bool WasCalled { get; private set; }
+
+        public void Terminate(Process process)
+        {
+            WasCalled = true;
+            inner.Terminate(process);
+        }
+    }
+
+    private sealed class SealObservationPublisher(Func<bool> treeExited) : IEvidenceBundlePublisher
+    {
+        private readonly PilotBEvidenceBundlePublisher inner = new();
+
+        public bool TreeExitedBeforePublication { get; private set; }
+
+        public Task WriteNewBytesAsync(
+            string path,
+            ReadOnlyMemory<byte> bytes,
+            CancellationToken cancellationToken)
+            => inner.WriteNewBytesAsync(path, bytes, cancellationToken);
+
+        public Task PublishSealAsync(
+            PilotBArtifactPaths paths,
+            PilotBEvidenceMetadata metadata,
+            string semanticFingerprint,
+            CancellationToken cancellationToken)
+        {
+            TreeExitedBeforePublication = treeExited();
+            return inner.PublishSealAsync(paths, metadata, semanticFingerprint, cancellationToken);
         }
     }
 }
