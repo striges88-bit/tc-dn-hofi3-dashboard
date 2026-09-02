@@ -16,6 +16,7 @@ internal sealed class PilotBCancellationDiagnostics : IDisposable
     private bool handleRetained;
     private int? processId;
     private string? cleanupReturnSnapshot;
+    private bool failureRecorded;
 
     public PilotBCancellationDiagnostics(ITestOutputHelper output, PilotBRunnerTestFixture fixture)
     {
@@ -45,14 +46,19 @@ internal sealed class PilotBCancellationDiagnostics : IDisposable
         }
     }
 
-    public void Failure(string stage, Exception exception)
+    // Only the first recorded failure should propagate; later teardown failures stay diagnostic.
+    public bool RecordFailure(string stage, Exception exception)
     {
+        var isFirstFailure = !failureRecorded;
+        failureRecorded = true;
         Write(CaptureSnapshot(stage));
         Write($"stage={stage}; exception={exception}");
         if (Execution?.Exception is { } runnerException)
         {
             Write($"runner-exception={runnerException}");
         }
+
+        return isFirstFailure;
     }
 
     public void ObserveCleanupReturn()
@@ -85,8 +91,10 @@ internal sealed class PilotBCancellationDiagnostics : IDisposable
         }
         catch (Exception exception)
         {
-            Failure("fixture-dispose", exception);
-            throw;
+            if (RecordFailure("fixture-dispose", exception))
+            {
+                throw;
+            }
         }
         finally
         {

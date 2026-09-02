@@ -315,7 +315,7 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
         }
         catch (Exception exception)
         {
-            diagnostics.Failure("primary", exception);
+            diagnostics.RecordFailure("primary", exception);
             throw;
         }
         finally
@@ -329,8 +329,10 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
             }
             catch (Exception exception)
             {
-                diagnostics.Failure("cleanup", exception);
-                throw;
+                if (diagnostics.RecordFailure("cleanup", exception))
+                {
+                    throw;
+                }
             }
         }
     }
@@ -362,7 +364,7 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
         }
         catch (Exception exception)
         {
-            diagnostics.Failure("primary", exception);
+            diagnostics.RecordFailure("primary", exception);
             throw;
         }
         finally
@@ -376,8 +378,10 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
             }
             catch (Exception exception)
             {
-                diagnostics.Failure("cleanup", exception);
-                throw;
+                if (diagnostics.RecordFailure("cleanup", exception))
+                {
+                    throw;
+                }
             }
         }
     }

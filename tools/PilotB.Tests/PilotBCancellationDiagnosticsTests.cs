@@ -19,8 +19,8 @@ public sealed class PilotBCancellationDiagnosticsTests
 
         Assert.DoesNotContain("stage=cleanup-kill-return", output.Text);
 
-        diagnostics.Failure("primary", new IOException("primary sentinel"));
-        diagnostics.Failure("cleanup", new InvalidOperationException("cleanup sentinel"));
+        Assert.True(diagnostics.RecordFailure("primary", new IOException("primary sentinel")));
+        Assert.False(diagnostics.RecordFailure("cleanup", new InvalidOperationException("cleanup sentinel")));
 
         Assert.Contains("runtime=.NET", output.Text);
         Assert.Contains("process-assembly=", output.Text);
@@ -47,15 +47,16 @@ public sealed class PilotBCancellationDiagnosticsTests
         using var lockedFile = new FileStream(
             Path.Combine(fixture.FixtureRoot, "locked.txt"), FileMode.Create,
             FileAccess.Write, FileShare.None);
+        var primaryFailure = new InvalidOperationException("primary sentinel");
         var failure = Record.Exception((Action)(() =>
         {
             try
             {
-                throw new InvalidOperationException("primary sentinel");
+                ThrowPrimary();
             }
             catch (Exception primary)
             {
-                diagnostics.Failure("primary", primary);
+                diagnostics.RecordFailure("primary", primary);
                 throw;
             }
             finally
@@ -64,13 +65,95 @@ public sealed class PilotBCancellationDiagnosticsTests
             }
         }));
 
-        Assert.IsType<IOException>(failure);
+        Assert.Same(primaryFailure, failure);
+        Assert.Contains(nameof(ThrowPrimary), failure!.StackTrace);
         Assert.Contains("stage=primary", output.Text);
         Assert.Contains("primary sentinel", output.Text);
         Assert.Contains("stage=fixture-dispose", output.Text);
-        Assert.Contains($"{failure.GetType().FullName}: {failure.Message}", output.Text);
+        Assert.Contains("System.IO.IOException:", output.Text);
         Assert.Contains("PilotBRunnerTestFixture.Dispose()", output.Text);
         Assert.Contains("handle=unavailable", output.Text);
+
+        void ThrowPrimary() => throw primaryFailure;
+    }
+
+    [Fact]
+    public void Dispose_WhenFixtureLockedWithoutPrimary_PropagatesDisposalFailure()
+    {
+        using var fixture = PilotBRunnerTestFixture.Create();
+        var output = new CapturedOutput();
+        var diagnostics = new PilotBCancellationDiagnostics(output, fixture);
+        using var lockedFile = new FileStream(
+            Path.Combine(fixture.FixtureRoot, "locked.txt"), FileMode.Create,
+            FileAccess.Write, FileShare.None);
+
+        var failure = Assert.Throws<IOException>(diagnostics.Dispose);
+
+        Assert.Contains("PilotBRunnerTestFixture.Dispose()", failure.StackTrace);
+        Assert.Contains("stage=fixture-dispose", output.Text);
+        Assert.Contains($"{failure.GetType().FullName}: {failure.Message}", output.Text);
+        Assert.DoesNotContain("stage=primary", output.Text);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RecordFailure_CleanupPreservesFirstExceptionAndStack(
+        bool primaryFails, bool fixtureLocked)
+    {
+        using var fixture = PilotBRunnerTestFixture.Create();
+        var output = new CapturedOutput();
+        using var lockedFile = fixtureLocked
+            ? new FileStream(Path.Combine(fixture.FixtureRoot, "locked.txt"),
+                FileMode.Create, FileAccess.Write, FileShare.None)
+            : null;
+        var primaryFailure = new InvalidOperationException("primary sentinel");
+        var cleanupFailure = new IOException("cleanup sentinel");
+
+        var failure = await Record.ExceptionAsync(async () =>
+        {
+            using var diagnostics = new PilotBCancellationDiagnostics(output, fixture);
+            try
+            {
+                await Task.Yield();
+                if (primaryFails)
+                {
+                    ThrowPrimary();
+                }
+            }
+            catch (Exception exception)
+            {
+                diagnostics.RecordFailure("primary", exception);
+                throw;
+            }
+            finally
+            {
+                try
+                {
+                    ThrowCleanup();
+                }
+                catch (Exception exception)
+                {
+                    if (diagnostics.RecordFailure("cleanup", exception))
+                    {
+                        throw;
+                    }
+                }
+            }
+        });
+
+        Assert.Same(primaryFails ? (Exception)primaryFailure : cleanupFailure, failure);
+        Assert.Contains(primaryFails ? nameof(ThrowPrimary) : nameof(ThrowCleanup), failure!.StackTrace);
+        Assert.Equal(primaryFails, output.Text.Contains("stage=primary", StringComparison.Ordinal));
+        Assert.Contains("stage=cleanup", output.Text);
+        Assert.Contains("System.IO.IOException: cleanup sentinel", output.Text);
+        Assert.Equal(fixtureLocked, output.Text.Contains("stage=fixture-dispose", StringComparison.Ordinal));
+        Assert.Equal(fixtureLocked, Directory.Exists(fixture.Root));
+
+        void ThrowPrimary() => throw primaryFailure;
+        void ThrowCleanup() => throw cleanupFailure;
     }
 
     [Fact]
@@ -79,7 +162,8 @@ public sealed class PilotBCancellationDiagnosticsTests
         using var fixture = PilotBRunnerTestFixture.Create();
         var diagnostics = new PilotBCancellationDiagnostics(new UnavailableOutput(), fixture);
 
-        diagnostics.Failure("primary", new InvalidOperationException("primary sentinel"));
+        Assert.True(diagnostics.RecordFailure("primary", new InvalidOperationException("primary sentinel")));
+        Assert.False(diagnostics.RecordFailure("cleanup", new IOException("cleanup sentinel")));
         diagnostics.Dispose();
 
         Assert.False(Directory.Exists(fixture.Root));

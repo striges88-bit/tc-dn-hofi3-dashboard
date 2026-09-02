@@ -4,6 +4,8 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 
 ## Active Rules
 
+- In test teardown, logging both errors does not preserve the test result: propagate the first failure with its original stack, record subsequent cleanup/disposal errors separately, and prove cleanup-only failure still fails. Exercise this deterministically (for example, a held file handle), without weakening native completion waits or hiding resource failures.
+
 - When the session context approaches 50% full, stop at a clean handoff point for `/compact`; record completed verification, remaining work, and the next pending command before continuing substantial work.
 - When a WPF project references a layer named `Application`, fully qualify `System.Windows.Application` in `App.xaml.cs` because the project namespace can shadow the WPF type.
 - Keep the `Application` layer independent from concrete Infrastructure services such as `JsonlMarketEventStore`; expose source/recorder interfaces in Application and compose JSONL/Binance adapters only in Desktop or another outer layer.
