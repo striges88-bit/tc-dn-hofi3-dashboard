@@ -57,7 +57,7 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
         finally
         {
             cancellation.Cancel();
-            await KillIfRunningAsync(ownedProcess);
+            KillIfRunning(ownedProcess);
             ownedProcess?.Dispose();
         }
     }
@@ -91,7 +91,7 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
         finally
         {
             cancellation.Cancel();
-            await KillIfRunningAsync(ownedProcess);
+            KillIfRunning(ownedProcess);
             ownedProcess?.Dispose();
         }
     }
@@ -130,8 +130,8 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
         finally
         {
             cancellation.Cancel();
-            await KillIfRunningAsync(parentProcess);
-            await KillIfRunningAsync(childProcess);
+            KillIfRunning(parentProcess);
+            KillIfRunning(childProcess);
             parentProcess?.Dispose();
             childProcess?.Dispose();
         }
@@ -167,7 +167,7 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
         finally
         {
             cancellation.Cancel();
-            await KillIfRunningAsync(ownedProcess);
+            KillIfRunning(ownedProcess);
             await ObserveCompletionAsync(execution);
             ownedProcess?.Dispose();
         }
@@ -203,7 +203,7 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
         finally
         {
             cancellation.Cancel();
-            await KillIfRunningAsync(ownedProcess);
+            KillIfRunning(ownedProcess);
             await ObserveCompletionAsync(execution);
             ownedProcess?.Dispose();
         }
@@ -279,8 +279,8 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
         }
         finally
         {
-            await KillIfRunningAsync(parentProcess);
-            await KillIfRunningAsync(childProcess);
+            KillIfRunning(parentProcess);
+            KillIfRunning(childProcess);
             await ObserveCompletionAsync(execution);
             parentProcess?.Dispose();
             childProcess?.Dispose();
@@ -322,7 +322,7 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
         {
             try
             {
-                await KillIfRunningAsync(ownedProcess);
+                KillIfRunning(ownedProcess);
                 diagnostics.ObserveCleanupReturn();
                 await ObserveCompletionAsync(execution);
                 ownedProcess?.Dispose();
@@ -369,7 +369,7 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
         {
             try
             {
-                await KillIfRunningAsync(ownedProcess);
+                KillIfRunning(ownedProcess);
                 diagnostics.ObserveCleanupReturn();
                 await ObserveCompletionAsync(execution);
                 ownedProcess?.Dispose();
@@ -399,6 +399,8 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
                     if (!process.HasExited
                         && process.StartTime.ToUniversalTime().Ticks == startedAtTicks)
                     {
+                        // Keep the verified process handle until cleanup, rather than reopening by PID.
+                        _ = process.SafeHandle;
                         return process;
                     }
 
@@ -415,23 +417,32 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
         throw new TimeoutException($"Timed out waiting for process marker '{markerPath}'.");
     }
 
-    private static async Task KillIfRunningAsync(Process? process)
+    private static void KillIfRunning(Process? process)
     {
-        if (process is null || process.HasExited)
+        if (process is null)
         {
             return;
         }
 
         try
         {
-            process.Kill(entireProcessTree: true);
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
         }
         catch (InvalidOperationException) when (process.HasExited)
         {
-            return;
+            // Exit racing with Kill still requires the native completion wait below.
         }
-
-        await process.WaitForExitAsync().WaitAsync(OperationTimeout);
+        finally
+        {
+            // HasExited/WaitForExitAsync may observe the exit code before the handle is signaled.
+            if (!process.WaitForExit(OperationTimeout))
+            {
+                throw new TimeoutException("Owned process did not signal termination during cleanup.");
+            }
+        }
     }
 
     private static async Task ObserveCompletionAsync(Task execution)

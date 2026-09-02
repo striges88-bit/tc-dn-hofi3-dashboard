@@ -1784,6 +1784,24 @@ Final post-review verification: focused 13/13; full Pilot B 176/176; solution 31
 
 Pre-authorization status PARTIAL: CI artifact retention/export (proposed PilotB TRX only, seven days), lifecycle sync and diagnostic publication remained authorization gates; no commit/push, memory refresh or CI run occurred. Suggested diagnostic commit was `test(pilot-b): capture cancellation cleanup diagnostics`. A causal-fix commit remains deferred until the cause is established.
 
+### PR #57 bounded native cleanup follow-up (Issue #50)
+
+- [x] Recheck clean HEAD/PR `5f326d172a89476aa55c1636947e3d02da0a5909`, OPEN/DRAFT PR #57, OPEN #50 and CLOSED dependencies; baseline diagnostic/cancellation Release 13/13.
+- [x] Verify the Windows implementation for actual CI runtime .NET 8.0.30 (`a83db3e0eb2defb6220e15dae2f1a0462fdbf99f`): bounded `WaitForExitCore` waits on the native handle, including when exit-code state is already cached.
+- [x] Keep a handle from marker identity validation; route every non-null cleanup path through bounded native termination wait with the existing five-second OperationTimeout.
+- [x] Verify diagnostics, cancellation, full PilotB, solution tests/build; inspect native snapshots, exact diff and process leaks.
+- [ ] Publish only after separate commit/push authorization, then inspect CI/TRX for the changed SHA.
+
+Evidence: published diagnostic CI run 33671317200 passed 316/316 (PilotB 176/176), but both fault tests recorded `WAIT_TIMEOUT (0x102)` at cleanup return before successful fixture deletion. This proves a cleanup-return/native-termination gap, not the cause of the prior directory lock. Use this direct baseline plus structural review and existing process-backed tests; do not manufacture a probabilistic RED race test.
+
+Boundary: test cleanup only; preserve production, behavioral timeouts, collection membership, diagnostic exception capture and seven-day PilotB-only TRX retention. No retry-delete, filesystem abstraction, broad serialization, Git mutation or Issue closure. Prior rejected lifecycle comment remains GITHUB_SYNC_BLOCKED pending explicit clearance; no retry through another route.
+
+Implementation checkpoint: `KillIfRunning` is synchronous and uses the existing `OperationTimeout` in `Process.WaitForExit`; its `finally` runs after normal kill, already-exited state, an exit racing with kill, and unexpected kill exceptions. False wait results throw rather than report cleanup success; null means no acquired process handle to wait on. Marker acquisition retains `Process.SafeHandle` before returning the identity-validated process. No new task wrapper, polling or second timeout was added. Existing diagnostic/cancellation tests passed 13/13; both pinned cleanup-return samples were `WAIT_OBJECT_0 (0x0)` with completed runner tasks, no exception diagnostics and successful fixture deletion. Local runtime remains .NET 8.0.27; changed-SHA CI on .NET 8.0.30 is still pending publication authority.
+
+Final local verification: focused 13/13 (10 cancellation + 3 diagnostic); full PilotB 176/176; solution 316/316 (19 Domain + 10 Application + 3 LiveDryRun + 22 Desktop + 71 Infrastructure + 176 PilotB + 15 Memory); Release build 0 warnings/0 errors. All six fault-test snapshots across focused/PilotB/solution TRX show native-wait `0x0`, runner `RanToCompletion`, no primary/cleanup/disposal exception output, and successful deletion. Artifacts are ignored `native-cleanup-fixed_net8.0_20260902234000.trx`, `native-cleanup-pilotb_net8.0_20260902234103.trx`, and `native-cleanup-solution_net8.0_20260902234158.trx` in `tools/PilotB.Tests/TestResults/`. Whitespace/scope checks passed; no FakeCli/testhost remained. Existing test methods, assertions, collection and timeout declarations are unchanged; the three-file diff is this log, one lesson and cancellation test cleanup only.
+
+Status: LOCAL VERIFIED / CI PENDING. Latest fetched CI is green run 33671317200 for unchanged published HEAD `5f326d1`, not evidence for this uncommitted fix. No staging, commit, memory refresh, push, workflow mutation or rerun occurred. Recommended next checkpoint: authorize exact three-file commit `test(pilot-b): wait for native process exit during cleanup`, then committed-HEAD memory gate and normal push to existing PR #57, followed by changed-SHA CI/TRX review. The old directory-lock cause and previously blocked Issue #50 lifecycle write remain unresolved; do not claim merge readiness or Issue completion.
+
 ### PR #57 diagnostic publication checkpoint
 
 - [x] User authorized the separate diagnostic-only commit, memory gate, normal push to the existing PR #57 branch, and GitHub Actions retention of only PilotB TRX for seven days.
