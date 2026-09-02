@@ -17,6 +17,7 @@ if (args is not ["codex", "exec", "--ephemeral", "--json"])
 using var input = new MemoryStream();
 await Console.OpenStandardInput().CopyToAsync(input);
 var prompt = Encoding.UTF8.GetString(input.ToArray());
+const int ControlledNonzeroExitCode = 23;
 
 switch (prompt)
 {
@@ -70,6 +71,34 @@ switch (prompt)
         Console.WriteLine("{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"phase\":\"final\",\"text\":\"Done.\"}}");
         Console.WriteLine("{\"type\":\"turn.completed\"}");
         return 0;
+
+    case "pilot-b.fake.unsupported":
+        Console.WriteLine("{\"type\":\"thread.started\",\"thread_id\":\"fake-thread\"}");
+        Console.WriteLine("{\"type\":\"turn.started\"}");
+        Console.WriteLine("{\"type\":\"future.event\"}");
+        Console.WriteLine("{\"type\":\"turn.completed\"}");
+        return 0;
+
+    case "pilot-b.fake.out-of-order":
+        Console.WriteLine("{\"type\":\"turn.started\"}");
+        Console.WriteLine("{\"type\":\"thread.started\",\"thread_id\":\"fake-thread\"}");
+        Console.WriteLine("{\"type\":\"turn.started\"}");
+        Console.WriteLine("{\"type\":\"turn.completed\"}");
+        return 0;
+
+    case "pilot-b.fake.terminal-failure":
+        Console.WriteLine("{\"type\":\"thread.started\",\"thread_id\":\"fake-thread\"}");
+        Console.WriteLine("{\"type\":\"turn.started\"}");
+        Console.WriteLine("{\"type\":\"turn.failed\",\"message\":\"fake terminal failure\"}");
+        return 0;
+
+    case "pilot-b.fake.nonzero":
+        Console.WriteLine("{\"type\":\"thread.started\",\"thread_id\":\"fake-thread\"}");
+        Console.WriteLine("{\"type\":\"turn.started\"}");
+        Console.WriteLine("{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\",\"phase\":\"final\",\"text\":\"Failed after a complete transcript.\"}}");
+        Console.WriteLine("{\"type\":\"turn.completed\"}");
+        Console.Error.WriteLine("fake nonzero exit diagnostic");
+        return ControlledNonzeroExitCode;
 
     case "pilot-b.fake.malformed":
         Console.WriteLine("{\"type\":\"thread.started\"}");

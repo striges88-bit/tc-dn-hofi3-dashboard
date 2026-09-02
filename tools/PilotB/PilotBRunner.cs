@@ -64,6 +64,7 @@ public sealed class PilotBRunner
     {
         ArgumentNullException.ThrowIfNull(options);
         var promptBytes = options.PromptBytes?.ToArray() ?? [];
+        var expectedPromptSha = PilotBSha256.Compute(promptBytes);
         var preflight = await PreflightAsync(options, promptBytes, cancellationToken);
         var manifest = preflight.Manifest!;
         var manifestBytes = preflight.ManifestBytes!;
@@ -84,6 +85,7 @@ public sealed class PilotBRunner
         PilotBFileManifest? preManifest = null;
         PilotBFileManifest? postManifest = null;
         var processStarted = false;
+        var processTerminationCompleted = true;
         var sealPublished = false;
         var lockReleased = false;
         PilotBRunQualificationResult? qualification = null;
@@ -126,99 +128,118 @@ public sealed class PilotBRunner
                 else
                 {
                     processStarted = true;
-                    using var outputBuffer = new MemoryStream();
-                    using var errorBuffer = new MemoryStream();
-                    using var captureCancellation = new CancellationTokenSource();
+                    var outputBuffer = new MemoryStream();
+                    var errorBuffer = new MemoryStream();
+                    var captureCancellation = new CancellationTokenSource();
                     var outputTask = process.StandardOutput.BaseStream.CopyToAsync(
                         outputBuffer,
                         captureCancellation.Token);
                     var errorTask = process.StandardError.BaseStream.CopyToAsync(
                         errorBuffer,
                         captureCancellation.Token);
+                    var captureTask = Task.WhenAll(outputTask, errorTask);
 
                     try
                     {
                         try
                         {
-                            await process.StandardInput.BaseStream.WriteAsync(promptBytes, cancellationToken);
-                            process.StandardInput.Close();
-                        }
-                        catch (Exception) when (!cancellationToken.IsCancellationRequested)
-                        {
-                            AddReason(captureReasons, "stdin-write-failed");
-                        }
-
-                        var waitTask = process.WaitForExitAsync();
-                        var timeoutTask = Task.Delay(options.Timeout);
-                        var cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-                        var completedTask = await Task.WhenAny(waitTask, timeoutTask, cancellationTask);
-                        if (cancellationToken.IsCancellationRequested)
-                        {
-                            await cancellationTask;
-                        }
-
-                        if (completedTask == timeoutTask)
-                        {
-                            timedOut = true;
                             try
                             {
-                                process.Kill(entireProcessTree: true);
+                                await process.StandardInput.BaseStream.WriteAsync(promptBytes, cancellationToken);
+                                process.StandardInput.Close();
                             }
-                            catch (InvalidOperationException)
+                            catch (Exception) when (!cancellationToken.IsCancellationRequested)
                             {
+                                AddReason(captureReasons, "stdin-write-failed");
+                            }
+
+                            var waitTask = process.WaitForExitAsync();
+                            var timeoutTask = Task.Delay(options.Timeout);
+                            var cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                            var completedTask = await Task.WhenAny(waitTask, timeoutTask, cancellationTask);
+                            if (cancellationToken.IsCancellationRequested)
+                            {
+                                await cancellationTask;
+                            }
+
+                            if (completedTask == timeoutTask)
+                            {
+                                timedOut = true;
+                                processTerminationCompleted = await TerminateAfterRunnerTimeoutAsync(
+                                    process,
+                                    captureTask,
+                                    captureCancellation,
+                                    captureReasons);
+                                if (cancellationToken.IsCancellationRequested)
+                                {
+                                    await cancellationTask;
+                                }
+                            }
+
+                            if (processTerminationCompleted)
+                            {
+                                await waitTask;
+                                if (cancellationToken.IsCancellationRequested)
+                                {
+                                    await cancellationTask;
+                                }
+
+                                completedTask = await Task.WhenAny(captureTask, cancellationTask);
+                                if (cancellationToken.IsCancellationRequested)
+                                {
+                                    await cancellationTask;
+                                }
+
+                                await captureTask;
                             }
                         }
-
-                        await waitTask;
-                        if (cancellationToken.IsCancellationRequested)
+                        catch (OperationCanceledException cancellationException)
+                            when (cancellationToken.IsCancellationRequested)
                         {
-                            await cancellationTask;
+                            await TerminateAfterCallerCancellationAsync(
+                                process,
+                                captureTask,
+                                captureCancellation,
+                                cancellationException);
+                            throw;
+                        }
+                        catch (Exception exception) when (cancellationToken.IsCancellationRequested)
+                        {
+                            var cancellationException = new OperationCanceledException(
+                                "The Pilot B run was canceled.",
+                                exception,
+                                cancellationToken);
+                            await TerminateAfterCallerCancellationAsync(
+                                process,
+                                captureTask,
+                                captureCancellation,
+                                cancellationException);
+                            throw cancellationException;
+                        }
+                        catch (Exception)
+                        {
+                            AddReason(captureReasons, "output-capture-failed");
                         }
 
-                        var captureTask = Task.WhenAll(outputTask, errorTask);
-                        completedTask = await Task.WhenAny(captureTask, cancellationTask);
-                        if (cancellationToken.IsCancellationRequested)
+                        if (captureTask.IsCompleted)
                         {
-                            await cancellationTask;
+                            stdoutBytes = outputBuffer.ToArray();
+                            stderrBytes = errorBuffer.ToArray();
                         }
 
-                        await captureTask;
+                        if (!timedOut)
+                        {
+                            exitCode = process.ExitCode;
+                        }
                     }
-                    catch (OperationCanceledException cancellationException)
-                        when (cancellationToken.IsCancellationRequested)
+                    finally
                     {
-                        await TerminateAfterCallerCancellationAsync(
-                            process,
-                            outputTask,
-                            errorTask,
-                            captureCancellation,
-                            cancellationException);
-                        throw;
-                    }
-                    catch (Exception exception) when (cancellationToken.IsCancellationRequested)
-                    {
-                        var cancellationException = new OperationCanceledException(
-                            "The Pilot B run was canceled.",
-                            exception,
-                            cancellationToken);
-                        await TerminateAfterCallerCancellationAsync(
-                            process,
-                            outputTask,
-                            errorTask,
-                            captureCancellation,
-                            cancellationException);
-                        throw cancellationException;
-                    }
-                    catch (Exception)
-                    {
-                        AddReason(captureReasons, "output-capture-failed");
-                    }
-
-                    stdoutBytes = outputBuffer.ToArray();
-                    stderrBytes = errorBuffer.ToArray();
-                    if (!timedOut)
-                    {
-                        exitCode = process.ExitCode;
+                        // A bounded abort may return before the pipe copies release their destinations.
+                        _ = DisposeCaptureResourcesAfterCompletionAsync(
+                            captureTask,
+                            outputBuffer,
+                            errorBuffer,
+                            captureCancellation);
                     }
                 }
 
@@ -246,7 +267,7 @@ public sealed class PilotBRunner
             var executableSha = SafeComputeFileHash(executablePath, captureReasons, "executable-read-failed");
             var executableHashValid = string.Equals(executableSha, preflight.ExecutableSha256, StringComparison.OrdinalIgnoreCase);
             var promptSha = SafeComputeFileHash(artifactPaths.PromptPath, captureReasons, "prompt-read-failed");
-            var promptBytesVerified = string.Equals(promptSha, PilotBSha256.Compute(promptBytes), StringComparison.OrdinalIgnoreCase);
+            var promptBytesVerified = string.Equals(promptSha, expectedPromptSha, StringComparison.OrdinalIgnoreCase);
             var repositoryBoundaryValid = preflight.RepositoryBoundaryValid
                 && PilotBGitBoundary.IsExactRepositoryRoot(fixtureRoot)
                 && string.Equals(Path.GetFullPath(manifest.RepositoryRoot), fixtureRoot, StringComparison.OrdinalIgnoreCase)
@@ -269,7 +290,7 @@ public sealed class PilotBRunner
             integrity = new PilotBRunnerIntegrityFacts(
                 executableSha,
                 preflight.ArmManifestSha256 ?? string.Empty,
-                promptSha,
+                expectedPromptSha,
                 preManifest?.Sha256 ?? string.Empty,
                 postManifest?.Sha256 ?? string.Empty,
                 repositoryBoundaryValid,
@@ -281,6 +302,7 @@ public sealed class PilotBRunner
             if (payloadCaptured
                 && preManifest is not null
                 && postManifest is not null
+                && processTerminationCompleted
                 && PilotBSha256.IsSha256(executableSha)
                 && PilotBSha256.IsSha256(promptSha))
             {
@@ -290,7 +312,7 @@ public sealed class PilotBRunner
                     var postFixtureSemanticSha = PilotBRunFingerprintWriter.ComputeFixtureSemanticSha256(postManifest);
                     var fingerprint = PilotBRunFingerprintWriter.Compute(new PilotBRunFingerprintInput(
                         executableSha,
-                        promptSha,
+                        expectedPromptSha,
                         manifest,
                         transcript,
                         preFixtureSemanticSha,
@@ -328,7 +350,7 @@ public sealed class PilotBRunner
                         options.IsQualification,
                         executableSha,
                         preflight.ArmManifestSha256!,
-                        promptSha,
+                        expectedPromptSha,
                         preManifest.Sha256,
                         postManifest.Sha256,
                         preFixtureSemanticSha,
@@ -643,45 +665,100 @@ public sealed class PilotBRunner
 
     private async Task TerminateAfterCallerCancellationAsync(
         Process process,
-        Task outputTask,
-        Task errorTask,
+        Task captureTask,
         CancellationTokenSource captureCancellation,
         OperationCanceledException cancellationException)
     {
-        var captureTask = Task.WhenAll(outputTask, errorTask);
-        Exception? terminationFailure = null;
+        var terminationFailure = await CaptureAfterProcessTreeTerminationAsync(process, captureTask);
+        if (terminationFailure is null)
+        {
+            return;
+        }
+
+        try
+        {
+            cancellationException.Data[ProcessTreeTerminationFailureDataKey] = terminationFailure;
+        }
+        catch
+        {
+        }
+
+        await AbortCaptureAsync(process, captureTask, captureCancellation);
+    }
+
+    private async Task<bool> TerminateAfterRunnerTimeoutAsync(
+        Process process,
+        Task captureTask,
+        CancellationTokenSource captureCancellation,
+        ICollection<string> captureReasons)
+    {
+        var terminationFailure = await CaptureAfterProcessTreeTerminationAsync(process, captureTask);
+        if (terminationFailure is null)
+        {
+            return true;
+        }
+
+        AddReason(
+            captureReasons,
+            terminationFailure is TimeoutException
+                ? "timeout-termination-incomplete"
+                : "timeout-termination-failed");
+        await AbortCaptureAsync(process, captureTask, captureCancellation);
+        return false;
+    }
+
+    private async Task<Exception?> CaptureAfterProcessTreeTerminationAsync(
+        Process process,
+        Task captureTask)
+    {
         try
         {
             processTreeTerminator.Terminate(process);
             await process.WaitForExitAsync().WaitAsync(ProcessShutdownTimeout);
             await captureTask.WaitAsync(ProcessShutdownTimeout);
+            return null;
         }
         catch (Exception exception)
         {
-            terminationFailure = exception;
-            try
-            {
-                cancellationException.Data[ProcessTreeTerminationFailureDataKey] = exception;
-            }
-            catch
-            {
-            }
+            return exception;
+        }
+    }
+
+    private static async Task AbortCaptureAsync(
+        Process process,
+        Task captureTask,
+        CancellationTokenSource captureCancellation)
+    {
+        captureCancellation.Cancel();
+        TryDispose(process.StandardInput);
+        TryDispose(process.StandardOutput);
+        TryDispose(process.StandardError);
+        try
+        {
+            await captureTask.WaitAsync(CaptureAbortTimeout);
+        }
+        catch
+        {
+        }
+    }
+
+    private static async Task DisposeCaptureResourcesAfterCompletionAsync(
+        Task captureTask,
+        MemoryStream outputBuffer,
+        MemoryStream errorBuffer,
+        CancellationTokenSource captureCancellation)
+    {
+        try
+        {
+            await captureTask;
+        }
+        catch
+        {
         }
 
-        if (terminationFailure is not null)
-        {
-            captureCancellation.Cancel();
-            TryDispose(process.StandardInput);
-            TryDispose(process.StandardOutput);
-            TryDispose(process.StandardError);
-            try
-            {
-                await captureTask.WaitAsync(CaptureAbortTimeout);
-            }
-            catch
-            {
-            }
-        }
+        TryDispose(outputBuffer);
+        TryDispose(errorBuffer);
+        TryDispose(captureCancellation);
     }
 
     private static void TryDispose(IDisposable disposable)

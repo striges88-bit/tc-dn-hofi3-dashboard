@@ -3,6 +3,7 @@ using PilotBRunnerPreflightFixture = CryptoIndicatorApp.PilotB.Tests.PilotBRunne
 
 namespace CryptoIndicatorApp.PilotB.Tests;
 
+[Collection(PilotBProcessBackedRunnerCollection.Name)]
 public sealed class PilotBRunnerPreflightTests
 {
     [Fact]
