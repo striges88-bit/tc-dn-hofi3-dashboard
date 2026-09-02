@@ -2,11 +2,12 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using CryptoIndicatorApp.PilotB;
+using Xunit.Abstractions;
 
 namespace CryptoIndicatorApp.PilotB.Tests;
 
 [Collection(PilotBProcessBackedRunnerCollection.Name)]
-public sealed class PilotBRunnerCancellationTests
+public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
 {
     private const string ParentReadyMarker = ".pilot-b-fake-parent-ready";
     private const string ChildReadyMarker = ".pilot-b-fake-child-ready";
@@ -289,7 +290,8 @@ public sealed class PilotBRunnerCancellationTests
     [Fact]
     public async Task Runner_ControlledTimeout_WhenTerminationThrows_ReturnsBoundedUnsealedResult()
     {
-        using var fixture = PilotBRunnerTestFixture.Create();
+        var fixture = PilotBRunnerTestFixture.Create();
+        using var diagnostics = new PilotBCancellationDiagnostics(output, fixture);
         var failure = new IOException("Injected timeout termination failure.");
         var request = fixture.CreateRequest("pilot-b.fake.cancel-before-output") with
         {
@@ -297,53 +299,86 @@ public sealed class PilotBRunnerCancellationTests
         };
         var execution = new PilotBRunner(new ThrowingProcessTreeTerminator(failure))
             .RunAsync(request);
+        diagnostics.Execution = execution;
         Process? ownedProcess = null;
 
         try
         {
             ownedProcess = await WaitForProcessMarkerAsync(
                 MarkerPath(fixture, ParentReadyMarker));
+            diagnostics.ObserveProcess(ownedProcess);
 
             var result = await execution.WaitAsync(OperationTimeout);
 
             AssertUnsealedTimeoutResult(result, "timeout-termination-failed");
             Assert.False(ownedProcess.HasExited);
         }
+        catch (Exception exception)
+        {
+            diagnostics.Failure("primary", exception);
+            throw;
+        }
         finally
         {
-            await KillIfRunningAsync(ownedProcess);
-            await ObserveCompletionAsync(execution);
-            ownedProcess?.Dispose();
+            try
+            {
+                await KillIfRunningAsync(ownedProcess);
+                diagnostics.ObserveCleanupReturn();
+                await ObserveCompletionAsync(execution);
+                ownedProcess?.Dispose();
+            }
+            catch (Exception exception)
+            {
+                diagnostics.Failure("cleanup", exception);
+                throw;
+            }
         }
     }
 
     [Fact]
     public async Task Runner_ControlledTimeout_WhenProcessDoesNotStop_ReturnsBoundedUnsealedResult()
     {
-        using var fixture = PilotBRunnerTestFixture.Create();
+        var fixture = PilotBRunnerTestFixture.Create();
+        using var diagnostics = new PilotBCancellationDiagnostics(output, fixture);
         var request = fixture.CreateRequest("pilot-b.fake.cancel-before-output") with
         {
             Timeout = FaultInjectionTimeout
         };
         var execution = new PilotBRunner(new NonTerminatingProcessTreeTerminator())
             .RunAsync(request);
+        diagnostics.Execution = execution;
         Process? ownedProcess = null;
 
         try
         {
             ownedProcess = await WaitForProcessMarkerAsync(
                 MarkerPath(fixture, ParentReadyMarker));
+            diagnostics.ObserveProcess(ownedProcess);
 
             var result = await execution.WaitAsync(OperationTimeout);
 
             AssertUnsealedTimeoutResult(result, "timeout-termination-incomplete");
             Assert.False(ownedProcess.HasExited);
         }
+        catch (Exception exception)
+        {
+            diagnostics.Failure("primary", exception);
+            throw;
+        }
         finally
         {
-            await KillIfRunningAsync(ownedProcess);
-            await ObserveCompletionAsync(execution);
-            ownedProcess?.Dispose();
+            try
+            {
+                await KillIfRunningAsync(ownedProcess);
+                diagnostics.ObserveCleanupReturn();
+                await ObserveCompletionAsync(execution);
+                ownedProcess?.Dispose();
+            }
+            catch (Exception exception)
+            {
+                diagnostics.Failure("cleanup", exception);
+                throw;
+            }
         }
     }
 
