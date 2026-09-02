@@ -128,105 +128,118 @@ public sealed class PilotBRunner
                 else
                 {
                     processStarted = true;
-                    using var outputBuffer = new MemoryStream();
-                    using var errorBuffer = new MemoryStream();
-                    using var captureCancellation = new CancellationTokenSource();
+                    var outputBuffer = new MemoryStream();
+                    var errorBuffer = new MemoryStream();
+                    var captureCancellation = new CancellationTokenSource();
                     var outputTask = process.StandardOutput.BaseStream.CopyToAsync(
                         outputBuffer,
                         captureCancellation.Token);
                     var errorTask = process.StandardError.BaseStream.CopyToAsync(
                         errorBuffer,
                         captureCancellation.Token);
+                    var captureTask = Task.WhenAll(outputTask, errorTask);
 
                     try
                     {
                         try
                         {
-                            await process.StandardInput.BaseStream.WriteAsync(promptBytes, cancellationToken);
-                            process.StandardInput.Close();
-                        }
-                        catch (Exception) when (!cancellationToken.IsCancellationRequested)
-                        {
-                            AddReason(captureReasons, "stdin-write-failed");
-                        }
+                            try
+                            {
+                                await process.StandardInput.BaseStream.WriteAsync(promptBytes, cancellationToken);
+                                process.StandardInput.Close();
+                            }
+                            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                            {
+                                AddReason(captureReasons, "stdin-write-failed");
+                            }
 
-                        var waitTask = process.WaitForExitAsync();
-                        var timeoutTask = Task.Delay(options.Timeout);
-                        var cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-                        var completedTask = await Task.WhenAny(waitTask, timeoutTask, cancellationTask);
-                        if (cancellationToken.IsCancellationRequested)
-                        {
-                            await cancellationTask;
-                        }
+                            var waitTask = process.WaitForExitAsync();
+                            var timeoutTask = Task.Delay(options.Timeout);
+                            var cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                            var completedTask = await Task.WhenAny(waitTask, timeoutTask, cancellationTask);
+                            if (cancellationToken.IsCancellationRequested)
+                            {
+                                await cancellationTask;
+                            }
 
-                        if (completedTask == timeoutTask)
+                            if (completedTask == timeoutTask)
+                            {
+                                timedOut = true;
+                                processTerminationCompleted = await TerminateAfterRunnerTimeoutAsync(
+                                    process,
+                                    captureTask,
+                                    captureCancellation,
+                                    captureReasons);
+                                if (cancellationToken.IsCancellationRequested)
+                                {
+                                    await cancellationTask;
+                                }
+                            }
+
+                            if (processTerminationCompleted)
+                            {
+                                await waitTask;
+                                if (cancellationToken.IsCancellationRequested)
+                                {
+                                    await cancellationTask;
+                                }
+
+                                completedTask = await Task.WhenAny(captureTask, cancellationTask);
+                                if (cancellationToken.IsCancellationRequested)
+                                {
+                                    await cancellationTask;
+                                }
+
+                                await captureTask;
+                            }
+                        }
+                        catch (OperationCanceledException cancellationException)
+                            when (cancellationToken.IsCancellationRequested)
                         {
-                            timedOut = true;
-                            processTerminationCompleted = await TerminateAfterRunnerTimeoutAsync(
+                            await TerminateAfterCallerCancellationAsync(
                                 process,
-                                outputTask,
-                                errorTask,
+                                captureTask,
                                 captureCancellation,
-                                captureReasons);
-                            if (cancellationToken.IsCancellationRequested)
-                            {
-                                await cancellationTask;
-                            }
+                                cancellationException);
+                            throw;
                         }
-
-                        if (processTerminationCompleted)
+                        catch (Exception exception) when (cancellationToken.IsCancellationRequested)
                         {
-                            await waitTask;
-                            if (cancellationToken.IsCancellationRequested)
-                            {
-                                await cancellationTask;
-                            }
+                            var cancellationException = new OperationCanceledException(
+                                "The Pilot B run was canceled.",
+                                exception,
+                                cancellationToken);
+                            await TerminateAfterCallerCancellationAsync(
+                                process,
+                                captureTask,
+                                captureCancellation,
+                                cancellationException);
+                            throw cancellationException;
+                        }
+                        catch (Exception)
+                        {
+                            AddReason(captureReasons, "output-capture-failed");
+                        }
 
-                            var captureTask = Task.WhenAll(outputTask, errorTask);
-                            completedTask = await Task.WhenAny(captureTask, cancellationTask);
-                            if (cancellationToken.IsCancellationRequested)
-                            {
-                                await cancellationTask;
-                            }
+                        if (captureTask.IsCompleted)
+                        {
+                            stdoutBytes = outputBuffer.ToArray();
+                            stderrBytes = errorBuffer.ToArray();
+                        }
 
-                            await captureTask;
+                        if (!timedOut)
+                        {
+                            exitCode = process.ExitCode;
                         }
                     }
-                    catch (OperationCanceledException cancellationException)
-                        when (cancellationToken.IsCancellationRequested)
+                    finally
                     {
-                        await TerminateAfterCallerCancellationAsync(
-                            process,
-                            outputTask,
-                            errorTask,
-                            captureCancellation,
-                            cancellationException);
-                        throw;
-                    }
-                    catch (Exception exception) when (cancellationToken.IsCancellationRequested)
-                    {
-                        var cancellationException = new OperationCanceledException(
-                            "The Pilot B run was canceled.",
-                            exception,
-                            cancellationToken);
-                        await TerminateAfterCallerCancellationAsync(
-                            process,
-                            outputTask,
-                            errorTask,
-                            captureCancellation,
-                            cancellationException);
-                        throw cancellationException;
-                    }
-                    catch (Exception)
-                    {
-                        AddReason(captureReasons, "output-capture-failed");
-                    }
-
-                    stdoutBytes = outputBuffer.ToArray();
-                    stderrBytes = errorBuffer.ToArray();
-                    if (!timedOut)
-                    {
-                        exitCode = process.ExitCode;
+                        // A bounded abort may return before the pipe copies release their destinations.
+                        _ = DisposeCaptureResourcesAfterCompletionAsync(
+                            captureTask,
+                            outputBuffer,
+                            errorBuffer,
+                            captureCancellation);
                     }
                 }
 
@@ -652,12 +665,10 @@ public sealed class PilotBRunner
 
     private async Task TerminateAfterCallerCancellationAsync(
         Process process,
-        Task outputTask,
-        Task errorTask,
+        Task captureTask,
         CancellationTokenSource captureCancellation,
         OperationCanceledException cancellationException)
     {
-        var captureTask = Task.WhenAll(outputTask, errorTask);
         var terminationFailure = await CaptureAfterProcessTreeTerminationAsync(process, captureTask);
         if (terminationFailure is null)
         {
@@ -677,12 +688,10 @@ public sealed class PilotBRunner
 
     private async Task<bool> TerminateAfterRunnerTimeoutAsync(
         Process process,
-        Task outputTask,
-        Task errorTask,
+        Task captureTask,
         CancellationTokenSource captureCancellation,
         ICollection<string> captureReasons)
     {
-        var captureTask = Task.WhenAll(outputTask, errorTask);
         var terminationFailure = await CaptureAfterProcessTreeTerminationAsync(process, captureTask);
         if (terminationFailure is null)
         {
@@ -731,6 +740,25 @@ public sealed class PilotBRunner
         catch
         {
         }
+    }
+
+    private static async Task DisposeCaptureResourcesAfterCompletionAsync(
+        Task captureTask,
+        MemoryStream outputBuffer,
+        MemoryStream errorBuffer,
+        CancellationTokenSource captureCancellation)
+    {
+        try
+        {
+            await captureTask;
+        }
+        catch
+        {
+        }
+
+        TryDispose(outputBuffer);
+        TryDispose(errorBuffer);
+        TryDispose(captureCancellation);
     }
 
     private static void TryDispose(IDisposable disposable)

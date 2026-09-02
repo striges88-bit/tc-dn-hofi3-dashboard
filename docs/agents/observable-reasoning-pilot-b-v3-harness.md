@@ -473,6 +473,12 @@ stable timeout-termination reason, returns no validity or fingerprint, and
 leaves any still-running fake process to explicit test-owned cleanup before
 fixture disposal.
 
+Stdout and stderr copies share one completion task. The runner snapshots their
+buffers only after that task completes; if bounded capture abort expires,
+buffer and cancellation-source disposal is deferred until the outstanding
+copies settle. That deferred cleanup owns only capture resources and cannot
+publish evidence, change qualification, or delay the fail-closed result.
+
 ### Issue #43 implemented runner slice
 
 Issue #43 implements the test-only fake-CLI path through the existing
