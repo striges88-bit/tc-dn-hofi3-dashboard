@@ -428,6 +428,46 @@ it is not trusted or returned unless final verification succeeds. Thus the same
 protocol-relevant inputs, outputs, and qualification state produce the same
 fingerprint across timestamps and physical directories.
 
+### Verified run-record and scoring handoff
+
+Successful verification returns one immutable typed projection assembled from
+the verifier's existing one-read payload snapshots. It contains only the typed
+arm, protocol hash, parsed semantic transcript, evidence timestamps, fixed
+invocation, qualification state, process outcome, verified integrity facts,
+prompt-byte fact, and semantic fingerprint needed downstream. Its constructor
+is internal and every collection is defensively copied; storage-only manifest
+identity and paths are not exposed through this projection.
+
+`PilotBRunner` uses that projection for its sealed result. It does not reuse its
+pre-publication transcript or integrity candidates and no longer stores an
+`IsScored` flag. Eligibility is derived only at the downstream handoff.
+
+`PilotBRunRecordProducer` accepts the artifact directory plus caller-owned run,
+case, pair, replica, safety, pairing, message-kind, adjudication, and shared
+source-manifest inputs. The shared `source_manifest_sha256` is an experiment
+input; it is not the per-arm raw manifest hash. The producer defensively copies
+message kinds, validates only the per-record projection shape, and then invokes
+the concrete verifier immediately before projection. It never accepts caller-
+supplied validity, `artifact_complete`, fingerprint, protocol/executable/prompt
+hashes, timestamps, transcript, or integrity facts.
+
+Only `SEALED + VALID + qualification_marker=false` produces an unchanged
+`pilot-b.run-record.v3`. Unsealed/tampered evidence, sealed-invalid evidence,
+qualification evidence, and malformed projection input return a typed rejection
+and no record; the evidence directory is read-only throughout. Commentary is
+projected exclusively through `PilotBRunRecordProjection`, preserving exact
+text, global sequence, and order. Final output stays in the semantic fingerprint
+and never becomes a primary scoring message.
+
+`PilotBScorer` remains filesystem-independent and owns batch, pair, Gate 1, and
+McNemar validation. Golden writer coverage fixes the existing v3 fingerprint
+bytes and proves idempotent semantic manifest/transcript projection. Real
+temporary publisher-to-verifier-to-producer-to-scorer coverage varies physical
+roots, timestamps, manifest and transcript formatting, thread/run/pair IDs,
+temporary names, and stderr bytes: protocol-equivalent runs retain the same
+fingerprint and canonical classification, while repeated A-B-A production
+leaves no shared state or artifact mutation.
+
 ### Cancellation and timeout
 
 Caller cancellation has a separate wait signal from the runner timeout. The

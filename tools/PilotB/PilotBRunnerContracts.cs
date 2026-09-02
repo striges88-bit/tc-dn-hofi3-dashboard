@@ -89,11 +89,103 @@ public sealed record PilotBRunQualificationResult(
     PilotBRunValidity Validity,
     IReadOnlyList<string> InvalidReasons);
 
-public sealed record PilotBEvidenceVerification(
-    PilotBEvidenceState EvidenceState,
-    PilotBRunQualificationResult? Qualification,
-    string? SemanticFingerprint,
-    IReadOnlyList<string> InvalidReasons);
+public sealed record PilotBVerifiedEvidenceProjection
+{
+    internal PilotBVerifiedEvidenceProjection(
+        PilotBArm arm,
+        string protocolSha256,
+        PilotBTranscriptParseResult transcript,
+        DateTimeOffset startedAtUtc,
+        DateTimeOffset completedAtUtc,
+        IReadOnlyList<string> invocationArguments,
+        bool isQualification,
+        int? exitCode,
+        bool timedOut,
+        PilotBRunQualificationResult qualification,
+        PilotBRunnerIntegrityFacts integrityFacts,
+        bool promptBytesVerified,
+        string semanticFingerprint)
+    {
+        ArgumentNullException.ThrowIfNull(transcript);
+        ArgumentNullException.ThrowIfNull(invocationArguments);
+        ArgumentNullException.ThrowIfNull(qualification);
+        ArgumentNullException.ThrowIfNull(integrityFacts);
+
+        Arm = arm;
+        ProtocolSha256 = protocolSha256;
+        Transcript = Freeze(transcript);
+        StartedAtUtc = startedAtUtc;
+        CompletedAtUtc = completedAtUtc;
+        InvocationArguments = Array.AsReadOnly(invocationArguments.ToArray());
+        IsQualification = isQualification;
+        ExitCode = exitCode;
+        TimedOut = timedOut;
+        Qualification = new PilotBRunQualificationResult(
+            qualification.Validity,
+            Array.AsReadOnly(qualification.InvalidReasons.ToArray()));
+        IntegrityFacts = integrityFacts;
+        PromptBytesVerified = promptBytesVerified;
+        SemanticFingerprint = semanticFingerprint;
+    }
+
+    public PilotBArm Arm { get; }
+    public string ProtocolSha256 { get; }
+    public PilotBTranscriptParseResult Transcript { get; }
+    public DateTimeOffset StartedAtUtc { get; }
+    public DateTimeOffset CompletedAtUtc { get; }
+    public IReadOnlyList<string> InvocationArguments { get; }
+    public bool IsQualification { get; }
+    public int? ExitCode { get; }
+    public bool TimedOut { get; }
+    public PilotBRunQualificationResult Qualification { get; }
+    public PilotBRunnerIntegrityFacts IntegrityFacts { get; }
+    public bool PromptBytesVerified { get; }
+    public string SemanticFingerprint { get; }
+
+    internal static bool TryParseArm(string armId, out PilotBArm arm)
+        => Enum.TryParse(armId, ignoreCase: true, out arm)
+           && Enum.IsDefined(arm)
+           && string.Equals(armId, arm.ToString().ToLowerInvariant(), StringComparison.Ordinal);
+
+    private static PilotBTranscriptParseResult Freeze(PilotBTranscriptParseResult transcript)
+        => new(
+            Array.AsReadOnly(transcript.IntermediateMessages.ToArray()),
+            transcript.IsValid,
+            transcript.HasTurnCompleted,
+            transcript.HasTurnFailed,
+            transcript.LineCount,
+            Array.AsReadOnly(transcript.InvalidReasons.ToArray()),
+            Array.AsReadOnly(transcript.ExcludedEventTypes.ToArray()))
+        {
+            SemanticMessages = Array.AsReadOnly(transcript.SemanticMessages.ToArray()),
+            FinalMessages = Array.AsReadOnly(transcript.FinalMessages.ToArray()),
+            TerminalOutcome = transcript.TerminalOutcome
+        };
+}
+
+public sealed record PilotBEvidenceVerification
+{
+    internal PilotBEvidenceVerification(
+        PilotBEvidenceState evidenceState,
+        PilotBVerifiedEvidenceProjection? verifiedEvidence,
+        IReadOnlyList<string> invalidReasons)
+    {
+        ArgumentNullException.ThrowIfNull(invalidReasons);
+        EvidenceState = evidenceState;
+        VerifiedEvidence = verifiedEvidence;
+        InvalidReasons = Array.AsReadOnly(invalidReasons.ToArray());
+    }
+
+    public PilotBEvidenceState EvidenceState { get; }
+
+    public PilotBVerifiedEvidenceProjection? VerifiedEvidence { get; }
+
+    public IReadOnlyList<string> InvalidReasons { get; }
+
+    public PilotBRunQualificationResult? Qualification => VerifiedEvidence?.Qualification;
+
+    public string? SemanticFingerprint => VerifiedEvidence?.SemanticFingerprint;
+}
 
 public sealed record PilotBArtifactPaths(
     string Root,
@@ -128,7 +220,6 @@ public sealed record PilotBRunnerIntegrityFacts(
 public sealed record PilotBRunnerResult(
     PilotBRunnerStatus Status,
     bool IsQualification,
-    bool IsScored,
     int? ExitCode,
     bool TimedOut,
     IReadOnlyList<string> InvalidReasons,

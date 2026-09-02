@@ -411,6 +411,7 @@ public sealed class PilotBEvidenceBundleVerifier
             var manifestBytes = payloads["manifest.json"];
             var manifestSha = PilotBSha256.Compute(manifestBytes);
             var manifest = PilotBArmManifest.Parse(manifestBytes);
+            Require(PilotBVerifiedEvidenceProjection.TryParseArm(manifest.ArmId, out var arm), "manifest-arm-invalid");
             var transcript = PilotBTranscriptParser.Parse(payloads["output.jsonl"]);
             var preManifest = PilotBFileManifest.Parse(payloads["pre-manifest.json"]);
             var postManifest = PilotBFileManifest.Parse(payloads["post-manifest.json"]);
@@ -489,15 +490,29 @@ public sealed class PilotBEvidenceBundleVerifier
                 metadata.TimedOut));
             Require(string.Equals(fingerprint, seal.SemanticFingerprint, StringComparison.Ordinal), "semantic-fingerprint-mismatch");
 
-            return new PilotBEvidenceVerification(PilotBEvidenceState.Sealed, qualification, fingerprint, []);
+            var verifiedEvidence = new PilotBVerifiedEvidenceProjection(
+                arm,
+                manifest.ProtocolSha256,
+                transcript,
+                metadata.StartedAtUtc,
+                metadata.CompletedAtUtc,
+                metadata.InvocationArguments,
+                metadata.IsQualification,
+                metadata.ExitCode,
+                metadata.TimedOut,
+                qualification,
+                expectedIntegrityFacts,
+                promptBytesVerified,
+                fingerprint);
+            return new PilotBEvidenceVerification(PilotBEvidenceState.Sealed, verifiedEvidence, []);
         }
         catch (PilotBEvidenceVerificationException exception)
         {
-            return new PilotBEvidenceVerification(PilotBEvidenceState.Unsealed, null, null, [exception.Reason]);
+            return new PilotBEvidenceVerification(PilotBEvidenceState.Unsealed, null, [exception.Reason]);
         }
         catch
         {
-            return new PilotBEvidenceVerification(PilotBEvidenceState.Unsealed, null, null, ["evidence-verification-failed"]);
+            return new PilotBEvidenceVerification(PilotBEvidenceState.Unsealed, null, ["evidence-verification-failed"]);
         }
     }
 
