@@ -6,6 +6,7 @@ using TestFixture = CryptoIndicatorApp.PilotB.Tests.PilotBRunnerTestFixture;
 
 namespace CryptoIndicatorApp.PilotB.Tests;
 
+[Collection(PilotBProcessBackedRunnerCollection.Name)]
 public sealed class PilotBRunnerTests
 {
     private static readonly DateTimeOffset FixedNow = new(2026, 8, 19, 9, 0, 0, TimeSpan.Zero);

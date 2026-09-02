@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 
 namespace CryptoIndicatorApp.PilotB.Tests;
 
+[Collection(PilotBProcessBackedRunnerCollection.Name)]
 public sealed class PilotBEvidenceBundlePublisherTests
 {
     [Theory]

@@ -4,6 +4,7 @@ using CryptoIndicatorApp.PilotB;
 
 namespace CryptoIndicatorApp.PilotB.Tests;
 
+[Collection(PilotBProcessBackedRunnerCollection.Name)]
 public sealed class PilotBRunnerControlledFailureTests
 {
     private const int ControlledNonzeroExitCode = 23;

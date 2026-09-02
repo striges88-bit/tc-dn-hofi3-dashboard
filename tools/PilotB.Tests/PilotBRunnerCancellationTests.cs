@@ -5,6 +5,7 @@ using CryptoIndicatorApp.PilotB;
 
 namespace CryptoIndicatorApp.PilotB.Tests;
 
+[Collection(PilotBProcessBackedRunnerCollection.Name)]
 public sealed class PilotBRunnerCancellationTests
 {
     private const string ParentReadyMarker = ".pilot-b-fake-parent-ready";
