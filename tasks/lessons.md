@@ -4,6 +4,8 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 
 ## Active Rules
 
+- In test teardown, logging both errors does not preserve the test result: propagate the first failure with its original stack, record subsequent cleanup/disposal errors separately, and prove cleanup-only failure still fails. Exercise this deterministically (for example, a held file handle), without weakening native completion waits or hiding resource failures.
+
 - When the session context approaches 50% full, stop at a clean handoff point for `/compact`; record completed verification, remaining work, and the next pending command before continuing substantial work.
 - When a WPF project references a layer named `Application`, fully qualify `System.Windows.Application` in `App.xaml.cs` because the project namespace can shadow the WPF type.
 - Keep the `Application` layer independent from concrete Infrastructure services such as `JsonlMarketEventStore`; expose source/recorder interfaces in Application and compose JSONL/Binance adapters only in Desktop or another outer layer.
@@ -68,3 +70,6 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 - Transcript parser message sequence must come from the shared semantic-message collection; commentary-local counting can duplicate sequence values when final output precedes commentary.
 - A bounded `Task.WaitAsync` timeout does not stop or transfer ownership of the underlying task; never snapshot or dispose a destination while its producer may still write, and defer resource cleanup until producer completion without extending caller latency.
 - When strict process-backed tests pass locally but exceed unchanged timing budgets under parallel Windows CI load, group every class that launches or coordinates the process into one xUnit collection before widening behavioral timeouts; keep pure tests parallel.
+- When diagnosing Windows process cleanup, pin the process handle while identity is verified and the process is alive; opening it after exit can itself fail. Distinguish exit-code state from native-handle signaling, preserve primary and disposal failures separately, and do not turn a runtime fast path into a claimed root cause without failure-time evidence.
+- For timing-sensitive cleanup diagnostics, sample native state without changing Process exit caches and defer output until after deletion; record adjacent observations as non-atomic, and preserve the original failure before disposal can mask it. A transient unsignaled handle with successful deletion is not proof of a directory-lock cause.
+- When Windows test cleanup requires native process termination, retain the identity-validated handle and use a bounded native wait on every non-null path, including already-exited and kill-failure paths. Exit-code state and WaitForExitAsync alone are insufficient; keep the existing budget and verify the runtime implementation before choosing the wait.

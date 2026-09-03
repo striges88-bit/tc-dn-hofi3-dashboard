@@ -41,3 +41,12 @@ jobs:
 
       - name: Test Memory CLI
         run: dotnet test tools/Memory.Tests/CryptoIndicatorApp.Memory.Tests.csproj --configuration Release --no-restore --no-build --logger "trx;LogFilePrefix=memory-cli"
+
+      - name: Retain PilotB test diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: pilotb-test-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: tools/PilotB.Tests/TestResults/*.trx
+          retention-days: 7
+          if-no-files-found: warn

@@ -22,7 +22,7 @@ public sealed class PilotBRunnerTests
         Assert.True(result.Status == PilotBRunnerStatus.Valid, string.Join("|", result.InvalidReasons));
         Assert.Equal(0, result.ExitCode);
         Assert.True(result.IsQualification);
-        Assert.False(result.IsScored);
+        Assert.Equal(PilotBRunValidity.Valid, result.RunValidity);
         Assert.Equal(["codex", "exec", "--ephemeral", "--json"], result.InvocationArguments);
         Assert.Single(result.Transcript.IntermediateMessages);
         Assert.Equal(Encoding.UTF8.GetBytes("pilot-b.fake.valid"), await File.ReadAllBytesAsync(result.Artifacts.PromptPath));
@@ -366,7 +366,7 @@ public sealed class PilotBRunnerTests
 
         using var integrity = JsonDocument.Parse(await File.ReadAllTextAsync(result.Artifacts.IntegrityPath));
         Assert.False(result.IsQualification);
-        Assert.True(result.IsScored);
+        Assert.Equal(PilotBRunValidity.Valid, result.RunValidity);
         Assert.False(integrity.RootElement.GetProperty("qualification_marker").GetBoolean());
     }
 

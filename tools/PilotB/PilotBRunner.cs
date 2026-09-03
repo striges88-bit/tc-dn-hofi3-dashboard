@@ -404,7 +404,8 @@ public sealed class PilotBRunner
         }
 
         var verification = new PilotBEvidenceBundleVerifier().Verify(artifactPaths);
-        if (verification.EvidenceState != PilotBEvidenceState.Sealed || verification.Qualification is null)
+        if (verification.EvidenceState != PilotBEvidenceState.Sealed
+            || verification.VerifiedEvidence is not { } verifiedEvidence)
         {
             return UnsealedResult(
                 options,
@@ -417,25 +418,23 @@ public sealed class PilotBRunner
                 captureReasons.Concat(verification.InvalidReasons));
         }
 
-        var verifiedIntegrity = finalIntegrity with { ArtifactComplete = true };
         return new PilotBRunnerResult(
-            verification.Qualification.Validity == PilotBRunValidity.Valid
+            verifiedEvidence.Qualification.Validity == PilotBRunValidity.Valid
                 ? PilotBRunnerStatus.Valid
                 : PilotBRunnerStatus.Invalid,
-            options.IsQualification,
-            !options.IsQualification && verification.Qualification.Validity == PilotBRunValidity.Valid,
-            exitCode,
-            timedOut,
-            verification.Qualification.InvalidReasons,
-            ExactInvocation,
-            finalTranscript,
+            verifiedEvidence.IsQualification,
+            verifiedEvidence.ExitCode,
+            verifiedEvidence.TimedOut,
+            verifiedEvidence.Qualification.InvalidReasons,
+            verifiedEvidence.InvocationArguments,
+            verifiedEvidence.Transcript,
             artifactPaths,
-            verifiedIntegrity,
-            verification.SemanticFingerprint)
+            verifiedEvidence.IntegrityFacts,
+            verifiedEvidence.SemanticFingerprint)
         {
             EvidenceState = PilotBEvidenceState.Sealed,
-            RunValidity = verification.Qualification.Validity,
-            Qualification = verification.Qualification
+            RunValidity = verifiedEvidence.Qualification.Validity,
+            Qualification = verifiedEvidence.Qualification
         };
     }
 
@@ -594,7 +593,6 @@ public sealed class PilotBRunner
         return new PilotBRunnerResult(
             PilotBRunnerStatus.Invalid,
             options.IsQualification,
-            false,
             exitCode,
             timedOut,
             invalidReasons,
