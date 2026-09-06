@@ -3,7 +3,7 @@ using CryptoIndicatorApp.PilotB;
 
 namespace CryptoIndicatorApp.PilotB.Tests;
 
-public sealed class PilotBRunFingerprintWriterTests
+public sealed partial class PilotBRunFingerprintWriterTests
 {
     [Fact]
     public void Write_EmitsVersionedGoldenBytesIdempotently()

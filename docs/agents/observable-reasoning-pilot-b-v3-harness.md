@@ -46,6 +46,15 @@ The record has no prompt text, transcript path, authentication value, token, or
 mutable home content. Hashes are evidence references, not a substitute for the
 sealed external artifact store.
 
+The JSONL reader requires the exact unique field set at every record, pairing,
+adjudication, integrity and message object. Enum wire values must match the
+defined lowercase names exactly; numeric, unknown, mixed-case and whitespace
+aliases are malformed. Malformed JSON value kinds produce `FormatException`.
+The public typed scorer independently rejects undefined enum values, missing
+nested objects/collections and messages, arm-order indices outside 0..1, and
+duplicate or decreasing commentary sequences as `INVALID_BATCH`. Commentary
+sequences need not be contiguous: final output is excluded from that projection.
+
 Required top-level fields are:
 
 ```text
@@ -470,6 +479,20 @@ leaves no shared state or artifact mutation.
 
 ### Cancellation and timeout
 
+One monotonic elapsed deadline covers stdin delivery, root-process exit and
+stdout/stderr drain. It starts when the process starts and is not renewed
+between phases. Timeout/cancellation cleanup also waits for an outstanding
+stdin write to settle; termination-induced write errors cannot replace the
+primary timeout/cancellation outcome. Caller cancellation that races with
+timeout cleanup keeps its token and secondary termination diagnostic.
+
+If the root exits while a descendant still holds a capture pipe, the drain
+deadline still applies. The existing root-based terminator cannot guarantee
+termination of an orphaned descendant: incomplete capture produces bounded
+`UNSEALED + null`, never a seal or trusted fingerprint. The regression test
+explicitly owns final cleanup of that descendant. This is the existing
+termination-failure contract, not a process-containment guarantee.
+
 Caller cancellation has a separate wait signal from the runner timeout. The
 caller token is checked before timeout classification, so cancellation cannot
 become a timeout result. While the owned process is still in scope, one narrow
@@ -610,6 +633,13 @@ The regression matrix must retain all existing tests and cover:
 
 ## Deferred human/authority gates
 
+ID8 acceptance boundary (approved 2026-09-06): engineering acceptance in #30
+proves that `CriticalFailure` is an independent, explicitly supplied boolean
+and that the scorer processes it deterministically. Real cause-to-source and
+adjudication traceability remains mandatory in #39 after the sealed runs in
+#38. Synthetic tests prove behavior, not real adjudication. The original
+traceability obligation is retained without adding fields to run-record.v3.
+
 The following remain explicitly outside this engineering slice:
 
 - installing or selecting a real standalone CLI and recording its release SHA;
@@ -625,3 +655,7 @@ The following remain explicitly outside this engineering slice:
 
 Those actions require their own human authority and must not be inferred from
 green harness tests.
+
+Fixture root consistency: verifier requires normalized absolute pre/post manifest roots to equal metadata.FixtureRoot (case-insensitive Windows comparison, full-path and trailing-separator normalization). A mismatch returns UNSEALED with fixture-root-mismatch even when raw inventory was rehashed. Storage roots remain excluded from the semantic fingerprint.
+
+Acceptance proof additions (2026-09-05): 22 scorer scenarios assert the complete ordered 16-predicate vector and terminal decision/reason, including routine-only, reachable combined routine/affected failure, minor clarity, both relative endpoints and critical precedence. Twenty fingerprint checks prove fixture-set canonicalization/idempotence and protocol-input/qualification sensitivity. External acceptance driver executes the unchanged publisher/preflight test cases forward and then in exact reverse order in one process (63 unique cases, 126 passes); log and driver are retained outside the repository.

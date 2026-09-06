@@ -10,7 +10,7 @@ namespace CryptoIndicatorApp.Memory;
 
 public sealed class MemoryStore : IDisposable
 {
-    private const int SchemaVersion = 1;
+    private const int SchemaVersion = 2;
     private readonly SqliteConnection _connection;
 
     public MemoryStore(string databasePath)
@@ -154,6 +154,24 @@ public sealed class MemoryStore : IDisposable
                 ("$blob", SourceBlobSha(metadata, symbol.SourcePath)),
                 ("$indexed", metadata.IndexedAt),
                 ("$updated", metadata.IndexedAt));
+        }
+
+        foreach (var declaration in snapshot.SymbolDeclarations)
+        {
+            Execute(
+                """
+                INSERT INTO symbol_declarations(symbol, source_path, source_hash, declaration_position, source_blob_sha, commit_sha, tree_sha, indexed_at)
+                VALUES ($symbol, $source, $hash, $position, $blob, $commit, $tree, $indexed)
+                """,
+                transaction,
+                ("$symbol", declaration.Symbol),
+                ("$source", declaration.SourcePath),
+                ("$hash", declaration.SourceHash),
+                ("$position", declaration.DeclarationPosition),
+                ("$blob", SourceBlobSha(metadata, declaration.SourcePath)),
+                ("$commit", metadata.CommitSha),
+                ("$tree", metadata.TreeSha),
+                ("$indexed", metadata.IndexedAt));
         }
 
         foreach (var experiment in snapshot.Experiments)

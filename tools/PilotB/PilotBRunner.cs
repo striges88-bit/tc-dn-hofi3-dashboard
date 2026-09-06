@@ -128,6 +128,8 @@ public sealed class PilotBRunner
                 else
                 {
                     processStarted = true;
+                    var executionStarted = Stopwatch.GetTimestamp();
+                    Task stdinWriteTask = Task.CompletedTask;
                     var outputBuffer = new MemoryStream();
                     var errorBuffer = new MemoryStream();
                     var captureCancellation = new CancellationTokenSource();
@@ -145,8 +147,13 @@ public sealed class PilotBRunner
                         {
                             try
                             {
-                                await process.StandardInput.BaseStream.WriteAsync(promptBytes, cancellationToken);
+                                stdinWriteTask = process.StandardInput.BaseStream.WriteAsync(promptBytes, cancellationToken).AsTask();
+                                await WaitWithinDeadlineAsync(stdinWriteTask, executionStarted, options.Timeout, cancellationToken);
                                 process.StandardInput.Close();
+                            }
+                            catch (TimeoutException)
+                            {
+                                throw;
                             }
                             catch (Exception) when (!cancellationToken.IsCancellationRequested)
                             {
@@ -154,51 +161,15 @@ public sealed class PilotBRunner
                             }
 
                             var waitTask = process.WaitForExitAsync();
-                            var timeoutTask = Task.Delay(options.Timeout);
-                            var cancellationTask = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-                            var completedTask = await Task.WhenAny(waitTask, timeoutTask, cancellationTask);
-                            if (cancellationToken.IsCancellationRequested)
-                            {
-                                await cancellationTask;
-                            }
-
-                            if (completedTask == timeoutTask)
-                            {
-                                timedOut = true;
-                                processTerminationCompleted = await TerminateAfterRunnerTimeoutAsync(
-                                    process,
-                                    captureTask,
-                                    captureCancellation,
-                                    captureReasons);
-                                if (cancellationToken.IsCancellationRequested)
-                                {
-                                    await cancellationTask;
-                                }
-                            }
-
-                            if (processTerminationCompleted)
-                            {
-                                await waitTask;
-                                if (cancellationToken.IsCancellationRequested)
-                                {
-                                    await cancellationTask;
-                                }
-
-                                completedTask = await Task.WhenAny(captureTask, cancellationTask);
-                                if (cancellationToken.IsCancellationRequested)
-                                {
-                                    await cancellationTask;
-                                }
-
-                                await captureTask;
-                            }
+                            await WaitWithinDeadlineAsync(waitTask, executionStarted, options.Timeout, cancellationToken);
+                            await WaitWithinDeadlineAsync(captureTask, executionStarted, options.Timeout, cancellationToken);
                         }
                         catch (OperationCanceledException cancellationException)
                             when (cancellationToken.IsCancellationRequested)
                         {
                             await TerminateAfterCallerCancellationAsync(
                                 process,
-                                captureTask,
+                                Task.WhenAll(captureTask, ObserveStdinCompletionAsync(stdinWriteTask)),
                                 captureCancellation,
                                 cancellationException);
                             throw;
@@ -211,10 +182,29 @@ public sealed class PilotBRunner
                                 cancellationToken);
                             await TerminateAfterCallerCancellationAsync(
                                 process,
-                                captureTask,
+                                Task.WhenAll(captureTask, ObserveStdinCompletionAsync(stdinWriteTask)),
                                 captureCancellation,
                                 cancellationException);
                             throw cancellationException;
+                        }
+                        catch (TimeoutException)
+                        {
+                            timedOut = true;
+                            processTerminationCompleted = await TerminateAfterRunnerTimeoutAsync(
+                                process,
+                                Task.WhenAll(captureTask, ObserveStdinCompletionAsync(stdinWriteTask)),
+                                captureCancellation,
+                                captureReasons);
+                            if (cancellationToken.IsCancellationRequested)
+                            {
+                                var cancellationException = new OperationCanceledException(cancellationToken);
+                                await TerminateAfterCallerCancellationAsync(
+                                    process,
+                                    Task.WhenAll(captureTask, ObserveStdinCompletionAsync(stdinWriteTask)),
+                                    captureCancellation,
+                                    cancellationException);
+                                throw cancellationException;
+                            }
                         }
                         catch (Exception)
                         {
@@ -658,6 +648,47 @@ public sealed class PilotBRunner
         {
             AddReason(reasons, failureReason);
             return string.Empty;
+        }
+    }
+
+    private static async Task WaitWithinDeadlineAsync(
+        Task task, long started, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        // Chunk only very long waits to respect Task timer limits without shortening
+        // the caller's timeout or overflowing an absolute Stopwatch timestamp.
+        var maximumWait = TimeSpan.FromDays(1);
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var remaining = timeout - Stopwatch.GetElapsedTime(started);
+            if (remaining <= TimeSpan.Zero)
+            {
+                throw new TimeoutException();
+            }
+
+            try
+            {
+                await task.WaitAsync(remaining > maximumWait ? maximumWait : remaining, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                return;
+            }
+            catch (TimeoutException) when (remaining > maximumWait && !task.IsCompleted)
+            {
+                // Continue against the same elapsed deadline.
+            }
+        }
+    }
+
+    private static async Task ObserveStdinCompletionAsync(Task stdinWriteTask)
+    {
+        try
+        {
+            await stdinWriteTask;
+        }
+        catch
+        {
+            // Killing the child can close its stdin mid-write. Wait for the write
+            // to settle, but preserve timeout/caller cancellation as primary.
         }
     }
 

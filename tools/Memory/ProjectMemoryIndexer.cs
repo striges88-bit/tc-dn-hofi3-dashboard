@@ -58,6 +58,7 @@ public sealed class ProjectMemoryIndexer
         var relations = new List<RelationRecord>();
         var experiments = new List<ExperimentRecord>();
         var todos = new List<TodoRecord>();
+        var csharpSymbols = new CSharpSymbolCatalog();
 
         foreach (var file in Directory.EnumerateFiles(_projectRoot, "*", SearchOption.AllDirectories)
                      .Select(path => new FileInfo(path))
@@ -73,7 +74,7 @@ public sealed class ProjectMemoryIndexer
                 AddChunks(documents, relativePath, hash, text);
             }
 
-            AddSpecializedRecords(relativePath, hash, text, documents, rules, adrs, formulas, symbols, events, relations, experiments, todos);
+            AddSpecializedRecords(relativePath, hash, text, documents, rules, adrs, formulas, symbols, events, relations, experiments, todos, csharpSymbols);
         }
 
         return new ProjectMemorySnapshot(
@@ -87,7 +88,10 @@ public sealed class ProjectMemoryIndexer
             relations,
             experiments,
             todos,
-            MemorySnapshotMetadata.ForWorkingTree(indexedAt));
+            MemorySnapshotMetadata.ForWorkingTree(indexedAt))
+        {
+            SymbolDeclarations = csharpSymbols.Declarations
+        };
     }
 
     private void AddSpecializedRecords(
@@ -102,7 +106,8 @@ public sealed class ProjectMemoryIndexer
         List<EventRecord> events,
         List<RelationRecord> relations,
         List<ExperimentRecord> experiments,
-        List<TodoRecord> todos)
+        List<TodoRecord> todos,
+        CSharpSymbolCatalog csharpSymbols)
     {
         if (path.Equals("docs/formulas.md", StringComparison.OrdinalIgnoreCase))
         {
@@ -153,7 +158,7 @@ public sealed class ProjectMemoryIndexer
 
         if (path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
         {
-            AddCSharpRecords(path, hash, text, documents, symbols, events, relations, experiments, todos);
+            AddCSharpRecords(path, hash, text, documents, symbols, events, relations, experiments, todos, csharpSymbols);
         }
 
         if (path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
@@ -206,10 +211,11 @@ public sealed class ProjectMemoryIndexer
 
     private static IEnumerable<EventRecord> ParseTestSymbolReferences(string text, string path, string hash)
     {
-        foreach (Match match in Regex.Matches(text, "requires_symbol=([A-Za-z_][A-Za-z0-9_.]*|[A-Z0-9]{3,20})", RegexOptions.IgnoreCase))
+        foreach (Match match in CSharpMemoryExtractor.RequiresSymbolRegex.Matches(text))
         {
-            var rawSymbol = match.Groups[1].Value;
-            var symbol = rawSymbol.Contains('.', StringComparison.Ordinal) ? rawSymbol : rawSymbol.ToUpperInvariant();
+            var rawSymbol = match.Groups["symbol"].Value;
+            var symbol = rawSymbol.Contains('.', StringComparison.Ordinal) || rawSymbol.Contains('`', StringComparison.Ordinal)
+                ? rawSymbol : rawSymbol.ToUpperInvariant();
             yield return new EventRecord($"event.test-symbol-reference.{Slug(symbol)}", "test_symbol_reference", symbol, match.Value, path, hash);
         }
     }
@@ -223,12 +229,20 @@ public sealed class ProjectMemoryIndexer
         List<EventRecord> events,
         List<RelationRecord> relations,
         List<ExperimentRecord> experiments,
-        List<TodoRecord> todos)
+        List<TodoRecord> todos,
+        CSharpSymbolCatalog csharpSymbols)
     {
         var extraction = CSharpMemoryExtractor.Extract(path, text);
+        var newSymbols = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var extractedSymbol in extraction.Symbols)
         {
+            if (!csharpSymbols.Add(extractedSymbol, path, hash))
+            {
+                continue;
+            }
+
+            newSymbols.Add($"symbol.{extractedSymbol.FullName}");
             var symbol = new SymbolRecord(
                 extractedSymbol.FullName,
                 extractedSymbol.Kind,
@@ -247,8 +261,13 @@ public sealed class ProjectMemoryIndexer
                 hash));
         }
 
-        foreach (var extractedRelation in extraction.Relations)
+        foreach (var extractedRelation in extraction.Relations.Distinct())
         {
+            if (!newSymbols.Contains(extractedRelation.ToId))
+            {
+                continue;
+            }
+
             var relation = new RelationRecord(
                 $"relation.{Slug(extractedRelation.FromId)}.{extractedRelation.Relation}.{Slug(extractedRelation.ToId)}",
                 extractedRelation.FromId,

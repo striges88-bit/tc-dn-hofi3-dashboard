@@ -135,6 +135,10 @@ Typed records must preserve source grounding: `id`, `status`, `source_path`, `so
 
 The code-memory MVP extracts lightweight C# facts directly from indexed `.cs` files without loading MSBuild or Roslyn workspaces. It records namespace/type/method symbols in `symbols`, `owns` relations in `relations`, xUnit test-method and `requires_symbol=` markers in `events`, `TODO` markers in `todos`, and `experiment_outcome=` markers in `experiments`. These records are searchable typed documents in `search_documents`; generic chunks remain fallback context, not the preferred answer when a typed symbol/event/relation exists. Stale-check must validate `requires_symbol=` events against the extracted `symbols` table.
 
+C# type identity includes generic arity on each generic owner segment (for example, ``Repro.Box`1.Nested``); arity-zero names are unchanged. The same identity is used by declarations, method parents, ownership, search and `requires_symbol=` references. `record` and `record class` share the `record` kind; `record struct` remains a distinct value-type kind. Generated indexes must be rebuilt after identity changes; they are disposable tooling data, not runtime recording contracts.
+
+Matching partial types retain one logical symbol and every source declaration. A partial method may retain one declaring and one implementing declaration with matching syntactic signature, including return/ref-kind, parameter types/ref-kind, modifiers and generic constraints. Implementation-only `async` and `extern` modifiers are excluded from signature equality; `unsafe` must match. An `extern` declaration counts as the implementation even without a body. Duplicate ordinary methods, two definitions, two implementations and a third part fail indexing. Declaration-only methods remain indexed because an optional body can be absent or generated outside the indexed source set. This lightweight extractor does not bind aliases, resolve types or validate all C# language rules; it does not load `obj` or a compiler workspace to complete declarations.
+
 ## Retrieval Protocol
 
 Retrieval is always staged:

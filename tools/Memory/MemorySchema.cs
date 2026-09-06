@@ -7,6 +7,7 @@ internal static class MemorySchema
         "PRAGMA journal_mode = WAL",
         "DROP TABLE IF EXISTS files",
         "DROP TABLE IF EXISTS symbols",
+        "DROP TABLE IF EXISTS symbol_declarations",
         "DROP TABLE IF EXISTS chunks",
         "DROP TABLE IF EXISTS rules",
         "DROP TABLE IF EXISTS adr",
@@ -35,6 +36,7 @@ internal static class MemorySchema
         )
         """,
         "CREATE TABLE symbols(symbol TEXT PRIMARY KEY, kind TEXT NOT NULL, display_name TEXT NOT NULL, parent_symbol TEXT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, source_blob_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+        "CREATE TABLE symbol_declarations(symbol TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, declaration_position INTEGER NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, PRIMARY KEY(symbol, source_path, declaration_position))",
         "CREATE TABLE chunks(id TEXT PRIMARY KEY, file_path TEXT NOT NULL, ordinal INTEGER NOT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, status TEXT NOT NULL)",
         "CREATE TABLE rules(id TEXT PRIMARY KEY, status TEXT NOT NULL, active_scope TEXT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
         "CREATE TABLE adr(id TEXT PRIMARY KEY, status TEXT NOT NULL, title TEXT NOT NULL, text TEXT NOT NULL, source_path TEXT NOT NULL, source_hash TEXT NOT NULL, source_blob_sha TEXT NULL, commit_sha TEXT NULL, tree_sha TEXT NULL, indexed_at TEXT NOT NULL, updated_at TEXT NOT NULL)",

@@ -134,6 +134,16 @@ public sealed class PilotBScorer
             return reasons;
         }
 
+        if (records.Any(record => record.Pairing is null
+            || record.Adjudication is null
+            || record.Integrity is null
+            || record.Messages is null
+            || record.InvalidReasons is null))
+        {
+            reasons.Add("invalid-run-evidence");
+            return reasons;
+        }
+
         if (records.GroupBy(record => record.RunId, StringComparer.Ordinal).Any(group => group.Count() != 1))
         {
             reasons.Add("duplicate-run-id");
@@ -166,6 +176,11 @@ public sealed class PilotBScorer
                 || string.IsNullOrWhiteSpace(record.CaseId)
                 || record.Replica is < 1 or > 2
                 || record.Pairing.PairOrdinal is < 1
+                || record.Pairing.ArmOrderIndex is < 0 or > 1
+                || !Enum.IsDefined(record.Arm)
+                || !Enum.IsDefined(record.Adjudication.TaskQuality)
+                || !Enum.IsDefined(record.Adjudication.Clarity)
+                || !Enum.IsDefined(record.Adjudication.Safety)
                 || !string.Equals(record.PairId, record.Pairing.PairId, StringComparison.Ordinal)
                 || record.CompletedAtUtc < record.StartedAtUtc
                 || record.Pairing.PairCompletedAtUtc < record.Pairing.PairStartedAtUtc
@@ -189,9 +204,11 @@ public sealed class PilotBScorer
                 }
             }
 
+            var previousSequence = 0;
             foreach (var message in record.Messages)
             {
-                if (message.Sequence < 1
+                if (message is null
+                    || message.Sequence <= previousSequence
                     || string.IsNullOrWhiteSpace(message.Text)
                     || !string.Equals(message.SourceEventType, "item.completed", StringComparison.Ordinal)
                     || !string.Equals(message.Phase, "commentary", StringComparison.Ordinal)
@@ -200,6 +217,8 @@ public sealed class PilotBScorer
                     reasons.Add("unsupported-primary-event");
                     break;
                 }
+
+                previousSequence = message.Sequence;
             }
         }
 

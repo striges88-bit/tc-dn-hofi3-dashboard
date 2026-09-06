@@ -1829,3 +1829,73 @@ Local verification: focused 18/18 (10 cancellation + 8 diagnostic cases); full P
 Implementation: per-test diagnostic state records whether a failure is already propagating. Callers rethrow the first error with `throw;` and report later cleanup/disposal errors without replacing it; disposal still releases the pinned handle and flushes its buffered snapshot in `finally`. Regressions check exact exception identity and original throw site, cleanup-only and disposal-only failure, async unwinding, locked/unlocked fixture and unavailable output. Residual risk: original directory-lock owner remains unproven; diagnostics remain temporary. Windows-only native probes match the current fixture/CI scope; cross-platform support is not added.
 
 Pre-commit review: independent Standards and Spec reviews found zero actionable issues; the narrow duplicated catch bodies keep propagation at the original throw sites without introducing a cleanup framework. Exact five-file diff and empty index verified against `50a18cb`. Next authorized operation: `test(pilot-b): preserve primary failure during cleanup`, then committed-HEAD memory status/refresh/status/pre-push gate and normal push to PR #57. Changed-SHA CI/review remains pending; publication SHA and remote verification belong in the Issue lifecycle/handoff, not a bookkeeping-only commit. No merge or Issue closure in this scope.
+
+## Pilot B C1-C4 remediation and acceptance (#30 / #31, 2026-09-05)
+
+### Approved ID8 boundary and publication preparation (2026-09-06)
+
+- [x] User accepted the proposed order and ID8 separation. Preserve original #30 ID8; add engineering boundary note and mandatory unchecked real source/adjudication traceability criterion in #39. Exact GitHub body readback verified; #38 dependency retained.
+- [x] Reconcile matrix: preserve 118 PASS / 1 PARTIAL against original combined obligations; expose 119 PASS for the approved engineering scope and one OPEN experimental obligation in #39. Source/test hashes unchanged; named tests match final 412 PASS TRX. Repeated generator produces byte-identical JSON/CSV/Markdown.
+- [x] Independent Luna Max Spec review confirms no circular dependency or dropped obligation; Standards review wording clarification applied. B01 control raw session is recoverable, B02 rerun pointers are missing; full calibration coverage remains unverified. Concrete 15-file commit/push/PR checkpoint and PR body prepared externally. GitHub #30/#31/#39 lifecycle readbacks verified; legacy HEAD/status/42 hashes unchanged.
+
+Real qualification, calibration and Gate 1 have not started. Existing historical checkpoints below remain audit history. Commit/push/PR and merge retain the separate checkpoint authority stated in the approved contract.
+
+### Approved specification reconciliation (2026-09-06)
+
+- [x] User approved ID22/ID28 in the external spec-reconciliation.md. Updated only the two exact clauses in GitHub #31; complete body readback matches. Existing process outcome fields and established narrow hooks remain unchanged.
+- [x] Reconcile all 119 matrix rows with the approved clauses: 118 PASS / 1 PARTIAL / 0 FAIL. Original wording retained in JSON/CSV and archived baseline; source references valid, all named tests matched final PASS TRX. Code/test hashes unchanged; no rerun needed for wording-only reconciliation.
+- [x] Check available external source/adjudication evidence for #30 ID8: current Issues/comments and targeted docs/tests contain synthetic fixtures, no real trace package. Independent read-only review agrees. ID8 remains PARTIAL pending a path/link to real run-records and source/adjudication evidence; ../id8-evidence-check-20260906.md records scope and required input.
+
+Historical checkpoint below precedes this approval. No code/test changes, commit, push, PR, real Pilot B or Issue closure are included in this reconciliation.
+
+Approved contract: fix C1-C4 in this order, then close named proof gaps and recheck all 119 criteria. Base main: 4fd1ead090e30eb294ba195eda624c1fdb0d7e22; isolated branch codex/pilot-b-c1-c4-acceptance. Legacy checkout is read-only, baseline hashes recorded externally. No commit/push/PR/merge/closure without separate permission. No real CLI/auth, frozen v3 changes, dependencies, WPF or unrelated edits.
+
+- [x] Preflight: current issues/comments, no blocked-by dependencies, main unchanged; clean clone and legacy baseline.
+- [x] C1/C2: strict JSONL fields/enums and typed scorer shape; regression-first. Enum RED 13/13, fields RED 11/11, typed RED 14 failures/3 retained passes; GREEN 25 reader + 17 typed checks; full PilotB 222/222, exit 0; diff --check passed. TRX/logs ../results and ../checkpoint-c1-c2.log. No schema/threshold changes.
+- [x] C3: common monotonic stdin/process/drain deadline. RED blocked stdin + descendant-held pipe; GREEN existing cancellation/deadline13/13; cancellation/timeout cleanup race RED then fixed. Full checkpoint226/226,0 skipped,exit0 (../results/checkpoint-c3.trx). Orphan-held pipe returns bounded UNSEALED; guaranteed orphan containment is not provided. No new process framework.
+- [x] C4: normalized absolute pre/post fixture roots agree with metadata. Rehashed-inventory mismatch RED 2 failures/2 normalization passes; GREEN 4/4; full PilotB 230/230, exit 0 (../results/checkpoint-c4.trx). Separate sandbox git diff --check passed; elevated git check could not recognize repository ownership.
+- [x] Proof gaps: 22 full scorer vectors + 20 fingerprint checks passed 42/42 (../results/proof-gaps.trx). Unchanged publisher/preflight cases ran forward/reverse in one process: 63 unique, 126/126 passed, exact reverse verified (../order-proof.log, ../order-proof-verification.json). Full checkpoint result below.
+- [x] Rechecked all 119 original criteria against current issue bodies, source refs and final TRX: 116 PASS / 3 PARTIAL / 0 FAIL. PARTIAL: 30.ID8 external traceability, 31.ID22/ID28 exact wording proposals pending user decision. US24 already requires one publication seam and passes its own text. Final matrix ../acceptance-matrix-final.md + JSON/CSV; no issue meaning changed.
+- [x] Full solution build/test and independent Standards + Spec reviews complete; no actionable implementation findings remain (three optional Standards judgments retained). Legacy HEAD/status/42 file hashes unchanged, no FakeCli process remains; test-only FakeCli source is retained. Final evidence package is external ../acceptance-matrix-final.md. Final GitHub lifecycle write/readback is recorded externally after capturing the reviewed diff hash; no commit/push/PR/merge/closure authorized.
+
+Approved public test seams: PilotBRunRecordJsonl.ParseSingle/ParseMany, PilotBScorer.Score, PilotBRunner.RunAsync with test-only FakeCli, concrete EvidenceBundleVerifier and fingerprint writer. Existing publisher/terminator hooks only for their established fault boundaries.
+Each checkpoint: dotnet test tools/PilotB.Tests/CryptoIndicatorApp.PilotB.Tests.csproj -c Release; git diff --check. Final: dotnet build CryptoIndicatorApp.sln -c Release; dotnet test CryptoIndicatorApp.sln -c Release --no-build. Record TRX, exact command/exit/log. Never remove, skip, weaken or narrow existing tests. Evidence lives outside repo in ../. No ADRs or memory refresh.
+
+Final verification after review fixes: focused timeout tests 4/4; full PilotB 272/272, zero skips (../results/checkpoint-review-final.trx). Final Release build exit0, zero errors; 22 NU1900 warnings only. Initial solution run failed 15 Memory tests because nested dotnet run --no-restore emitted NU1900 before JSON; standalone baseline/diagnostic logs reproduce the cause. Repeated full solution passed 412/412 with no skipped/modified assertions using process-only MSBuildWarningsAsMessages=NU1900 and exact safe.directory for the isolated clone. NuGet audit remains enabled; original warnings/failures retained. No config/dependency/Memory source changes. Results ../final-reviewed-{build,solution}*.
+
+## Approved Memory partial-declaration publication repair (#30 / #31, 2026-09-06)
+
+Original Pilot B commit 26dad89629f1dc6fee424b970b0b4fc0ab42be1e is immutable. User approved this separate repair and additional commit; push/PR/CI authority persists. Only the isolated checkout and disposable generated stores/fixtures are used; legacy checkout, retained-data policy, dependencies, hooks, protocol and scoring are excluded. Merge and issue closure are not authorized.
+
+Approved acceptance seams: public working-tree/committed-HEAD Memory refresh and search, with generated SQLite declaration provenance verification. Preserve one logical symbol and all source paths/hashes/blob metadata; only legitimate partial type duplicates may coalesce. Invalid duplicate rejection stays intact.
+
+- [x] Re-read approved proposal, current #30/#31 and publication blocker; HEAD/branch confirmed and STARTED comments posted.
+- [x] Regression-first: actual CLI partial duplicate RED, control PASS, restored RED; generic arity mismatch RED before review fix. Methods/events and exactly one logical symbol/ownership relation verified.
+- [x] Partial types coalesce only when kind/identity/arity match; generated schema v2 retains every declaration path/hash/span offset and committed blob metadata. Working-tree, committed-HEAD/repeat and invalid duplicate compatibility coverage passes.
+- [x] Focused Memory 22/22; final solution 419/419, zero skips (7 TRX in ../results/memory-fix-final). Release build 0 warnings/errors. Process-only MSBuildWarningsAsMessages=NU1900 retained, NuGet audit enabled. Independent Luna Max Standards/Spec reviews: no remaining actionable findings after arity and test-timeout fixes.
+- [x] Historical checkpoint: repair aed1688 committed; Memory full refresh 6/6 and pre-push 7/7 passed for that HEAD.
+- [x] Historical checkpoint: aed1688 pushed to explicit GitHub URL; PR #58 opened to main; CI run 34051380854 passed 419/419. Five subsequent CodeRabbit findings are handled in the follow-up below.
+
+## PR #58 CodeRabbit corrections (#30 / #31, 2026-09-06)
+
+User approved optimal order and preserved commit/push/PR/CI authority. Baseline aed16881b4f08038a83d60e171c206e05d00bfa3. Three existing test drafts preserved. Legacy checkout remains read-only. No merge, issue closure, real CLI/auth, protocol/scoring, retained-data policy or new dependency changes.
+
+Acceptance uses existing public Memory snapshot/refresh/search/stale-check and generated provenance seams, and runner/Fake CLI test seam.
+
+- [x] Live Issue preflight, baseline and drafts verified; STARTED posted to #30/#31.
+- [x] R2/R3: record / record class / record struct grammar and canonical type arity, nested owners/methods/relations/events/references; legal distinct arities remain distinct, incompatible duplicates rejected.
+- [x] R4: one compatible partial method declaration/implementation pair retains both declarations, one symbol/owns; reject incompatible or repeated bodies, preserve valid declaration-only methods.
+- [x] R1: bounded test process termination/drain and deletion retry; original timeout survives secondary cleanup failure, cleanup-only failure propagates.
+- [x] R5: natural parent exit with descendant-held pipe is observed; bounded UNSEALED with null fingerprint, other short deadline cases unchanged; repeat focused scenario.
+- [x] Full relevant tests and solution build/tests, reviewed acceptance matrix, independent Standards/Spec review.
+- [x] Scoped commit 857f03a; committed-HEAD Memory refresh 6/6, eval 11/11, pre-push 7/7; normal push to PR #58. CI 34055236723 passed 448 solution tests and separate Memory 51. CodeRabbit resolved the original five threads; incremental review raised two follow-up findings below.
+
+### Incremental review follow-up
+
+- [x] Generic method arity ignores attribute argument commas: reproduce a false Map`2 collision, reuse the existing nesting-aware arity reader; public snapshot/ownership/search regression passes.
+- [x] Replace OS-dependent locked-file cleanup failures with deterministic injected directory deletion in the test fixture; preserve primary and cleanup-only failure assertions, exact five attempts and inner IOException.
+- [x] Release build 0 warnings/errors; solution 451/451 (Memory 54, PilotB 272), zero skips. Attribute syntax compiler proof passes. All 119 mapped engineering rows and legacy HEAD/status/42 hashes reverified; ../pr58-followup-acceptance.md and pr58-followup-verification.json retain evidence.
+- [x] Bounded independent Luna Max review of the four code/test files: operator-in-attribute finding reproduced (2 RED / 1 PASS), corrected and rechecked; zero remaining actionable findings. Arity regression covers comma, relational and shift arguments (3 PASS); target compiler confirms all forms.
+- [ ] Additional scoped commit, committed-HEAD Memory gates, normal push and exact-head CI/review evidence. No merge or issue closure.
+
+Final local reacceptance: Release build 0 warnings/errors; full solution 448/448 (Memory 51, PilotB 272), zero skips. Final natural-parent-exit deadline class repeated 8 times: 32/32, exact exits/TRX retained. Previously mapped tests for all 119 approved engineering criteria pass; source references/hashes rechecked, real ID8 remains OPEN in #39. Independent Luna Max Standards and Spec rechecks: no actionable findings. Compiler proof confirms async/extern implementation modifiers and rejects differing unsafe with isolated CS0764. Secondary cleanup diagnostics are visible via ITestOutputHelper, including an unavailable-output regression. Process-only MSBuildWarningsAsMessages=NU1900 retained; NuGet audit remains enabled. External evidence: ../pr58-review-acceptance.md and ../pr58-review-verification.json. Legacy HEAD/status/42 hashes unchanged. Next authorized checkpoint: scoped commit, HEAD Memory gates, push existing PR #58 and exact-head CI; publication evidence is recorded externally to avoid a bookkeeping-only commit.

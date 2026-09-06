@@ -112,6 +112,10 @@ public static class PilotBRunRecordJsonl
 
     private static PilotBRunRecord ParseElement(JsonElement root)
     {
+        RequireFields(root, "schema_version", "record_type", "run_id", "pair_id", "case_id",
+            "arm", "replica", "is_safety_case", "started_at_utc", "completed_at_utc",
+            "protocol_sha256", "source_manifest_sha256", "executable_sha256", "prompt_sha256",
+            "pairing", "validity", "invalid_reasons", "messages", "adjudication", "integrity");
         Require(root, "schema_version", PilotBContractVersions.RunRecord);
         Require(root, "record_type", "run_record");
 
@@ -119,13 +123,23 @@ public static class PilotBRunRecordJsonl
         var adjudicationElement = RequiredObject(root, "adjudication");
         var integrityElement = RequiredObject(root, "integrity");
         var messagesElement = RequiredArray(root, "messages");
+        RequireFields(pairingElement, "pair_id", "pair_ordinal", "arm_order_index",
+            "pair_started_at_utc", "pair_completed_at_utc");
+        RequireFields(adjudicationElement, "task_quality", "clarity", "safety",
+            "mandatory_update_omitted", "critical_failure", "completed", "corpus_runtime_unstable");
+        RequireFields(integrityElement, "artifact_complete", "repository_boundary_valid",
+            "prompt_bytes_verified", "timing_valid", "auth_lane_excluded", "workspace_integrity_captured");
 
-        var messages = messagesElement.EnumerateArray().Select(message => new PilotBMessage(
-            RequiredInt(message, "sequence"),
-            RequiredString(message, "text"),
-            ParseMessageKind(RequiredString(message, "kind")),
-            RequiredString(message, "source_event_type"),
-            RequiredString(message, "phase"))).ToArray();
+        var messages = messagesElement.EnumerateArray().Select(message =>
+        {
+            RequireFields(message, "sequence", "text", "kind", "source_event_type", "phase");
+            return new PilotBMessage(
+                RequiredInt(message, "sequence"),
+                RequiredString(message, "text"),
+                ParseMessageKind(RequiredString(message, "kind")),
+                RequiredString(message, "source_event_type"),
+                RequiredString(message, "phase"));
+        }).ToArray();
 
         return new PilotBRunRecord(
             RequiredString(root, "run_id"),
@@ -147,7 +161,10 @@ public static class PilotBRunRecordJsonl
                 RequiredDateTime(pairingElement, "pair_started_at_utc"),
                 RequiredDateTime(pairingElement, "pair_completed_at_utc")),
             ParseValidity(RequiredString(root, "validity")),
-            RequiredArray(root, "invalid_reasons").EnumerateArray().Select(value => value.GetString() ?? throw new FormatException("Invalid reason must be a string.")).ToArray(),
+            RequiredArray(root, "invalid_reasons").EnumerateArray().Select(value =>
+                value.ValueKind == JsonValueKind.String
+                    ? value.GetString()!
+                    : throw new FormatException("Invalid reason must be a string.")).ToArray(),
             messages,
             new PilotBAdjudication(
                 ParseEnum<PilotBTaskQuality>(RequiredString(adjudicationElement, "task_quality")),
@@ -164,6 +181,28 @@ public static class PilotBRunRecordJsonl
                 RequiredBool(integrityElement, "timing_valid"),
                 RequiredBool(integrityElement, "auth_lane_excluded"),
                 RequiredBool(integrityElement, "workspace_integrity_captured")));
+    }
+
+    private static void RequireFields(JsonElement value, params string[] fields)
+    {
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            throw new FormatException("A run-record object is required.");
+        }
+
+        var remaining = new HashSet<string>(fields, StringComparer.Ordinal);
+        foreach (var property in value.EnumerateObject())
+        {
+            if (!remaining.Remove(property.Name))
+            {
+                throw new FormatException($"Unknown or duplicate run-record field '{property.Name}'.");
+            }
+        }
+
+        if (remaining.Count != 0)
+        {
+            throw new FormatException("Required run-record fields are missing.");
+        }
     }
 
     private static JsonElement RequiredObject(JsonElement root, string name)
@@ -209,7 +248,9 @@ public static class PilotBRunRecordJsonl
 
     private static int RequiredInt(JsonElement root, string name)
     {
-        if (!root.TryGetProperty(name, out var value) || !value.TryGetInt32(out var parsed))
+        if (!root.TryGetProperty(name, out var value)
+            || value.ValueKind != JsonValueKind.Number
+            || !value.TryGetInt32(out var parsed))
         {
             throw new FormatException($"Required integer '{name}' is missing.");
         }
@@ -244,7 +285,9 @@ public static class PilotBRunRecordJsonl
 
     private static T ParseEnum<T>(string value) where T : struct, Enum
     {
-        if (!Enum.TryParse<T>(value, ignoreCase: true, out var parsed))
+        if (!Enum.TryParse<T>(value, ignoreCase: true, out var parsed)
+            || !Enum.IsDefined(parsed)
+            || !string.Equals(value, parsed.ToString().ToLowerInvariant(), StringComparison.Ordinal))
         {
             throw new FormatException($"Enum value '{value}' is invalid for {typeof(T).Name}.");
         }
