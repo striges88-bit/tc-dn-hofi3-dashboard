@@ -13,7 +13,7 @@ internal static class CSharpMemoryExtractor
         RegexOptions.Compiled);
 
     private static readonly Regex MethodRegex = new(
-        @"(?m)^\s*(?:\[[^\]]+\]\s*)*(?<modifiers>(?:(?:public|internal|private|protected|static|sealed|override|virtual|abstract|async|partial|extern|unsafe|new|readonly)\s+)*)(?<return>(?:ref\s+(?:readonly\s+)?)?[A-Za-z_][A-Za-z0-9_<>,\[\]\?\.]*)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)(?<generic>\s*<[^>]+>)?\s*\(",
+        @"(?m)^\s*(?:\[[^\]]+\]\s*)*(?<modifiers>(?:(?:public|internal|private|protected|static|sealed|override|virtual|abstract|async|partial|extern|unsafe|new|readonly)\s+)*)(?<return>(?:ref\s+(?:readonly\s+)?)?[A-Za-z_][A-Za-z0-9_<>,\[\]\?\.]*)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)(?<generic>\s*<(?:\[[^\]]*\]|[^>])+>)?\s*\(",
         RegexOptions.Compiled);
 
     internal static readonly Regex RequiresSymbolRegex = new(
@@ -106,7 +106,9 @@ internal static class CSharpMemoryExtractor
 
             var openingParen = match.Index + match.Length - 1;
             var parameterSignature = BuildParameterSignatureKey(text, openingParen);
-            var genericArity = match.Groups["generic"].Success ? match.Groups["generic"].Value.Count(c => c == ',') + 1 : 0;
+            var genericArity = match.Groups["generic"].Success
+                ? ReadGenericArity(text, match.Groups["generic"].Index)
+                : 0;
             var identityName = genericArity == 0 ? name : $"{name}`{genericArity}";
             var fullName = $"{parentType.FullName}.{identityName}/{parameterSignature}";
             var partialShape = Regex.IsMatch(match.Groups["modifiers"].Value, @"\bpartial\b")
@@ -263,10 +265,22 @@ internal static class CSharpMemoryExtractor
 
         var depth = 1;
         var arity = 1;
+        var attributeDepth = 0;
         for (var index = position + 1; index < text.Length; index++)
         {
             var current = text[index];
-            if (current is '<' or '[' or '(')
+            if (current == '[')
+            {
+                attributeDepth++;
+                continue;
+            }
+            if (attributeDepth > 0)
+            {
+                // Attribute expressions may contain commas and relational/shift operators.
+                if (current == ']') attributeDepth--;
+                continue;
+            }
+            if (current is '<' or '(')
             {
                 depth++;
             }

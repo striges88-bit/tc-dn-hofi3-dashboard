@@ -227,36 +227,33 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
     public void DisposeAfterPrimaryFailurePreservesPrimaryAndDiagnosesCleanupFailure(bool outputUnavailable)
     {
         var captured = new CapturedOutput(outputUnavailable);
-        var fixture = MemoryProjectFixture.Create(captured);
+        var deletion = new ControlledDirectoryDelete();
+        var fixture = MemoryProjectFixture.Create(captured, deletion.Delete);
         var primaryFailure = new TimeoutException("memory CLI timed out.");
 
         try
         {
             var failure = Record.Exception((Action)(() =>
             {
-                using (var lockedFile = new FileStream(
-                    Path.Combine(fixture.Root, "locked.txt"),
-                    FileMode.Create,
-                    FileAccess.Write,
-                    FileShare.None))
+                try
                 {
-                    try
-                    {
-                        fixture.RecordPrimaryFailure(primaryFailure);
-                        throw primaryFailure;
-                    }
-                    finally
-                    {
-                        fixture.Dispose();
-                    }
+                    fixture.RecordPrimaryFailure(primaryFailure);
+                    throw primaryFailure;
+                }
+                finally
+                {
+                    fixture.Dispose();
                 }
             }));
 
             Assert.Same(primaryFailure, failure);
+            Assert.Equal(5, deletion.Attempts);
             var cleanupFailures = Assert.IsAssignableFrom<IReadOnlyList<Exception>>(
                 primaryFailure.Data[MemoryProjectFixture.CleanupFailuresDataKey]);
             Assert.Equal(outputUnavailable ? 2 : 1, cleanupFailures.Count);
             Assert.Contains("after 5 attempts", cleanupFailures[0].Message, StringComparison.Ordinal);
+            var deletionFailure = Assert.IsType<IOException>(cleanupFailures[0].InnerException);
+            Assert.Equal("controlled directory deletion failure", deletionFailure.Message);
             if (outputUnavailable)
             {
                 Assert.Equal("test output unavailable", cleanupFailures[1].Message);
@@ -272,6 +269,7 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
         }
         finally
         {
+            deletion.Fail = false;
             fixture.Dispose();
         }
     }
@@ -279,28 +277,41 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
     [Fact]
     public void DisposeWithoutPrimaryPropagatesCleanupFailureAfterRetries()
     {
-        var fixture = MemoryProjectFixture.Create(output);
+        var deletion = new ControlledDirectoryDelete();
+        var fixture = MemoryProjectFixture.Create(output, deletion.Delete);
 
         try
         {
-            Exception? cleanupFailure;
-            using (var lockedFile = new FileStream(
-                Path.Combine(fixture.Root, "locked.txt"),
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None))
-            {
-                cleanupFailure = Record.Exception((Action)fixture.Dispose);
-                Assert.NotNull(cleanupFailure);
-                Assert.Contains("after 5 attempts", cleanupFailure!.Message, StringComparison.Ordinal);
-                Assert.True(Directory.Exists(fixture.Root));
-            }
-
-            fixture.Dispose();
+            var cleanupFailure = Record.Exception((Action)fixture.Dispose);
+            Assert.NotNull(cleanupFailure);
+            Assert.Equal(5, deletion.Attempts);
+            Assert.Contains("after 5 attempts", cleanupFailure!.Message, StringComparison.Ordinal);
+            var deletionFailure = Assert.IsType<IOException>(cleanupFailure.InnerException);
+            Assert.Equal("controlled directory deletion failure", deletionFailure.Message);
+            Assert.True(Directory.Exists(fixture.Root));
         }
         finally
         {
+            deletion.Fail = false;
             fixture.Dispose();
+        }
+    }
+
+    private sealed class ControlledDirectoryDelete
+    {
+        public int Attempts { get; private set; }
+
+        public bool Fail { get; set; } = true;
+
+        public void Delete(string path)
+        {
+            Attempts++;
+            if (Fail)
+            {
+                throw new IOException("controlled directory deletion failure");
+            }
+
+            Directory.Delete(path, recursive: true);
         }
     }
 

@@ -25,14 +25,16 @@ internal sealed class MemoryProjectFixture : IDisposable
         : "git";
 
     private readonly ITestOutputHelper _output;
+    private readonly Action<string> _deleteDirectory;
     private Exception? primaryFailure;
 
     internal const string CleanupFailuresDataKey =
         "CryptoIndicatorApp.Memory.Tests.MemoryProjectFixture.CleanupFailures";
 
-    private MemoryProjectFixture(string root, ITestOutputHelper output)
+    private MemoryProjectFixture(string root, ITestOutputHelper output, Action<string> deleteDirectory)
     {
         _output = output;
+        _deleteDirectory = deleteDirectory;
         Root = root;
         DatabasePath = Path.Combine(root, "docs", "memory", "generated", "project-memory.sqlite");
     }
@@ -41,11 +43,14 @@ internal sealed class MemoryProjectFixture : IDisposable
 
     public string DatabasePath { get; }
 
-    public static MemoryProjectFixture Create(ITestOutputHelper output)
+    public static MemoryProjectFixture Create(ITestOutputHelper output, Action<string>? deleteDirectory = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "tc-dn-hofi3-memory-partial-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
-        return new MemoryProjectFixture(root, output);
+        return new MemoryProjectFixture(
+            root,
+            output,
+            deleteDirectory ?? (path => Directory.Delete(path, recursive: true)));
     }
 
     public void Write(string relativePath, string content)
@@ -180,7 +185,7 @@ internal sealed class MemoryProjectFixture : IDisposable
         {
             try
             {
-                Directory.Delete(Root, recursive: true);
+                _deleteDirectory(Root);
                 return;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

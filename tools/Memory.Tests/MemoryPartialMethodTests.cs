@@ -5,6 +5,28 @@ namespace CryptoIndicatorApp.Memory.Tests;
 public sealed class MemoryPartialMethodTests
 {
     [Theory]
+    [InlineData("Marker(1, 2)")]
+    [InlineData("Marker(1 < 2)")]
+    [InlineData("Marker(1 >> 2)")]
+    public async Task GenericMethodArityIgnoresAttributeArguments(string attribute)
+    {
+        using var fixture = new SymbolProjectFixture();
+        fixture.Write("A.cs", Wrap($$"""
+            public void Map<[{{attribute}}] TItem>() { }
+            public void Map<TFirst, TSecond>() { }
+            """));
+        var snapshot = await fixture.Snapshot();
+        Assert.Single(snapshot.Symbols, s => s.Symbol == "Repro.Box`1.Map`1/0");
+        Assert.Single(snapshot.Symbols, s => s.Symbol == "Repro.Box`1.Map`2/0");
+        Assert.Equal(2, snapshot.SymbolDeclarations.Count(d => d.Symbol.Contains(".Map`", StringComparison.Ordinal)));
+        Assert.Single(snapshot.Relations, r => r.ToId == "symbol.Repro.Box`1.Map`1/0");
+        Assert.Single(snapshot.Relations, r => r.ToId == "symbol.Repro.Box`1.Map`2/0");
+        using var store = new MemoryStore(":memory:");
+        store.Refresh(snapshot);
+        Assert.Equal(2, store.Search("Map").Results.Count(h => h.Id.StartsWith("symbol.", StringComparison.Ordinal)));
+    }
+
+    [Theory]
     [InlineData("public partial System.Threading.Tasks.Task Check();", "public async partial System.Threading.Tasks.Task Check() => await System.Threading.Tasks.Task.Delay(1);")]
     [InlineData("public static partial void Check();", "[System.Runtime.InteropServices.DllImport(\"unused-proof-library\")] public static extern partial void Check();")]
     [InlineData("public unsafe partial int Check();", "public unsafe partial int Check() => 0;")]
