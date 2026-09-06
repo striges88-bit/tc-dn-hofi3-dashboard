@@ -9,7 +9,7 @@ internal static class CSharpMemoryExtractor
         RegexOptions.Multiline | RegexOptions.Compiled);
 
     private static readonly Regex TypeRegex = new(
-        @"(?m)^\s*(?:\[[^\]]+\]\s*)*(?:(?:public|internal|private|protected|sealed|abstract|static|partial|readonly|unsafe)\s+)*(?<kind>class|struct|interface|enum|record)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
+        @"(?m)^\s*(?:\[[^\]]+\]\s*)*(?<modifiers>(?:(?:public|internal|private|protected|sealed|abstract|static|partial|readonly|unsafe)\s+)*)(?<kind>class|struct|interface|enum|record)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
         RegexOptions.Compiled);
 
     private static readonly Regex MethodRegex = new(
@@ -52,7 +52,9 @@ internal static class CSharpMemoryExtractor
                 match.Groups["kind"].Value,
                 match.Groups["name"].Value,
                 match.Index,
-                FindBodyEnd(text, match.Index)))
+                FindBodyEnd(text, match.Index),
+                Regex.IsMatch(match.Groups["modifiers"].Value, @"\bpartial\b"),
+                ReadGenericArity(text, match.Groups["name"].Index + match.Groups["name"].Length)))
             .OrderBy(candidate => candidate.Position)
             .ToArray();
 
@@ -72,7 +74,9 @@ internal static class CSharpMemoryExtractor
                 candidate.ParentFullName,
                 candidate.Position,
                 candidate.EndPosition,
-                HasTestAttribute: false);
+                HasTestAttribute: false,
+                IsPartial: candidate.IsPartial,
+                GenericArity: candidate.GenericArity);
         }
     }
 
@@ -218,6 +222,44 @@ internal static class CSharpMemoryExtractor
                 outcome,
                 description);
         }
+    }
+
+    private static int ReadGenericArity(string text, int position)
+    {
+        while (position < text.Length && char.IsWhiteSpace(text[position]))
+        {
+            position++;
+        }
+
+        if (position == text.Length || text[position] != '<')
+        {
+            return 0;
+        }
+
+        var depth = 1;
+        var arity = 1;
+        for (var index = position + 1; index < text.Length; index++)
+        {
+            var current = text[index];
+            if (current is '<' or '[' or '(')
+            {
+                depth++;
+            }
+            else if (current is '>' or ']' or ')')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    return arity;
+                }
+            }
+            else if (current == ',' && depth == 1)
+            {
+                arity++;
+            }
+        }
+
+        throw new InvalidOperationException("Unterminated C# type parameter list.");
     }
 
     private static bool HasTestAttribute(string declaration)
@@ -400,10 +442,16 @@ internal sealed record CSharpSymbol(
     string? ParentSymbol,
     int Position,
     int EndPosition,
-    bool HasTestAttribute);
+    bool HasTestAttribute,
+    bool IsPartial = false,
+    int GenericArity = 0);
 
-internal sealed class CSharpTypeCandidate(string kind, string name, int position, int endPosition)
+internal sealed class CSharpTypeCandidate(string kind, string name, int position, int endPosition, bool isPartial, int genericArity)
 {
+    public bool IsPartial { get; } = isPartial;
+
+    public int GenericArity { get; } = genericArity;
+
     public string Kind { get; } = kind;
 
     public string Name { get; } = name;

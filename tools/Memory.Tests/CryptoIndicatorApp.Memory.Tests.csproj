@@ -20,4 +20,8 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Memory\CryptoIndicatorApp.Memory.csproj" />
+  </ItemGroup>
+
 </Project>

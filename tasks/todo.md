@@ -1862,3 +1862,16 @@ Approved public test seams: PilotBRunRecordJsonl.ParseSingle/ParseMany, PilotBSc
 Each checkpoint: dotnet test tools/PilotB.Tests/CryptoIndicatorApp.PilotB.Tests.csproj -c Release; git diff --check. Final: dotnet build CryptoIndicatorApp.sln -c Release; dotnet test CryptoIndicatorApp.sln -c Release --no-build. Record TRX, exact command/exit/log. Never remove, skip, weaken or narrow existing tests. Evidence lives outside repo in ../. No ADRs or memory refresh.
 
 Final verification after review fixes: focused timeout tests 4/4; full PilotB 272/272, zero skips (../results/checkpoint-review-final.trx). Final Release build exit0, zero errors; 22 NU1900 warnings only. Initial solution run failed 15 Memory tests because nested dotnet run --no-restore emitted NU1900 before JSON; standalone baseline/diagnostic logs reproduce the cause. Repeated full solution passed 412/412 with no skipped/modified assertions using process-only MSBuildWarningsAsMessages=NU1900 and exact safe.directory for the isolated clone. NuGet audit remains enabled; original warnings/failures retained. No config/dependency/Memory source changes. Results ../final-reviewed-{build,solution}*.
+
+## Approved Memory partial-declaration publication repair (#30 / #31, 2026-09-06)
+
+Original Pilot B commit 26dad89629f1dc6fee424b970b0b4fc0ab42be1e is immutable. User approved this separate repair and additional commit; push/PR/CI authority persists. Only the isolated checkout and disposable generated stores/fixtures are used; legacy checkout, retained-data policy, dependencies, hooks, protocol and scoring are excluded. Merge and issue closure are not authorized.
+
+Approved acceptance seams: public working-tree/committed-HEAD Memory refresh and search, with generated SQLite declaration provenance verification. Preserve one logical symbol and all source paths/hashes/blob metadata; only legitimate partial type duplicates may coalesce. Invalid duplicate rejection stays intact.
+
+- [x] Re-read approved proposal, current #30/#31 and publication blocker; HEAD/branch confirmed and STARTED comments posted.
+- [x] Regression-first: actual CLI partial duplicate RED, control PASS, restored RED; generic arity mismatch RED before review fix. Methods/events and exactly one logical symbol/ownership relation verified.
+- [x] Partial types coalesce only when kind/identity/arity match; generated schema v2 retains every declaration path/hash/span offset and committed blob metadata. Working-tree, committed-HEAD/repeat and invalid duplicate compatibility coverage passes.
+- [x] Focused Memory 22/22; final solution 419/419, zero skips (7 TRX in ../results/memory-fix-final). Release build 0 warnings/errors. Process-only MSBuildWarningsAsMessages=NU1900 retained, NuGet audit enabled. Independent Luna Max Standards/Spec reviews: no remaining actionable findings after arity and test-timeout fixes.
+- [ ] Separate repair commit; exact committed-HEAD Memory status, full refresh, status and pre-push verification.
+- [ ] Push explicit GitHub URL (origin is a local legacy checkout), ready PR to main, exact-head CI and Issue evidence update.

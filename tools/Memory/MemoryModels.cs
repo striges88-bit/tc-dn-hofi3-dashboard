@@ -11,7 +11,17 @@ public sealed record ProjectMemorySnapshot(
     IReadOnlyList<RelationRecord> Relations,
     IReadOnlyList<ExperimentRecord> Experiments,
     IReadOnlyList<TodoRecord> Todos,
-    MemorySnapshotMetadata Metadata);
+    MemorySnapshotMetadata Metadata)
+{
+    public IReadOnlyList<SymbolDeclarationRecord> SymbolDeclarations { get; init; } = [];
+}
+
+// DeclarationPosition is the UTF-16 offset of the extracted span, including leading whitespace/attributes.
+public sealed record SymbolDeclarationRecord(
+    string Symbol,
+    string SourcePath,
+    string SourceHash,
+    int DeclarationPosition);
 
 public sealed record MemorySnapshotMetadata(
     string RefreshSource,
