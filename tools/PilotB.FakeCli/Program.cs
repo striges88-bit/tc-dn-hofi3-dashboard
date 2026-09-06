@@ -8,10 +8,24 @@ if (args is ["--pilot-b-fake-child", var childMarkerPath])
     return 0;
 }
 
+if (args is ["--pilot-b-fake-child-holds-pipe", var childPipeMarkerPath])
+{
+    await WriteProcessMarkerAsync(childPipeMarkerPath);
+    await Task.Delay(Timeout.InfiniteTimeSpan);
+    return 0;
+}
+
 if (args is not ["codex", "exec", "--ephemeral", "--json"])
 {
     Console.Error.WriteLine("fake cli received an unexpected invocation");
     return 64;
+}
+
+if (File.Exists(Path.Combine(Environment.CurrentDirectory, ".pilot-b-fake-no-read-stdin")))
+{
+    await WriteProcessMarkerAsync(GetMarkerPath(".pilot-b-fake-parent-ready"));
+    await Task.Delay(Timeout.InfiniteTimeSpan);
+    return 0;
 }
 
 using var input = new MemoryStream();
@@ -57,6 +71,34 @@ switch (prompt)
             await child.WaitForExitAsync();
             return child.ExitCode;
         }
+
+    case "pilot-b.fake.parent-exit-child-holds-pipe":
+        var parentExitChildMarker = GetMarkerPath(".pilot-b-fake-parent-exit-child-ready");
+        using (var child = new Process
+               {
+                   StartInfo = new ProcessStartInfo
+                   {
+                       FileName = Environment.ProcessPath
+                           ?? throw new InvalidOperationException("Cannot resolve the fake CLI process path."),
+                       UseShellExecute = false,
+                       CreateNoWindow = true
+                   }
+               })
+        {
+            child.StartInfo.ArgumentList.Add("--pilot-b-fake-child-holds-pipe");
+            child.StartInfo.ArgumentList.Add(parentExitChildMarker);
+            if (!child.Start())
+            {
+                return 67;
+            }
+
+            await WriteProcessMarkerAsync(GetMarkerPath(".pilot-b-fake-parent-exit-ready"));
+            await WaitForFileAsync(parentExitChildMarker);
+            const int parentObservationDelayMilliseconds = 100;
+            await Task.Delay(parentObservationDelayMilliseconds);
+        }
+
+        return 0;
 
     case "pilot-b.fake.delayed-valid":
         await Task.Delay(TimeSpan.FromMilliseconds(750));
@@ -134,4 +176,20 @@ static async Task WriteProcessMarkerAsync(string markerPath)
     using var process = Process.GetCurrentProcess();
     var startedAtTicks = process.StartTime.ToUniversalTime().Ticks;
     await File.WriteAllTextAsync(markerPath, $"{Environment.ProcessId}|{startedAtTicks}");
+}
+
+static async Task WaitForFileAsync(string path)
+{
+    var markerTimeout = TimeSpan.FromSeconds(2);
+    var markerPollInterval = TimeSpan.FromMilliseconds(10);
+    var deadline = DateTimeOffset.UtcNow.Add(markerTimeout);
+    while (!File.Exists(path))
+    {
+        if (DateTimeOffset.UtcNow >= deadline)
+        {
+            throw new TimeoutException($"Timed out waiting for fake marker '{path}'.");
+        }
+
+        await Task.Delay(markerPollInterval);
+    }
 }

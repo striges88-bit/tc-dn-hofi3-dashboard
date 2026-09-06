@@ -415,6 +415,8 @@ public sealed class PilotBEvidenceBundleVerifier
             var transcript = PilotBTranscriptParser.Parse(payloads["output.jsonl"]);
             var preManifest = PilotBFileManifest.Parse(payloads["pre-manifest.json"]);
             var postManifest = PilotBFileManifest.Parse(payloads["post-manifest.json"]);
+            Require(FixtureRootsMatch(preManifest.Root, metadata.FixtureRoot)
+                && FixtureRootsMatch(postManifest.Root, metadata.FixtureRoot), "fixture-root-mismatch");
             var executableSha = PilotBSha256.ComputeFile(metadata.ExecutablePath);
             var capturedPromptSha = PilotBSha256.Compute(payloads["prompt.bin"]);
 
@@ -516,6 +518,13 @@ public sealed class PilotBEvidenceBundleVerifier
         }
     }
 
+    private static bool FixtureRootsMatch(string manifestRoot, string metadataRoot)
+        => Path.IsPathFullyQualified(manifestRoot)
+            && Path.IsPathFullyQualified(metadataRoot)
+            && string.Equals(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(manifestRoot)),
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(metadataRoot)),
+                StringComparison.OrdinalIgnoreCase);
     private static void VerifyFilesystemInventory(PilotBArtifactPaths paths)
     {
         if (!Directory.Exists(paths.Root))

@@ -3,7 +3,7 @@ using CryptoIndicatorApp.PilotB;
 
 namespace CryptoIndicatorApp.PilotB.Tests;
 
-public sealed class PilotBScorerTests
+public sealed partial class PilotBScorerTests
 {
     private const string Hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private static readonly DateTimeOffset PairStart = new(2026, 8, 19, 8, 0, 0, TimeSpan.Zero);
