@@ -9,15 +9,15 @@ internal static class CSharpMemoryExtractor
         RegexOptions.Multiline | RegexOptions.Compiled);
 
     private static readonly Regex TypeRegex = new(
-        @"(?m)^\s*(?:\[[^\]]+\]\s*)*(?<modifiers>(?:(?:public|internal|private|protected|sealed|abstract|static|partial|readonly|unsafe)\s+)*)(?<kind>class|struct|interface|enum|record)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
+        @"(?m)^\s*(?:\[[^\]]+\]\s*)*(?<modifiers>(?:(?:public|internal|private|protected|sealed|abstract|static|partial|readonly|unsafe)\s+)*)(?<kind>record(?:\s+(?:class|struct))?|class|struct|interface|enum)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)",
         RegexOptions.Compiled);
 
     private static readonly Regex MethodRegex = new(
-        @"(?m)^\s*(?:\[[^\]]+\]\s*)*(?:(?:public|internal|private|protected|static|sealed|override|virtual|abstract|async|partial|extern|unsafe)\s+)+(?<return>[A-Za-z_][A-Za-z0-9_<>,\[\]\?\.]*)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*\(",
+        @"(?m)^\s*(?:\[[^\]]+\]\s*)*(?<modifiers>(?:(?:public|internal|private|protected|static|sealed|override|virtual|abstract|async|partial|extern|unsafe|new|readonly)\s+)*)(?<return>(?:ref\s+(?:readonly\s+)?)?[A-Za-z_][A-Za-z0-9_<>,\[\]\?\.]*)\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)(?<generic>\s*<[^>]+>)?\s*\(",
         RegexOptions.Compiled);
 
-    private static readonly Regex RequiresSymbolRegex = new(
-        @"requires_symbol=(?<symbol>[A-Za-z_][A-Za-z0-9_.]*|[A-Z0-9]{3,20})",
+    internal static readonly Regex RequiresSymbolRegex = new(
+        @"requires_symbol=(?<symbol>[A-Za-z_][A-Za-z0-9_]*(?:`[1-9][0-9]*)?(?:\.[A-Za-z_][A-Za-z0-9_]*(?:`[1-9][0-9]*)?)*|[A-Z0-9]{3,20})",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex TodoRegex = new(
@@ -31,11 +31,13 @@ internal static class CSharpMemoryExtractor
     public static CSharpMemoryExtraction Extract(string path, string text)
     {
         var parseText = CSharpLiteralSanitizer.BlankStringAndCharLiterals(text);
-        var namespaceName = NamespaceRegex.Match(parseText) is { Success: true } namespaceMatch
+        var declarationText = Regex.Replace(parseText, @"//[^\r\n]*|/\*[\s\S]*?\*/",
+            match => new string(match.Value.Select(c => c is '\r' or '\n' ? c : ' ').ToArray()));
+        var namespaceName = NamespaceRegex.Match(declarationText) is { Success: true } namespaceMatch
             ? namespaceMatch.Groups["name"].Value
             : null;
-        var types = ExtractTypes(namespaceName, parseText).ToArray();
-        var methods = ExtractMethods(namespaceName, parseText, types).ToArray();
+        var types = ExtractTypes(namespaceName, declarationText).ToArray();
+        var methods = ExtractMethods(namespaceName, declarationText, types).ToArray();
         var symbols = types.Concat(methods).ToArray();
         var relations = ExtractRelations(namespaceName, path, types, methods).ToArray();
         var events = ExtractEvents(path, parseText, methods).ToArray();
@@ -49,7 +51,7 @@ internal static class CSharpMemoryExtractor
     {
         var candidates = TypeRegex.Matches(text)
             .Select(match => new CSharpTypeCandidate(
-                match.Groups["kind"].Value,
+                NormalizeTypeKind(match.Groups["kind"].Value),
                 match.Groups["name"].Value,
                 match.Index,
                 FindBodyEnd(text, match.Index),
@@ -65,7 +67,8 @@ internal static class CSharpMemoryExtractor
                 .OrderByDescending(other => other.Position)
                 .FirstOrDefault();
             candidate.ParentFullName = parent?.FullName ?? namespaceName;
-            candidate.FullName = Qualify(candidate.ParentFullName, candidate.Name);
+            var identityName = candidate.GenericArity == 0 ? candidate.Name : $"{candidate.Name}`{candidate.GenericArity}";
+            candidate.FullName = Qualify(candidate.ParentFullName, identityName);
 
             yield return new CSharpSymbol(
                 candidate.FullName,
@@ -85,7 +88,9 @@ internal static class CSharpMemoryExtractor
         foreach (Match match in MethodRegex.Matches(text))
         {
             var name = match.Groups["name"].Value;
-            if (IsControlFlowToken(name))
+            if (IsControlFlowToken(name) || match.Groups["return"].Value.EndsWith(',')
+                || match.Groups["return"].Value is "class" or "struct" or "record"
+                or "return" or "throw" or "new" or "await" or "using" or "yield")
             {
                 continue;
             }
@@ -94,13 +99,19 @@ internal static class CSharpMemoryExtractor
                 .Where(type => type.Position <= match.Index && match.Index < type.EndPosition)
                 .OrderByDescending(type => type.Position)
                 .FirstOrDefault();
-            if (parentType is null)
+            if (parentType is null || !IsDirectTypeMember(text, parentType.Position, match.Index))
             {
                 continue;
             }
 
-            var parameterSignature = BuildParameterSignatureKey(text, match.Index + match.Length - 1);
-            var fullName = $"{parentType.FullName}.{name}/{parameterSignature}";
+            var openingParen = match.Index + match.Length - 1;
+            var parameterSignature = BuildParameterSignatureKey(text, openingParen);
+            var genericArity = match.Groups["generic"].Success ? match.Groups["generic"].Value.Count(c => c == ',') + 1 : 0;
+            var identityName = genericArity == 0 ? name : $"{name}`{genericArity}";
+            var fullName = $"{parentType.FullName}.{identityName}/{parameterSignature}";
+            var partialShape = Regex.IsMatch(match.Groups["modifiers"].Value, @"\bpartial\b")
+                ? CSharpPartialMethodShape.Read(text, openingParen, match, ExtractParameterSegments(text, openingParen))
+                : null;
             yield return new CSharpSymbol(
                 fullName,
                 "method",
@@ -108,8 +119,22 @@ internal static class CSharpMemoryExtractor
                 parentType.FullName,
                 match.Index,
                 match.Index + match.Length,
-                HasTestAttribute(match.Value));
+                HasTestAttribute(match.Value),
+                IsPartial: partialShape is not null && parentType.IsPartial,
+                GenericArity: genericArity,
+                PartialMethod: partialShape);
         }
+    }
+
+    private static bool IsDirectTypeMember(string text, int typePosition, int methodPosition)
+    {
+        var depth = 0;
+        for (var index = typePosition; index < methodPosition; index++)
+        {
+            if (text[index] == '{') depth++;
+            if (text[index] == '}') depth--;
+        }
+        return depth == 1;
     }
 
     private static IEnumerable<CSharpRelation> ExtractRelations(
@@ -260,6 +285,12 @@ internal static class CSharpMemoryExtractor
         }
 
         throw new InvalidOperationException("Unterminated C# type parameter list.");
+    }
+
+    private static string NormalizeTypeKind(string kind)
+    {
+        var normalized = Regex.Replace(kind, @"\s+", " ");
+        return normalized == "record class" ? "record" : normalized;
     }
 
     private static bool HasTestAttribute(string declaration)
@@ -444,7 +475,8 @@ internal sealed record CSharpSymbol(
     int EndPosition,
     bool HasTestAttribute,
     bool IsPartial = false,
-    int GenericArity = 0);
+    int GenericArity = 0,
+    CSharpPartialMethodShape? PartialMethod = null);
 
 internal sealed class CSharpTypeCandidate(string kind, string name, int position, int endPosition, bool isPartial, int genericArity)
 {

@@ -211,10 +211,11 @@ public sealed class ProjectMemoryIndexer
 
     private static IEnumerable<EventRecord> ParseTestSymbolReferences(string text, string path, string hash)
     {
-        foreach (Match match in Regex.Matches(text, "requires_symbol=([A-Za-z_][A-Za-z0-9_.]*|[A-Z0-9]{3,20})", RegexOptions.IgnoreCase))
+        foreach (Match match in CSharpMemoryExtractor.RequiresSymbolRegex.Matches(text))
         {
-            var rawSymbol = match.Groups[1].Value;
-            var symbol = rawSymbol.Contains('.', StringComparison.Ordinal) ? rawSymbol : rawSymbol.ToUpperInvariant();
+            var rawSymbol = match.Groups["symbol"].Value;
+            var symbol = rawSymbol.Contains('.', StringComparison.Ordinal) || rawSymbol.Contains('`', StringComparison.Ordinal)
+                ? rawSymbol : rawSymbol.ToUpperInvariant();
             yield return new EventRecord($"event.test-symbol-reference.{Slug(symbol)}", "test_symbol_reference", symbol, match.Value, path, hash);
         }
     }

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using Xunit.Abstractions;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -6,22 +6,12 @@ using Microsoft.Data.Sqlite;
 
 namespace CryptoIndicatorApp.Memory.Tests;
 
-public sealed class MemoryPartialDeclarationTests
+public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
 {
-    private static readonly string RepositoryRoot = FindRepositoryRoot();
-    private static readonly string DotnetPath = File.Exists(Path.Combine(RepositoryRoot, ".dotnet", "dotnet.exe"))
-        ? Path.Combine(RepositoryRoot, ".dotnet", "dotnet.exe")
-        : "dotnet";
-#if DEBUG
-    private const string DotnetConfiguration = "Debug";
-#else
-    private const string DotnetConfiguration = "Release";
-#endif
-
     [Fact]
     public void WorkingTreeRefreshCoalescesPartialClassAndPreservesDeclarationProvenance()
     {
-        using var fixture = MemoryProjectFixture.Create();
+        using var fixture = MemoryProjectFixture.Create(output);
         var alphaText = """
             namespace Repro;
 
@@ -88,7 +78,7 @@ public sealed class MemoryPartialDeclarationTests
     [Fact]
     public void CommittedHeadRefreshPreservesBlobProvenanceAcrossRepeat()
     {
-        using var fixture = MemoryProjectFixture.Create();
+        using var fixture = MemoryProjectFixture.Create(output);
         var alphaText = """
             namespace Repro;
 
@@ -165,7 +155,7 @@ public sealed class MemoryPartialDeclarationTests
     [Fact]
     public void SameGenericArityPartialClassesStillCoalesce()
     {
-        using var fixture = MemoryProjectFixture.Create();
+        using var fixture = MemoryProjectFixture.Create(output);
         fixture.Write("CryptoIndicatorApp.sln", string.Empty);
         fixture.Write("Repro/First.cs", "namespace Repro;\n\npublic partial class Sample<T> { }\n");
         fixture.Write("Repro/Second.cs", "namespace Repro;\n\npublic partial class Sample<T> { }\n");
@@ -174,17 +164,35 @@ public sealed class MemoryPartialDeclarationTests
         Assert.True(
             refresh.ExitCode == 0,
             $"same-arity refresh failed with exit code {refresh.ExitCode}\nSTDOUT:\n{refresh.StandardOutput}\nSTDERR:\n{refresh.StandardError}");
-        Assert.Equal(2, ReadDeclarations(fixture.DatabasePath).Count);
+        Assert.Equal(2, ReadDeclarations(fixture.DatabasePath, "Repro.Sample`1").Count);
+
+        var search = fixture.RunMemoryCli("search", "--query", "Repro.Sample", "--json");
+        AssertSearchHitCount(search, "symbol.repro-sample-1", "symbol", 1);
+    }
+
+    [Fact]
+    public void DistinctGenericAritiesRemainDistinctSymbols()
+    {
+        using var fixture = MemoryProjectFixture.Create(output);
+        fixture.Write("CryptoIndicatorApp.sln", string.Empty);
+        fixture.Write("Repro/NonGeneric.cs", "namespace Repro;\n\npublic class Sample { }\n");
+        fixture.Write("Repro/Generic.cs", "namespace Repro;\n\npublic class Sample<T> { }\n");
+
+        var refresh = fixture.RunMemoryCli("refresh", "--json");
+        Assert.True(
+            refresh.ExitCode == 0,
+            $"distinct-arity refresh failed with exit code {refresh.ExitCode}\nSTDOUT:\n{refresh.StandardOutput}\nSTDERR:\n{refresh.StandardError}");
 
         var search = fixture.RunMemoryCli("search", "--query", "Repro.Sample", "--json");
         AssertSearchHitCount(search, "symbol.repro-sample", "symbol", 1);
+        AssertSearchHitCount(search, "symbol.repro-sample-1", "symbol", 1);
     }
 
     [Theory]
     [MemberData(nameof(IncompatibleDuplicateDeclarations))]
     public void WorkingTreeRefreshRejectsIncompatibleDuplicateTypes(string firstDeclaration, string secondDeclaration)
     {
-        using var fixture = MemoryProjectFixture.Create();
+        using var fixture = MemoryProjectFixture.Create(output);
         fixture.Write("CryptoIndicatorApp.sln", string.Empty);
         fixture.Write("Repro/First.cs", $"namespace Repro;\n\n{firstDeclaration}\n");
         fixture.Write("Repro/Second.cs", $"namespace Repro;\n\n{secondDeclaration}\n");
@@ -197,7 +205,7 @@ public sealed class MemoryPartialDeclarationTests
     [Fact]
     public void DistinctSymbolsWithCollidingSearchIdsAreStillRejected()
     {
-        using var fixture = MemoryProjectFixture.Create();
+        using var fixture = MemoryProjectFixture.Create(output);
         fixture.Write("CryptoIndicatorApp.sln", string.Empty);
         fixture.Write("First.cs", "namespace Repro;\npublic class Sample_A { }\n");
         fixture.Write("Second.cs", "namespace Repro.Sample;\npublic class A { }\n");
@@ -211,8 +219,102 @@ public sealed class MemoryPartialDeclarationTests
     {
         { "public class Sample { }", "public class Sample { }" },
         { "public partial class Sample { }", "public class Sample { }" },
-        { "public partial class Sample { }", "public partial class Sample<T> { }" },
     };
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DisposeAfterPrimaryFailurePreservesPrimaryAndDiagnosesCleanupFailure(bool outputUnavailable)
+    {
+        var captured = new CapturedOutput(outputUnavailable);
+        var fixture = MemoryProjectFixture.Create(captured);
+        var primaryFailure = new TimeoutException("memory CLI timed out.");
+
+        try
+        {
+            var failure = Record.Exception((Action)(() =>
+            {
+                using (var lockedFile = new FileStream(
+                    Path.Combine(fixture.Root, "locked.txt"),
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None))
+                {
+                    try
+                    {
+                        fixture.RecordPrimaryFailure(primaryFailure);
+                        throw primaryFailure;
+                    }
+                    finally
+                    {
+                        fixture.Dispose();
+                    }
+                }
+            }));
+
+            Assert.Same(primaryFailure, failure);
+            var cleanupFailures = Assert.IsAssignableFrom<IReadOnlyList<Exception>>(
+                primaryFailure.Data[MemoryProjectFixture.CleanupFailuresDataKey]);
+            Assert.Equal(outputUnavailable ? 2 : 1, cleanupFailures.Count);
+            Assert.Contains("after 5 attempts", cleanupFailures[0].Message, StringComparison.Ordinal);
+            if (outputUnavailable)
+            {
+                Assert.Equal("test output unavailable", cleanupFailures[1].Message);
+            }
+            else
+            {
+                Assert.Contains("stage=fixture-dispose", captured.Text);
+                Assert.Contains("System.TimeoutException", captured.Text);
+                Assert.Contains("System.IO.IOException", captured.Text);
+                Assert.Contains("after 5 attempts", captured.Text);
+            }
+            Assert.True(Directory.Exists(fixture.Root));
+        }
+        finally
+        {
+            fixture.Dispose();
+        }
+    }
+
+    [Fact]
+    public void DisposeWithoutPrimaryPropagatesCleanupFailureAfterRetries()
+    {
+        var fixture = MemoryProjectFixture.Create(output);
+
+        try
+        {
+            Exception? cleanupFailure;
+            using (var lockedFile = new FileStream(
+                Path.Combine(fixture.Root, "locked.txt"),
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None))
+            {
+                cleanupFailure = Record.Exception((Action)fixture.Dispose);
+                Assert.NotNull(cleanupFailure);
+                Assert.Contains("after 5 attempts", cleanupFailure!.Message, StringComparison.Ordinal);
+                Assert.True(Directory.Exists(fixture.Root));
+            }
+
+            fixture.Dispose();
+        }
+        finally
+        {
+            fixture.Dispose();
+        }
+    }
+
+    private sealed class CapturedOutput(bool unavailable) : ITestOutputHelper
+    {
+        private readonly StringBuilder _text = new();
+        public string Text => _text.ToString();
+        public void WriteLine(string message)
+        {
+            if (unavailable) throw new IOException("test output unavailable");
+            _text.AppendLine(message);
+        }
+        public void WriteLine(string format, params object[] args) => WriteLine(string.Format(format, args));
+    }
 
     private static void AssertDeclaration(
         DeclarationProvenance actual,
@@ -261,6 +363,9 @@ public sealed class MemoryPartialDeclarationTests
     }
 
     private static IReadOnlyList<DeclarationProvenance> ReadDeclarations(string databasePath)
+        => ReadDeclarations(databasePath, "Repro.Sample");
+
+    private static IReadOnlyList<DeclarationProvenance> ReadDeclarations(string databasePath, string symbol)
     {
         using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
         connection.Open();
@@ -269,9 +374,10 @@ public sealed class MemoryPartialDeclarationTests
             SELECT symbol, source_path, source_hash, declaration_position,
                    commit_sha, tree_sha, source_blob_sha
             FROM symbol_declarations
-            WHERE symbol = 'Repro.Sample'
+            WHERE symbol = $symbol
             ORDER BY source_path;
             """;
+        command.Parameters.AddWithValue("$symbol", symbol);
 
         using var reader = command.ExecuteReader();
         var declarations = new List<DeclarationProvenance>();
@@ -315,17 +421,6 @@ public sealed class MemoryPartialDeclarationTests
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     }
 
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "CryptoIndicatorApp.sln")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
-    }
-
     private sealed record DeclarationProvenance(
         string Symbol,
         string SourcePath,
@@ -335,163 +430,4 @@ public sealed class MemoryPartialDeclarationTests
         string? TreeSha,
         string? SourceBlobSha);
 
-    private sealed record CliResult(int ExitCode, string StandardOutput, string StandardError);
-
-    private sealed class MemoryProjectFixture : IDisposable
-    {
-        private MemoryProjectFixture(string root)
-        {
-            Root = root;
-            DatabasePath = Path.Combine(root, "docs", "memory", "generated", "project-memory.sqlite");
-        }
-
-        public string Root { get; }
-
-        public string DatabasePath { get; }
-
-        public static MemoryProjectFixture Create()
-        {
-            var root = Path.Combine(Path.GetTempPath(), "tc-dn-hofi3-memory-partial-tests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(root);
-            return new MemoryProjectFixture(root);
-        }
-
-        public void Write(string relativePath, string content)
-        {
-            var path = Path.Combine(Root, relativePath.Replace('/', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, content);
-        }
-
-        public CliResult RunMemoryCli(params string[] arguments)
-        {
-            var projectPath = Path.Combine(RepositoryRoot, "tools", "Memory", "CryptoIndicatorApp.Memory.csproj");
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = DotnetPath,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WorkingDirectory = RepositoryRoot,
-            };
-            startInfo.ArgumentList.Add("run");
-            startInfo.ArgumentList.Add("--no-restore");
-            startInfo.ArgumentList.Add("--no-build");
-            startInfo.ArgumentList.Add("--configuration");
-            startInfo.ArgumentList.Add(DotnetConfiguration);
-            startInfo.ArgumentList.Add("--project");
-            startInfo.ArgumentList.Add(projectPath);
-            startInfo.ArgumentList.Add("--");
-            foreach (var argument in arguments)
-            {
-                startInfo.ArgumentList.Add(argument);
-            }
-
-            startInfo.ArgumentList.Add("--project-root");
-            startInfo.ArgumentList.Add(Root);
-            startInfo.ArgumentList.Add("--db");
-            startInfo.ArgumentList.Add(DatabasePath);
-
-            using var process = Process.Start(startInfo);
-            Assert.NotNull(process);
-            var stdoutTask = process!.StandardOutput.ReadToEndAsync();
-            var stderrTask = process.StandardError.ReadToEndAsync();
-            if (!process.WaitForExit(TimeSpan.FromSeconds(120)))
-            {
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-                catch (InvalidOperationException)
-                {
-                }
-
-                process.WaitForExit(TimeSpan.FromSeconds(5));
-                Assert.Fail("memory CLI timed out.");
-            }
-
-            return new CliResult(
-                process.ExitCode,
-                stdoutTask.GetAwaiter().GetResult(),
-                stderrTask.GetAwaiter().GetResult());
-        }
-
-        public void InitializeGitRepository()
-        {
-            RunGit("init");
-            RunGit("config", "user.name", "Memory Partial Test");
-            RunGit("config", "user.email", "memory-partial-test@example.invalid");
-            RunGit("add", ".");
-            RunGit("commit", "-m", "partial declaration fixture");
-        }
-
-        public string RunGit(params string[] arguments)
-        {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = GitPath,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WorkingDirectory = Root,
-            };
-            foreach (var argument in arguments)
-            {
-                startInfo.ArgumentList.Add(argument);
-            }
-
-            using var process = Process.Start(startInfo);
-            Assert.NotNull(process);
-            var stdoutTask = process!.StandardOutput.ReadToEndAsync();
-            var stderrTask = process.StandardError.ReadToEndAsync();
-            if (!process.WaitForExit(TimeSpan.FromSeconds(30)))
-            {
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-                catch (InvalidOperationException)
-                {
-                }
-
-                process.WaitForExit(TimeSpan.FromSeconds(5));
-                Assert.Fail($"git {string.Join(' ', arguments)} timed out.");
-            }
-
-            var stdout = stdoutTask.GetAwaiter().GetResult();
-            var stderr = stderrTask.GetAwaiter().GetResult();
-            Assert.True(
-                process.ExitCode == 0,
-                $"git {string.Join(' ', arguments)} failed with exit code {process.ExitCode}\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}");
-            return stdout;
-        }
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Root))
-            {
-                ClearReadOnlyAttributes();
-                Directory.Delete(Root, recursive: true);
-            }
-        }
-
-        private void ClearReadOnlyAttributes()
-        {
-            foreach (var file in Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories))
-            {
-                File.SetAttributes(file, FileAttributes.Normal);
-            }
-
-            foreach (var directory in Directory.EnumerateDirectories(Root, "*", SearchOption.AllDirectories))
-            {
-                File.SetAttributes(directory, FileAttributes.Directory);
-            }
-        }
-    }
-
-    private static string GitPath => File.Exists(@"C:\Program Files\Git\cmd\git.exe")
-        ? @"C:\Program Files\Git\cmd\git.exe"
-        : "git";
 }

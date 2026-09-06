@@ -4,6 +4,7 @@ internal sealed class CSharpSymbolCatalog
 {
     private readonly Dictionary<string, CSharpSymbol> _symbols = new(StringComparer.Ordinal);
     private readonly List<SymbolDeclarationRecord> _declarations = [];
+    private readonly HashSet<string> _pairedMethods = new(StringComparer.Ordinal);
 
     public IReadOnlyList<SymbolDeclarationRecord> Declarations => _declarations;
 
@@ -13,15 +14,20 @@ internal sealed class CSharpSymbolCatalog
         if (!isNew)
         {
             var first = _symbols[symbol.FullName];
-            if (!first.IsPartial || !symbol.IsPartial
-                || symbol.Kind is not ("class" or "struct" or "interface" or "record")
-                || first.Kind != symbol.Kind
-                || first.GenericArity != symbol.GenericArity
-                || first.ParentSymbol != symbol.ParentSymbol
-                || first.DisplayName != symbol.DisplayName)
+            var matchingIdentity = first.IsPartial && symbol.IsPartial
+                && first.Kind == symbol.Kind
+                && first.GenericArity == symbol.GenericArity
+                && first.ParentSymbol == symbol.ParentSymbol
+                && first.DisplayName == symbol.DisplayName;
+            var matchingType = symbol.Kind is "class" or "struct" or "interface" or "record" or "record struct";
+            var matchingMethod = first.PartialMethod is { } firstMethod && symbol.PartialMethod is { } nextMethod
+                && firstMethod.Signature == nextMethod.Signature && firstMethod.IsImplementation != nextMethod.IsImplementation
+                && !_pairedMethods.Contains(symbol.FullName);
+            if (!matchingIdentity || (!matchingType && !matchingMethod))
             {
-                throw new InvalidOperationException($"Duplicate C# symbol '{symbol.FullName}' from '{path}' is not a matching partial type declaration.");
+                throw new InvalidOperationException($"Duplicate C# symbol '{symbol.FullName}' from '{path}' is not a matching partial declaration.");
             }
+            if (matchingMethod) _pairedMethods.Add(symbol.FullName);
         }
 
         // Files arrive in ordinal path order; retain that canonical source and every declaration.

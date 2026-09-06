@@ -115,7 +115,7 @@ public sealed class PilotBRunnerTimeoutDeadlineTests
         using var fixture = PilotBRunnerTestFixture.Create();
         var request = fixture.CreateRequest("pilot-b.fake.parent-exit-child-holds-pipe") with
         {
-            Timeout = DeadlineTimeout
+            Timeout = TimeSpan.FromSeconds(2)
         };
         var execution = new PilotBRunner().RunAsync(request);
         Process? parentProcess = null;
@@ -131,6 +131,7 @@ public sealed class PilotBRunnerTimeoutDeadlineTests
                 MarkerPath(fixture, ChildReadyMarker));
             await parentProcess.WaitForExitAsync().WaitAsync(ProcessObservationTimeout);
             Assert.True(parentProcess.HasExited);
+            Assert.Equal(0, parentProcess.ExitCode);
             Assert.False(childProcess.HasExited);
             try
             {

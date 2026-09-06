@@ -94,7 +94,7 @@ switch (prompt)
 
             await WriteProcessMarkerAsync(GetMarkerPath(".pilot-b-fake-parent-exit-ready"));
             await WaitForFileAsync(parentExitChildMarker);
-            const int parentObservationDelayMilliseconds = 100;
+            const int parentObservationDelayMilliseconds = 750;
             await Task.Delay(parentObservationDelayMilliseconds);
         }
 

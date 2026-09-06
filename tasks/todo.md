@@ -1873,5 +1873,21 @@ Approved acceptance seams: public working-tree/committed-HEAD Memory refresh and
 - [x] Regression-first: actual CLI partial duplicate RED, control PASS, restored RED; generic arity mismatch RED before review fix. Methods/events and exactly one logical symbol/ownership relation verified.
 - [x] Partial types coalesce only when kind/identity/arity match; generated schema v2 retains every declaration path/hash/span offset and committed blob metadata. Working-tree, committed-HEAD/repeat and invalid duplicate compatibility coverage passes.
 - [x] Focused Memory 22/22; final solution 419/419, zero skips (7 TRX in ../results/memory-fix-final). Release build 0 warnings/errors. Process-only MSBuildWarningsAsMessages=NU1900 retained, NuGet audit enabled. Independent Luna Max Standards/Spec reviews: no remaining actionable findings after arity and test-timeout fixes.
-- [ ] Separate repair commit; exact committed-HEAD Memory status, full refresh, status and pre-push verification.
-- [ ] Push explicit GitHub URL (origin is a local legacy checkout), ready PR to main, exact-head CI and Issue evidence update.
+- [x] Historical checkpoint: repair aed1688 committed; Memory full refresh 6/6 and pre-push 7/7 passed for that HEAD.
+- [x] Historical checkpoint: aed1688 pushed to explicit GitHub URL; PR #58 opened to main; CI run 34051380854 passed 419/419. Five subsequent CodeRabbit findings are handled in the follow-up below.
+
+## PR #58 CodeRabbit corrections (#30 / #31, 2026-09-06)
+
+User approved optimal order and preserved commit/push/PR/CI authority. Baseline aed16881b4f08038a83d60e171c206e05d00bfa3. Three existing test drafts preserved. Legacy checkout remains read-only. No merge, issue closure, real CLI/auth, protocol/scoring, retained-data policy or new dependency changes.
+
+Acceptance uses existing public Memory snapshot/refresh/search/stale-check and generated provenance seams, and runner/Fake CLI test seam.
+
+- [x] Live Issue preflight, baseline and drafts verified; STARTED posted to #30/#31.
+- [x] R2/R3: record / record class / record struct grammar and canonical type arity, nested owners/methods/relations/events/references; legal distinct arities remain distinct, incompatible duplicates rejected.
+- [x] R4: one compatible partial method declaration/implementation pair retains both declarations, one symbol/owns; reject incompatible or repeated bodies, preserve valid declaration-only methods.
+- [x] R1: bounded test process termination/drain and deletion retry; original timeout survives secondary cleanup failure, cleanup-only failure propagates.
+- [x] R5: natural parent exit with descendant-held pipe is observed; bounded UNSEALED with null fingerprint, other short deadline cases unchanged; repeat focused scenario.
+- [x] Full relevant tests and solution build/tests, reviewed acceptance matrix, independent Standards/Spec review.
+- [ ] Scoped commit; committed-HEAD Memory refresh/status/pre-push; normal push to existing PR #58, exact-head CI and review, lifecycle evidence.
+
+Final local reacceptance: Release build 0 warnings/errors; full solution 448/448 (Memory 51, PilotB 272), zero skips. Final natural-parent-exit deadline class repeated 8 times: 32/32, exact exits/TRX retained. Previously mapped tests for all 119 approved engineering criteria pass; source references/hashes rechecked, real ID8 remains OPEN in #39. Independent Luna Max Standards and Spec rechecks: no actionable findings. Compiler proof confirms async/extern implementation modifiers and rejects differing unsafe with isolated CS0764. Secondary cleanup diagnostics are visible via ITestOutputHelper, including an unavailable-output regression. Process-only MSBuildWarningsAsMessages=NU1900 retained; NuGet audit remains enabled. External evidence: ../pr58-review-acceptance.md and ../pr58-review-verification.json. Legacy HEAD/status/42 hashes unchanged. Next authorized checkpoint: scoped commit, HEAD Memory gates, push existing PR #58 and exact-head CI; publication evidence is recorded externally to avoid a bookkeeping-only commit.
