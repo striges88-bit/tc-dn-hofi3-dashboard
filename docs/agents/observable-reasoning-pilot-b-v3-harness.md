@@ -119,7 +119,8 @@ and the terminal event, only documented item lifecycle events are allowed.
 messages come only from the authoritative completed `agent_message`
 representation. The fingerprint and the run record both read that list, so
 completed commentary and completed final output share one sequence, text, and
-phase. Its exact cardinality is constrained only by the proven pinned-CLI
+phase. A final answer stays on that record. It does not enter the arm metric
+counts. Its exact cardinality is constrained only by the proven pinned-CLI
 contract.
 
 A successful transcript must reach an allowed terminal-success event.
@@ -147,9 +148,9 @@ Any mismatch is `INVALID_BATCH`.
 Per-arm metrics are deterministic counts over the sealed intermediate events:
 
 ```text
-routine_messages       = count(kind=ROUTINE)
-observable_messages    = count(kind=OBSERVABLE)
-affected_runs          = runs with at least one ROUTINE message
+routine_messages       = count(phase=commentary and kind=ROUTINE)
+observable_messages    = count(phase=commentary and kind=OBSERVABLE)
+affected_runs          = runs with at least one commentary ROUTINE message
 observable_rate        = observable_messages / (routine_messages + observable_messages)
 completed_runs         = count(adjudication.completed=true)
 quality_failures       = task-quality FAIL plus omitted mandatory updates

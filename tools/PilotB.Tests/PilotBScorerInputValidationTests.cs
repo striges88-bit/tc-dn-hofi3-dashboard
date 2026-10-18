@@ -86,6 +86,29 @@ public sealed partial class PilotBScorerTests
     }
 
     [Theory]
+    [InlineData(PilotBMessageKind.Routine)]
+    [InlineData(PilotBMessageKind.Observable)]
+    public void Scorer_FinalMessageLeavesArmMetricsUnchanged(PilotBMessageKind kind)
+    {
+        var baseline = CreateBatch(10, 2).ToArray();
+        var withFinal = baseline.ToArray();
+        var index = Array.FindIndex(withFinal, record =>
+            record.Messages.All(message => message.Kind != PilotBMessageKind.Routine));
+        var record = withFinal[index];
+        var commentary = record.Messages[0];
+        withFinal[index] = record with
+        {
+            Messages =
+            [
+                commentary,
+                new PilotBMessage(commentary.Sequence + 1, "Done.", kind, "item.completed", "final")
+            ]
+        };
+
+        Assert.Equal(Score(baseline).Metrics, Score(withFinal).Metrics);
+    }
+
+    [Theory]
     [InlineData("root")]
     [InlineData("pairing")]
     [InlineData("adjudication")]
