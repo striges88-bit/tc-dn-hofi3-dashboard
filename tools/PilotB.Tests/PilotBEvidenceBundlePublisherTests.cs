@@ -82,6 +82,36 @@ public sealed class PilotBEvidenceBundlePublisherTests
     }
 
     [Fact]
+    public async Task PublishSeal_RegularWriteLockIsAcceptedAndOmittedFromPrintedInventory()
+    {
+        using var fixture = PilotBRunnerTestFixture.Create();
+        var bundle = await PreparePublishableBundleAsync(fixture);
+        await File.WriteAllTextAsync(bundle.Paths.LockPath, "held");
+
+        await new PilotBEvidenceBundlePublisher().PublishSealAsync(
+            bundle.Paths,
+            bundle.Metadata,
+            bundle.SemanticFingerprint,
+            CancellationToken.None);
+
+        var seal = JsonNode.Parse(await File.ReadAllBytesAsync(bundle.Paths.SealPath))!.AsObject();
+        var printed = seal["payload_inventory"]!.AsArray()
+            .Select(node => node!["path"]!.GetValue<string>())
+            .ToArray();
+        Assert.Equal(PilotBEvidenceBundle.PayloadNames, printed);
+        Assert.DoesNotContain(Path.GetFileName(bundle.Paths.LockPath), printed);
+
+        File.Delete(bundle.Paths.LockPath);
+        var sealedVerification = new PilotBEvidenceBundleVerifier().Verify(bundle.Paths);
+        Assert.Equal(PilotBEvidenceState.Sealed, sealedVerification.EvidenceState);
+
+        await File.WriteAllTextAsync(bundle.Paths.LockPath, "leftover");
+        var leftover = new PilotBEvidenceBundleVerifier().Verify(bundle.Paths);
+        Assert.Equal(PilotBEvidenceState.Unsealed, leftover.EvidenceState);
+        Assert.Contains("artifact-inventory-not-closed", leftover.InvalidReasons);
+    }
+
+    [Fact]
     public async Task PublishSealAsync_WhenMetadataBytesDrift_RejectsBeforeCreatingTemporarySeal()
     {
         using var fixture = PilotBRunnerTestFixture.Create();
