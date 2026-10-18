@@ -443,8 +443,7 @@ internal static class CSharpMemoryExtractor
         }
 
         var typeTokens = tokens.Length == 1 ? tokens : tokens[..^1];
-        var typeName = string.Concat(typeTokens);
-        return ProjectMemoryIndexer.Slug(typeName);
+        return string.Concat(typeTokens);
     }
 
     private static IEnumerable<string> SplitLines(string text)

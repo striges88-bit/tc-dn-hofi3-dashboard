@@ -102,8 +102,8 @@ public sealed class MemoryPartialMethodTests
         fixture.Write("A.cs", Wrap("public static partial TItem Check<TItem>(ref int[] values, TItem item) where TItem : class;"));
         fixture.Write("B.cs", Wrap("public static partial TItem Check<TItem>(ref int[] data, TItem other) /* ; { */ where TItem : class => other;"));
         var snapshot = await fixture.Snapshot();
-        Assert.Single(snapshot.Symbols, s => s.Symbol == "Repro.Box`1.Check`1/int-titem");
-        Assert.Equal(2, snapshot.SymbolDeclarations.Count(d => d.Symbol == "Repro.Box`1.Check`1/int-titem"));
+        Assert.Single(snapshot.Symbols, s => s.Symbol == "Repro.Box`1.Check`1/int[]-TItem");
+        Assert.Equal(2, snapshot.SymbolDeclarations.Count(d => d.Symbol == "Repro.Box`1.Check`1/int[]-TItem"));
     }
 
     [Theory]
