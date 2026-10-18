@@ -44,7 +44,7 @@ internal sealed class PilotBEvidenceBundlePublisher : IEvidenceBundlePublisher
         string semanticFingerprint,
         CancellationToken cancellationToken)
     {
-        ValidatePayloadInventory(paths);
+        PilotBEvidenceBundle.RequirePublishDirectory(paths);
         var payloads = PilotBEvidenceBundle.CapturePayloadSnapshots(paths);
         ValidateMetadata(payloads["metadata.json"], metadata);
         var inventory = PilotBEvidenceBundle.CapturePayloadInventory(payloads);
@@ -114,34 +114,6 @@ internal sealed class PilotBEvidenceBundlePublisher : IEvidenceBundlePublisher
         if (!actual.AsSpan().SequenceEqual(expected))
         {
             throw new InvalidDataException("The evidence metadata does not match the publication input.");
-        }
-    }
-
-    private static void ValidatePayloadInventory(PilotBArtifactPaths paths)
-    {
-        var expected = PilotBEvidenceBundle.PayloadNames.OrderBy(name => name, StringComparer.Ordinal).ToList();
-        if (File.Exists(paths.LockPath))
-        {
-            if ((File.GetAttributes(paths.LockPath) & FileAttributes.ReparsePoint) != 0)
-            {
-                throw new InvalidDataException("The evidence ownership lock must be a regular file.");
-            }
-
-            expected.Add(Path.GetFileName(paths.LockPath));
-            expected.Sort(StringComparer.Ordinal);
-        }
-
-        var actual = Directory.EnumerateFileSystemEntries(paths.Root, "*", SearchOption.TopDirectoryOnly)
-            .Select(Path.GetFileName)
-            .Where(name => name is not null)
-            .Cast<string>()
-            .Where(name => !string.Equals(name, Path.GetFileName(paths.SealPath), StringComparison.Ordinal)
-                           && !string.Equals(name, Path.GetFileName(paths.SealPath) + ".tmp", StringComparison.Ordinal))
-            .OrderBy(name => name, StringComparer.Ordinal)
-            .ToArray();
-        if (!actual.SequenceEqual(expected, StringComparer.Ordinal))
-        {
-            throw new InvalidDataException("The evidence payload inventory is not closed.");
         }
     }
 

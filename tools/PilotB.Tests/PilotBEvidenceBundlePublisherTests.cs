@@ -7,14 +7,21 @@ namespace CryptoIndicatorApp.PilotB.Tests;
 [Collection(PilotBProcessBackedRunnerCollection.Name)]
 public sealed class PilotBEvidenceBundlePublisherTests
 {
+    public static IEnumerable<object[]> ClosedPayloadNames()
+        => PilotBEvidenceBundle.PayloadNames.Select(name => new object[] { name });
+
+    public static IEnumerable<object[]> PublicationFailureArtifacts()
+    {
+        foreach (var name in PilotBEvidenceBundle.PayloadNames)
+        {
+            yield return new object[] { name };
+        }
+
+        yield return new object[] { "integrity.json" };
+    }
+
     [Theory]
-    [InlineData("output.jsonl")]
-    [InlineData("stderr.txt")]
-    [InlineData("prompt.bin")]
-    [InlineData("manifest.json")]
-    [InlineData("pre-manifest.json")]
-    [InlineData("post-manifest.json")]
-    [InlineData("metadata.json")]
+    [MemberData(nameof(ClosedPayloadNames))]
     public async Task WriteNewBytesAsync_WhenPayloadExists_RejectsWithoutOverwrite(string payloadName)
     {
         var root = Directory.CreateTempSubdirectory("pilot-b-publisher-test-").FullName;
@@ -37,14 +44,7 @@ public sealed class PilotBEvidenceBundlePublisherTests
     }
 
     [Theory]
-    [InlineData("prompt.bin")]
-    [InlineData("manifest.json")]
-    [InlineData("pre-manifest.json")]
-    [InlineData("post-manifest.json")]
-    [InlineData("output.jsonl")]
-    [InlineData("stderr.txt")]
-    [InlineData("metadata.json")]
-    [InlineData("integrity.json")]
+    [MemberData(nameof(PublicationFailureArtifacts))]
     public async Task Runner_WhenPublicationCallFails_ReturnsUnsealedWithoutFingerprint(string failedArtifact)
     {
         using var fixture = PilotBRunnerTestFixture.Create();
