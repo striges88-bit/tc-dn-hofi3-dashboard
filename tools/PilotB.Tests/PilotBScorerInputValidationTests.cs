@@ -63,7 +63,7 @@ public sealed partial class PilotBScorerTests
         records[1] = records[1] with
         {
             Messages = [records[1].Messages[0] with { Sequence = 2 },
-                new PilotBMessage(4, "Later observable result.", PilotBMessageKind.Observable)]
+                new PilotBMessage(4, "Later observable result.", PilotBMessageKind.Observable, "commentary")]
         };
         var parsed = PilotBRunRecordJsonl.ParseSingle(PilotBRunRecordJsonl.Serialize(records[1]));
         Assert.Equal(new[] { 2, 4 }, parsed.Messages.Select(message => message.Sequence));
@@ -101,11 +101,28 @@ public sealed partial class PilotBScorerTests
             Messages =
             [
                 commentary,
-                new PilotBMessage(commentary.Sequence + 1, "Done.", kind, "item.completed", "final")
+                new PilotBMessage(commentary.Sequence + 1, "Done.", kind, "final", "item.completed")
             ]
         };
 
         Assert.Equal(Score(baseline).Metrics, Score(withFinal).Metrics);
+    }
+
+    [Theory]
+    [InlineData("analysis")]
+    [InlineData("Commentary")]
+    [InlineData("")]
+    public void Scorer_RejectsPhaseOutsideCommentaryAndFinal(string phase)
+    {
+        var records = CreateBatch(10, 2).ToArray();
+        records[1] = records[1] with
+        {
+            Messages = [records[1].Messages[0] with { Phase = phase }]
+        };
+
+        var result = Score(records);
+        Assert.Equal(PilotBDecision.InvalidBatch, result.Decision);
+        Assert.Contains("unsupported-primary-event", result.InvalidReasons);
     }
 
     [Theory]

@@ -105,5 +105,6 @@ public sealed partial class PilotBScorerTests
     private static PilotBMessage[] VectorMessages(int routine, int observable)
         => Enumerable.Range(1, routine + observable).Select(sequence => new PilotBMessage(
             sequence, $"Adjudicated message {sequence}.",
-            sequence <= routine ? PilotBMessageKind.Routine : PilotBMessageKind.Observable)).ToArray();
+            sequence <= routine ? PilotBMessageKind.Routine : PilotBMessageKind.Observable,
+            "commentary")).ToArray();
 }

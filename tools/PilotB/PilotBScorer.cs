@@ -295,9 +295,9 @@ public sealed class PilotBScorer
     private static PilotBArmMetrics CalculateArmMetrics(IReadOnlyList<PilotBRunRecord> runs)
     {
         var routineMessages = runs.Sum(run => run.Messages.Count(message =>
-            message.Phase is "commentary" && message.Kind == PilotBMessageKind.Routine));
+            IsCommentary(message) && message.Kind == PilotBMessageKind.Routine));
         var observableMessages = runs.Sum(run => run.Messages.Count(message =>
-            message.Phase is "commentary" && message.Kind == PilotBMessageKind.Observable));
+            IsCommentary(message) && message.Kind == PilotBMessageKind.Observable));
         var messageCount = routineMessages + observableMessages;
         var qualityFailures = runs.Count(run =>
             run.Adjudication.TaskQuality == PilotBTaskQuality.Fail
@@ -321,8 +321,11 @@ public sealed class PilotBScorer
             runs.Any(run => run.Adjudication.CriticalFailure));
     }
 
+    private static bool IsCommentary(PilotBMessage message)
+        => message.Phase is "commentary";
+
     private static bool IsAffected(PilotBRunRecord run)
-        => run.Messages.Any(message => message.Phase is "commentary" && message.Kind == PilotBMessageKind.Routine);
+        => run.Messages.Any(message => IsCommentary(message) && message.Kind == PilotBMessageKind.Routine);
 
     private static EvaluationFacts CreateEvaluationFacts(
         PilotBScoreMetrics metrics,

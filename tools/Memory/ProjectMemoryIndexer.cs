@@ -211,12 +211,13 @@ public sealed class ProjectMemoryIndexer
 
     private static IEnumerable<EventRecord> ParseTestSymbolReferences(string text, string path, string hash)
     {
-        foreach (Match match in CSharpMemoryExtractor.RequiresSymbolRegex.Matches(text))
+        var matches = CSharpMemoryExtractor.RequiresSymbolRegex.Matches(text);
+        for (var ordinal = 0; ordinal < matches.Count; ordinal++)
         {
-            var rawSymbol = match.Groups["symbol"].Value;
+            var rawSymbol = matches[ordinal].Groups["symbol"].Value;
             var symbol = rawSymbol.Contains('.', StringComparison.Ordinal) || rawSymbol.Contains('`', StringComparison.Ordinal)
                 ? rawSymbol : rawSymbol.ToUpperInvariant();
-            yield return new EventRecord($"event.test-symbol-reference.{SymbolKey(symbol)}", "test_symbol_reference", symbol, match.Value, path, hash);
+            yield return new EventRecord(TestSymbolReferenceEventId(symbol, path, ordinal), "test_symbol_reference", symbol, matches[ordinal].Value, path, hash);
         }
     }
 
@@ -445,6 +446,9 @@ public sealed class ProjectMemoryIndexer
 
         return Regex.Replace(builder.ToString(), "-+", "-").Trim('-');
     }
+
+    internal static string TestSymbolReferenceEventId(string symbol, string path, int ordinal)
+        => $"event.test-symbol-reference.{SymbolKey(symbol)}.{ordinal}.{path}";
 
     internal static string SymbolKey(string fullName)
     {

@@ -51,7 +51,7 @@ public sealed partial class PilotBScorerTests
             arm: PilotBArm.Treatment,
             isSafetyCase: true,
             affected: false,
-            messages: [new PilotBMessage(1, "The verified result changes the next step.", PilotBMessageKind.Observable)]);
+            messages: [new PilotBMessage(1, "The verified result changes the next step.", PilotBMessageKind.Observable, "commentary")]);
 
         var jsonl = PilotBRunRecordJsonl.Serialize(record);
         var parsed = PilotBRunRecordJsonl.ParseSingle(jsonl);
@@ -477,8 +477,8 @@ public sealed partial class PilotBScorerTests
         {
             Messages =
             [
-                new PilotBMessage(1, "Routine next-step narration.", PilotBMessageKind.Routine),
-                new PilotBMessage(2, "A material result changes the next step.", PilotBMessageKind.Observable)
+                new PilotBMessage(1, "Routine next-step narration.", PilotBMessageKind.Routine, "commentary"),
+                new PilotBMessage(2, "A material result changes the next step.", PilotBMessageKind.Observable, "commentary")
             ]
         };
 
@@ -696,7 +696,8 @@ public sealed partial class PilotBScorerTests
         var messageList = messages ?? [new PilotBMessage(
             1,
             affected ? "Routine next-step narration." : "A material result changes the next step.",
-            affected ? PilotBMessageKind.Routine : PilotBMessageKind.Observable)];
+            affected ? PilotBMessageKind.Routine : PilotBMessageKind.Observable,
+            "commentary")];
 
         return new PilotBRunRecord(
             $"{pairId}-{arm.ToString().ToLowerInvariant()}",

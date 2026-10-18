@@ -24,8 +24,8 @@ public static class PilotBRunRecordProjection
                 message.Sequence,
                 message.Text,
                 adjudicationKinds[index],
-                "item.completed",
-                message.Phase);
+                message.Phase,
+                "item.completed");
         }
 
         return messages;

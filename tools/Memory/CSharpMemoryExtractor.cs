@@ -168,11 +168,12 @@ internal static class CSharpMemoryExtractor
 
     private static IEnumerable<EventRecordDraft> ExtractEvents(string path, string text, IReadOnlyList<CSharpSymbol> methods)
     {
-        foreach (Match match in RequiresSymbolRegex.Matches(text))
+        var matches = RequiresSymbolRegex.Matches(text);
+        for (var ordinal = 0; ordinal < matches.Count; ordinal++)
         {
-            var symbol = match.Groups["symbol"].Value;
+            var symbol = matches[ordinal].Groups["symbol"].Value;
             yield return new EventRecordDraft(
-                $"event.test-symbol-reference.{ProjectMemoryIndexer.SymbolKey(symbol)}",
+                ProjectMemoryIndexer.TestSymbolReferenceEventId(symbol, path, ordinal),
                 "test_symbol_reference",
                 symbol,
                 $"requires_symbol={symbol}");
@@ -426,7 +427,18 @@ internal static class CSharpMemoryExtractor
 
     private static string ExtractParameterTypeKey(string parameter)
     {
-        parameter = Regex.Replace(parameter, @"\[[^\]]+\]", " ");
+        while (parameter.TrimStart().StartsWith('['))
+        {
+            parameter = parameter.TrimStart();
+            var end = parameter.IndexOf(']');
+            if (end < 0)
+            {
+                break;
+            }
+
+            parameter = parameter[(end + 1)..];
+        }
+
         var equalsIndex = parameter.IndexOf('=');
         if (equalsIndex >= 0)
         {
