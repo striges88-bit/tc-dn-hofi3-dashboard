@@ -1,4 +1,3 @@
-using CryptoIndicatorApp.Memory;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -354,12 +353,12 @@ public sealed class MemoryCliTests
         var symbols = document.RootElement.GetProperty("results")
             .EnumerateArray()
             .Where(hit => hit.GetProperty("type").GetString() == "symbol")
-            .Select(hit => hit.GetProperty("id").GetString())
-            .Where(id => id is not null && id.Contains("buildpoints", StringComparison.OrdinalIgnoreCase))
+            .Select(hit => (Id: hit.GetProperty("id").GetString(), Title: hit.GetProperty("title").GetString() ?? ""))
+            .Where(hit => hit.Title.Contains("BuildPoints", StringComparison.Ordinal))
             .ToArray();
-
-        Assert.Contains(symbols, id => id == $"symbol.{ProjectMemoryIndexer.SymbolKey("CryptoIndicatorApp.Desktop.Rendering.OverloadedChartGeometryBuilder.BuildPoints/int")}");
-        Assert.Contains(symbols, id => id == $"symbol.{ProjectMemoryIndexer.SymbolKey("CryptoIndicatorApp.Desktop.Rendering.OverloadedChartGeometryBuilder.BuildPoints/int-int")}");
+        var width = Assert.Single(symbols, hit => hit.Title.EndsWith("BuildPoints/int", StringComparison.Ordinal));
+        var widthAndHeight = Assert.Single(symbols, hit => hit.Title.EndsWith("BuildPoints/int-int", StringComparison.Ordinal));
+        Assert.NotEqual(width.Id, widthAndHeight.Id);
     }
 
     [Fact]

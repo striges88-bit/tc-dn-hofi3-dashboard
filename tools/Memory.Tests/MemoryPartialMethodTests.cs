@@ -173,7 +173,7 @@ public sealed class MemoryPartialMethodTests
         Assert.Single(snapshot.Events, e => e.Symbol == "Repro.Box`1.Check/int");
         using var store = new MemoryStore(":memory:");
         store.Refresh(snapshot);
-        Assert.Contains(store.Search("Check").Results, h => h.Id == $"symbol.{ProjectMemoryIndexer.SymbolKey("Repro.Box`1.Check/int")}");
+        Assert.Contains(store.Search("Check").Results, hit => hit.Type == "symbol" && hit.Title.EndsWith("Repro.Box`1.Check/int", StringComparison.Ordinal));
         Assert.Empty(store.StaleCheck(fixture.Root).Issues);
     }
 }

@@ -1,4 +1,5 @@
 using CryptoIndicatorApp.Memory;
+using Microsoft.Data.Sqlite;
 
 namespace CryptoIndicatorApp.Memory.Tests;
 
@@ -20,7 +21,7 @@ public sealed class MemorySymbolIdentityTests
         Assert.Equal(2, snapshot.Relations.Count);
         using var store = new MemoryStore(":memory:");
         store.Refresh(snapshot);
-        Assert.Contains(store.Search("Invoice").Results, h => h.Id == SymbolSearchId("Repro.Invoice`1"));
+        Assert.Contains(store.Search("Invoice").Results, hit => hit.Type == "symbol" && hit.Title.EndsWith("Repro.Invoice`1", StringComparison.Ordinal));
         Assert.Empty(store.StaleCheck(fixture.Root).Issues);
     }
 
@@ -68,7 +69,7 @@ public sealed class MemorySymbolIdentityTests
         Assert.Contains(snapshot.Events, e => e.EventType == "test_symbol_reference" && e.Symbol == "Repro.Box`2");
         using var store = new MemoryStore(":memory:");
         store.Refresh(snapshot);
-        Assert.Contains(store.Search("Box").Results, hit => hit.Id == SymbolSearchId("Repro.Box`1"));
+        Assert.Contains(store.Search("Box").Results, hit => hit.Type == "symbol" && hit.Title.EndsWith("Repro.Box`1", StringComparison.Ordinal));
         Assert.Empty(store.StaleCheck(fixture.Root).Issues);
     }
 
@@ -76,12 +77,12 @@ public sealed class MemorySymbolIdentityTests
     public async Task DistinctParameterTypesWithDotAndUnderscoreStayDistinctSymbols()
     {
         using var fixture = new SymbolProjectFixture();
-        fixture.Write("A.cs", """
+        fixture.Write("Methods.Tests.cs", """
             namespace Repro;
             public class Box<T>
             {
-                public void M(Foo.Bar value) { }
-                public void M(Foo_Bar value) { }
+                [Fact] public void M(Foo.Bar value) { }
+                [Fact] public void M(Foo_Bar value) { }
             }
             """);
         var snapshot = await fixture.Snapshot();
@@ -89,13 +90,14 @@ public sealed class MemorySymbolIdentityTests
         const string underscored = "Repro.Box`1.M/Foo_Bar";
         Assert.Contains(snapshot.Symbols, symbol => symbol.Symbol == dotted);
         Assert.Contains(snapshot.Symbols, symbol => symbol.Symbol == underscored);
-        Assert.Contains(snapshot.Relations, relation => relation.Id == Owns("Repro.Box`1", dotted));
-        Assert.Contains(snapshot.Relations, relation => relation.Id == Owns("Repro.Box`1", underscored));
-        using var store = new MemoryStore(":memory:");
-        store.Refresh(snapshot);
-        var hits = store.Search("Foo").Results;
-        Assert.Contains(hits, hit => hit.Id == SymbolSearchId(dotted) && hit.Type == "symbol");
-        Assert.Contains(hits, hit => hit.Id == SymbolSearchId(underscored) && hit.Type == "symbol");
+        var databasePath = Path.Combine(fixture.Root, "memory.sqlite");
+        using (var store = new MemoryStore(databasePath))
+        {
+            store.Refresh(snapshot);
+            AssertSearchFindsBoth(store, "Foo", dotted, underscored);
+        }
+
+        AssertDistinctPrimaryKeys(databasePath, dotted, underscored);
     }
 
     [Fact]
@@ -106,27 +108,61 @@ public sealed class MemorySymbolIdentityTests
             namespace Repro;
             public class Foo { }
             public class foo { }
+            // requires_symbol=Repro.Foo
+            // requires_symbol=Repro.foo
             """);
         var snapshot = await fixture.Snapshot();
         const string upper = "Repro.Foo";
         const string lower = "Repro.foo";
         Assert.Contains(snapshot.Symbols, symbol => symbol.Symbol == upper);
         Assert.Contains(snapshot.Symbols, symbol => symbol.Symbol == lower);
-        Assert.Contains(snapshot.Relations, relation => relation.Id == ModuleOwns(upper));
-        Assert.Contains(snapshot.Relations, relation => relation.Id == ModuleOwns(lower));
-        using var store = new MemoryStore(":memory:");
-        store.Refresh(snapshot);
-        var hits = store.Search("Foo").Results;
-        Assert.Contains(hits, hit => hit.Id == SymbolSearchId(upper) && hit.Type == "symbol");
-        Assert.Contains(hits, hit => hit.Id == SymbolSearchId(lower) && hit.Type == "symbol");
+        var databasePath = Path.Combine(fixture.Root, "memory.sqlite");
+        using (var store = new MemoryStore(databasePath))
+        {
+            store.Refresh(snapshot);
+            AssertSearchFindsBoth(store, "Foo", upper, lower);
+        }
+
+        AssertDistinctPrimaryKeys(databasePath, upper, lower);
     }
 
-    private static string SymbolSearchId(string fullName)
-        => $"symbol.{ProjectMemoryIndexer.SymbolKey(fullName)}";
+    private static void AssertSearchFindsBoth(MemoryStore store, string query, string firstSymbol, string secondSymbol)
+    {
+        var hits = store.Search(query).Results.Where(hit => hit.Type == "symbol").ToArray();
+        var first = Assert.Single(hits, hit => hit.Title.EndsWith(firstSymbol, StringComparison.Ordinal));
+        var second = Assert.Single(hits, hit => hit.Title.EndsWith(secondSymbol, StringComparison.Ordinal));
+        Assert.NotEqual(first.Id, second.Id);
+    }
 
-    private static string Owns(string ownerFullName, string ownedFullName)
-        => $"relation.{ProjectMemoryIndexer.SymbolKey(ownerFullName)}.owns.{ProjectMemoryIndexer.SymbolKey(ownedFullName)}";
+    private static void AssertDistinctPrimaryKeys(string databasePath, string firstSymbol, string secondSymbol)
+    {
+        using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        connection.Open();
+        Assert.NotEqual(
+            SingleId(connection, "SELECT id, title FROM search_documents WHERE type = 'symbol'", title => title.EndsWith(firstSymbol, StringComparison.Ordinal)),
+            SingleId(connection, "SELECT id, title FROM search_documents WHERE type = 'symbol'", title => title.EndsWith(secondSymbol, StringComparison.Ordinal)));
+        Assert.NotEqual(
+            SingleId(connection, "SELECT id, to_id FROM relations WHERE relation = 'owns'", toId => toId == "symbol." + firstSymbol),
+            SingleId(connection, "SELECT id, to_id FROM relations WHERE relation = 'owns'", toId => toId == "symbol." + secondSymbol));
+        Assert.NotEqual(
+            SingleId(connection, "SELECT id, symbol FROM events WHERE symbol IS NOT NULL", symbol => symbol == firstSymbol),
+            SingleId(connection, "SELECT id, symbol FROM events WHERE symbol IS NOT NULL", symbol => symbol == secondSymbol));
+    }
 
-    private static string ModuleOwns(string ownedFullName)
-        => $"relation.{ProjectMemoryIndexer.Slug("module.Repro")}.owns.{ProjectMemoryIndexer.SymbolKey(ownedFullName)}";
+    private static string SingleId(SqliteConnection connection, string sql, Func<string, bool> match)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        using var reader = command.ExecuteReader();
+        var ids = new List<string>();
+        while (reader.Read())
+        {
+            if (match(reader.GetString(1)))
+            {
+                ids.Add(reader.GetString(0));
+            }
+        }
+
+        return Assert.Single(ids);
+    }
 }
