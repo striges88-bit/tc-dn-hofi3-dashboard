@@ -71,4 +71,21 @@ public sealed class MemorySymbolIdentityTests
         Assert.Contains(store.Search("Box").Results, hit => hit.Id == "symbol.repro-box-1");
         Assert.Empty(store.StaleCheck(fixture.Root).Issues);
     }
+
+    [Fact]
+    public async Task DistinctParameterTypesWithDotAndUnderscoreStayDistinctSymbols()
+    {
+        using var fixture = new SymbolProjectFixture();
+        fixture.Write("A.cs", """
+            namespace Repro;
+            public class Box<T>
+            {
+                public void M(Foo.Bar value) { }
+                public void M(Foo_Bar value) { }
+            }
+            """);
+        var snapshot = await fixture.Snapshot();
+        Assert.Contains(snapshot.Symbols, symbol => symbol.Symbol == "Repro.Box`1.M/Foo.Bar");
+        Assert.Contains(snapshot.Symbols, symbol => symbol.Symbol == "Repro.Box`1.M/Foo_Bar");
+    }
 }
