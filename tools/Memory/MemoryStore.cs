@@ -21,7 +21,7 @@ public sealed class MemoryStore : IDisposable
             Directory.CreateDirectory(directory);
         }
 
-        _connection = new SqliteConnection($"Data Source={databasePath}");
+        _connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
         _connection.Open();
     }
 
