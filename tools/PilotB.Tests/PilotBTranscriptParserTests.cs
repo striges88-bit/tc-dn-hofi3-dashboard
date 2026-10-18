@@ -153,7 +153,7 @@ public sealed class PilotBTranscriptParserTests
             """;
 
         var parsed = PilotBTranscriptParser.Parse(jsonl);
-        var projected = PilotBRunRecordProjection.ProjectCommentary(
+        var projected = PilotBRunRecordProjection.ProjectSemanticMessages(
             parsed,
             [PilotBMessageKind.Routine, PilotBMessageKind.Observable, PilotBMessageKind.Routine]);
 

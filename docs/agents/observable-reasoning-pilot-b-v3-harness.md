@@ -52,8 +52,8 @@ defined lowercase names exactly; numeric, unknown, mixed-case and whitespace
 aliases are malformed. Malformed JSON value kinds produce `FormatException`.
 The public typed scorer independently rejects undefined enum values, missing
 nested objects/collections and messages, arm-order indices outside 0..1, and
-duplicate or decreasing commentary sequences as `INVALID_BATCH`. Commentary
-sequences need not be contiguous: final output is excluded from that projection.
+duplicate or decreasing semantic sequences as `INVALID_BATCH`. Semantic
+sequences need not be contiguous.
 
 Required top-level fields are:
 
@@ -73,7 +73,7 @@ pairing                    { pair_id, pair_ordinal, arm_order_index,
                               pair_started_at_utc, pair_completed_at_utc }
 validity                   = "valid" | "invalid"
 invalid_reasons            [string]
-messages                   [primary intermediate messages]
+messages                   [semantic messages]
 adjudication               { task_quality, clarity, safety,
                               mandatory_update_omitted, critical_failure,
                               completed, corpus_runtime_unstable }
@@ -90,7 +90,7 @@ Each `messages` entry is an adjudicated primary event:
 sequence, text
 kind                       = "routine" | "observable"
 source_event_type          = "item.completed"
-phase                      = "commentary"
+phase                      = "commentary" | "final"
 ```
 
 `kind` is an explicit sealed adjudication input. The scorer does not infer a
@@ -117,10 +117,10 @@ exactly one `turn.started` is required before turn content. Between turn start
 and the terminal event, only documented item lifecycle events are allowed.
 `item.started` and `item.updated` never become semantic messages. Semantic
 messages come only from the authoritative completed `agent_message`
-representation; completed commentary is mapped to run-record messages, while
-every valid completed final output is retained in the semantic transcript and
-fingerprint but never in primary narration scoring. Its exact cardinality is
-constrained only by the proven pinned-CLI contract.
+representation. The fingerprint and the run record both read that list, so
+completed commentary and completed final output share one sequence, text, and
+phase. Its exact cardinality is constrained only by the proven pinned-CLI
+contract.
 
 A successful transcript must reach an allowed terminal-success event.
 `turn.failed` or fatal `error` records failure; EOF before a terminal state is

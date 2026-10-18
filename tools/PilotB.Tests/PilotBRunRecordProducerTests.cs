@@ -66,7 +66,7 @@ public sealed class PilotBRunRecordProducerTests
         Assert.Equal(["Verified the fixture boundary.", "Done."], record.Messages.Select(message => message.Text));
         Assert.Equal(["commentary", "final"], record.Messages.Select(message => message.Phase));
         Assert.Equal(
-            PilotBRunRecordProjection.ProjectCommentary(
+            PilotBRunRecordProjection.ProjectSemanticMessages(
                 runnerResult.Transcript,
                 request.MessageKinds).ToArray(),
             record.Messages.ToArray());

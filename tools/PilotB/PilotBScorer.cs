@@ -211,7 +211,7 @@ public sealed class PilotBScorer
                     || message.Sequence <= previousSequence
                     || string.IsNullOrWhiteSpace(message.Text)
                     || !string.Equals(message.SourceEventType, "item.completed", StringComparison.Ordinal)
-                    || !string.Equals(message.Phase, "commentary", StringComparison.Ordinal)
+                    || message.Phase is not ("commentary" or "final")
                     || message.Kind is not (PilotBMessageKind.Routine or PilotBMessageKind.Observable))
                 {
                     reasons.Add("unsupported-primary-event");

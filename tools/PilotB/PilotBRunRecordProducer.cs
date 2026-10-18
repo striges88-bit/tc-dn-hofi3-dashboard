@@ -86,7 +86,7 @@ public sealed class PilotBRunRecordProducer
 
         try
         {
-            var messages = PilotBRunRecordProjection.ProjectCommentary(
+            var messages = PilotBRunRecordProjection.ProjectSemanticMessages(
                 evidence.Transcript,
                 messageKinds);
             var record = new PilotBRunRecord(
