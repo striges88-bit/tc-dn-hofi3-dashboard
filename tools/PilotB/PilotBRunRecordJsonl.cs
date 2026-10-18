@@ -137,8 +137,8 @@ public static class PilotBRunRecordJsonl
                 RequiredInt(message, "sequence"),
                 RequiredString(message, "text"),
                 ParseMessageKind(RequiredString(message, "kind")),
-                RequiredString(message, "source_event_type"),
-                RequiredString(message, "phase"));
+                RequiredString(message, "phase"),
+                RequiredString(message, "source_event_type"));
         }).ToArray();
 
         return new PilotBRunRecord(

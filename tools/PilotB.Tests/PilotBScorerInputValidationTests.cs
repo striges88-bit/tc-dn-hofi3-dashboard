@@ -63,12 +63,66 @@ public sealed partial class PilotBScorerTests
         records[1] = records[1] with
         {
             Messages = [records[1].Messages[0] with { Sequence = 2 },
-                new PilotBMessage(4, "Later observable result.", PilotBMessageKind.Observable)]
+                new PilotBMessage(4, "Later observable result.", PilotBMessageKind.Observable, "commentary")]
         };
         var parsed = PilotBRunRecordJsonl.ParseSingle(PilotBRunRecordJsonl.Serialize(records[1]));
         Assert.Equal(new[] { 2, 4 }, parsed.Messages.Select(message => message.Sequence));
         records[1] = parsed;
         Assert.Equal(PilotBDecision.Pass, Score(records).Decision);
+    }
+
+    [Fact]
+    public void Scorer_AcceptsFinalPhaseOnTheSemanticRecord()
+    {
+        var records = CreateBatch(10, 2).ToArray();
+        records[1] = records[1] with
+        {
+            Messages = [records[1].Messages[0] with { Phase = "final" }]
+        };
+
+        var result = Score(records);
+        Assert.Equal(PilotBDecision.Pass, result.Decision);
+        Assert.DoesNotContain("unsupported-primary-event", result.InvalidReasons);
+    }
+
+    [Theory]
+    [InlineData(PilotBMessageKind.Routine)]
+    [InlineData(PilotBMessageKind.Observable)]
+    public void Scorer_FinalMessageLeavesArmMetricsUnchanged(PilotBMessageKind kind)
+    {
+        var baseline = CreateBatch(10, 2).ToArray();
+        var withFinal = baseline.ToArray();
+        var index = Array.FindIndex(withFinal, record =>
+            record.Messages.All(message => message.Kind != PilotBMessageKind.Routine));
+        var record = withFinal[index];
+        var commentary = record.Messages[0];
+        withFinal[index] = record with
+        {
+            Messages =
+            [
+                commentary,
+                new PilotBMessage(commentary.Sequence + 1, "Done.", kind, "final", "item.completed")
+            ]
+        };
+
+        Assert.Equal(Score(baseline).Metrics, Score(withFinal).Metrics);
+    }
+
+    [Theory]
+    [InlineData("analysis")]
+    [InlineData("Commentary")]
+    [InlineData("")]
+    public void Scorer_RejectsPhaseOutsideCommentaryAndFinal(string phase)
+    {
+        var records = CreateBatch(10, 2).ToArray();
+        records[1] = records[1] with
+        {
+            Messages = [records[1].Messages[0] with { Phase = phase }]
+        };
+
+        var result = Score(records);
+        Assert.Equal(PilotBDecision.InvalidBatch, result.Decision);
+        Assert.Contains("unsupported-primary-event", result.InvalidReasons);
     }
 
     [Theory]

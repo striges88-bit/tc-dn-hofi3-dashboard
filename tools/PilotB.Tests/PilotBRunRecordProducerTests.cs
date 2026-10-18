@@ -49,7 +49,7 @@ public sealed class PilotBRunRecordProducerTests
         });
         var request = CreateProductionRequest(
             runnerResult.Artifacts.Root,
-            [PilotBMessageKind.Observable]);
+            [PilotBMessageKind.Observable, PilotBMessageKind.Observable]);
 
         var result = new PilotBRunRecordProducer().Produce(request);
 
@@ -63,8 +63,10 @@ public sealed class PilotBRunRecordProducerTests
         Assert.Equal(runnerResult.IntegrityFacts.PromptSha256, record.PromptSha256);
         Assert.Equal(PilotBRunValidity.Valid, record.Validity);
         Assert.Empty(record.InvalidReasons);
+        Assert.Equal(["Verified the fixture boundary.", "Done."], record.Messages.Select(message => message.Text));
+        Assert.Equal(["commentary", "final"], record.Messages.Select(message => message.Phase));
         Assert.Equal(
-            PilotBRunRecordProjection.ProjectCommentary(
+            PilotBRunRecordProjection.ProjectSemanticMessages(
                 runnerResult.Transcript,
                 request.MessageKinds).ToArray(),
             record.Messages.ToArray());
@@ -115,21 +117,19 @@ public sealed class PilotBRunRecordProducerTests
 
         var result = new PilotBRunRecordProducer().Produce(CreateProductionRequest(
             variant.Paths.Root,
-            [PilotBMessageKind.Routine, PilotBMessageKind.Observable]));
+            [PilotBMessageKind.Observable, PilotBMessageKind.Routine, PilotBMessageKind.Observable]));
 
         var record = Assert.IsType<PilotBRunRecord>(result.RunRecord);
         Assert.Null(result.Rejection);
-        Assert.Equal([2, 3], record.Messages.Select(message => message.Sequence));
-        Assert.Equal(["first  exact\nline", "second exact"], record.Messages.Select(message => message.Text));
+        Assert.Equal([1, 2, 3], record.Messages.Select(message => message.Sequence));
         Assert.Equal(
-            [PilotBMessageKind.Routine, PilotBMessageKind.Observable],
+            ["Retained final.", "first  exact\nline", "second exact"],
+            record.Messages.Select(message => message.Text));
+        Assert.Equal(
+            [PilotBMessageKind.Observable, PilotBMessageKind.Routine, PilotBMessageKind.Observable],
             record.Messages.Select(message => message.Kind));
-        Assert.All(record.Messages, message =>
-        {
-            Assert.Equal("item.completed", message.SourceEventType);
-            Assert.Equal("commentary", message.Phase);
-        });
-        Assert.DoesNotContain(record.Messages, message => message.Text.Contains("final", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(["final", "commentary", "commentary"], record.Messages.Select(message => message.Phase));
+        Assert.All(record.Messages, message => Assert.Equal("item.completed", message.SourceEventType));
     }
 
     [Theory]
@@ -210,14 +210,14 @@ public sealed class PilotBRunRecordProducerTests
         var sourceTreatmentState = CaptureBundleState(treatmentSource.Artifacts.Root);
         var controlARequest = CreateProductionRequest(
             controlSource.Artifacts.Root,
-            [PilotBMessageKind.Routine],
+            [PilotBMessageKind.Routine, PilotBMessageKind.Routine],
             "run-a-control",
             "pair-a",
             armOrderIndex: 0,
             pairStart: PairStart);
         var treatmentARequest = CreateProductionRequest(
             treatmentSource.Artifacts.Root,
-            [PilotBMessageKind.Observable],
+            [PilotBMessageKind.Observable, PilotBMessageKind.Observable],
             "run-a-treatment",
             "pair-a",
             armOrderIndex: 1,
@@ -246,14 +246,14 @@ public sealed class PilotBRunRecordProducerTests
         var variantTreatmentState = CaptureBundleState(treatmentVariant.Paths.Root);
         var controlBRequest = CreateProductionRequest(
             controlVariant.Paths.Root,
-            [PilotBMessageKind.Observable],
+            [PilotBMessageKind.Observable, PilotBMessageKind.Observable],
             "run-b-control",
             "pair-b",
             armOrderIndex: 0,
             pairStart: PairStart.AddHours(1));
         var treatmentBRequest = CreateProductionRequest(
             treatmentVariant.Paths.Root,
-            [PilotBMessageKind.Routine],
+            [PilotBMessageKind.Routine, PilotBMessageKind.Routine],
             "run-b-treatment",
             "pair-b",
             armOrderIndex: 1,
@@ -279,14 +279,14 @@ public sealed class PilotBRunRecordProducerTests
         var repeatedTreatmentState = CaptureBundleState(repeatedTreatmentVariant.Paths.Root);
         var repeatedControl = ProduceRecord(producer, CreateProductionRequest(
             repeatedControlVariant.Paths.Root,
-            [PilotBMessageKind.Routine],
+            [PilotBMessageKind.Routine, PilotBMessageKind.Routine],
             "run-c-control",
             "pair-c",
             armOrderIndex: 0,
             pairStart: PairStart.AddHours(2)));
         var repeatedTreatment = ProduceRecord(producer, CreateProductionRequest(
             repeatedTreatmentVariant.Paths.Root,
-            [PilotBMessageKind.Observable],
+            [PilotBMessageKind.Observable, PilotBMessageKind.Observable],
             "run-c-treatment",
             "pair-c",
             armOrderIndex: 1,

@@ -593,8 +593,8 @@ public sealed class PilotBRunner
             null)
         {
             EvidenceState = PilotBEvidenceState.Unsealed,
-            RunValidity = null,
-            Qualification = null
+            RunValidity = qualification?.Validity,
+            Qualification = qualification
         };
     }
 

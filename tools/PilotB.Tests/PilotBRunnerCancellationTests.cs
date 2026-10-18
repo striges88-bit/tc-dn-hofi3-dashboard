@@ -504,8 +504,10 @@ public sealed class PilotBRunnerCancellationTests(ITestOutputHelper output)
     private static void AssertUnsealedTimeoutResult(PilotBRunnerResult result, string terminationReason)
     {
         Assert.Equal(PilotBEvidenceState.Unsealed, result.EvidenceState);
-        Assert.Null(result.RunValidity);
-        Assert.Null(result.Qualification);
+        Assert.Equal(PilotBRunValidity.Invalid, result.RunValidity);
+        Assert.NotNull(result.Qualification);
+        Assert.Equal(PilotBRunValidity.Invalid, result.Qualification.Validity);
+        Assert.DoesNotContain("evidence-unsealed", result.Qualification.InvalidReasons);
         Assert.Null(result.DeterministicFingerprint);
         Assert.False(result.IntegrityFacts.ArtifactComplete);
         Assert.Contains("timeout", result.InvalidReasons);

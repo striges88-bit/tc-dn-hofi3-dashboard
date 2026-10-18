@@ -154,7 +154,9 @@ public sealed class PilotBRunnerTimeoutDeadlineTests
         Assert.Null(executionFailure);
         Assert.NotNull(result);
         Assert.Equal(PilotBEvidenceState.Unsealed, result.EvidenceState);
-        Assert.Null(result.RunValidity);
+        Assert.NotNull(result.Qualification);
+        Assert.Equal(result.Qualification.Validity, result.RunValidity);
+        Assert.DoesNotContain("evidence-unsealed", result.Qualification.InvalidReasons);
         Assert.Null(result.DeterministicFingerprint);
         Assert.Contains("timeout", result.InvalidReasons);
         Assert.Contains("timeout-termination-incomplete", result.InvalidReasons);

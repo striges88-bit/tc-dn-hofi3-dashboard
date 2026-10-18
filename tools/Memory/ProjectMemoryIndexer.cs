@@ -143,7 +143,7 @@ public sealed class ProjectMemoryIndexer
             foreach (var symbol in ParseSymbols(text, path, hash))
             {
                 symbols.Add(symbol);
-                documents.Add(ToSearchDocument($"symbol.{Slug(symbol.Symbol)}", "symbol", "current", symbol.Symbol, SymbolSearchBody(symbol), path, hash));
+                documents.Add(ToSearchDocument($"symbol.{SymbolKey(symbol.Symbol)}", "symbol", "current", symbol.Symbol, SymbolSearchBody(symbol), path, hash));
             }
         }
 
@@ -211,12 +211,13 @@ public sealed class ProjectMemoryIndexer
 
     private static IEnumerable<EventRecord> ParseTestSymbolReferences(string text, string path, string hash)
     {
-        foreach (Match match in CSharpMemoryExtractor.RequiresSymbolRegex.Matches(text))
+        var matches = CSharpMemoryExtractor.RequiresSymbolRegex.Matches(text);
+        for (var ordinal = 0; ordinal < matches.Count; ordinal++)
         {
-            var rawSymbol = match.Groups["symbol"].Value;
+            var rawSymbol = matches[ordinal].Groups["symbol"].Value;
             var symbol = rawSymbol.Contains('.', StringComparison.Ordinal) || rawSymbol.Contains('`', StringComparison.Ordinal)
                 ? rawSymbol : rawSymbol.ToUpperInvariant();
-            yield return new EventRecord($"event.test-symbol-reference.{Slug(symbol)}", "test_symbol_reference", symbol, match.Value, path, hash);
+            yield return new EventRecord(TestSymbolReferenceEventId(symbol, path, ordinal), "test_symbol_reference", symbol, matches[ordinal].Value, path, hash);
         }
     }
 
@@ -252,7 +253,7 @@ public sealed class ProjectMemoryIndexer
                 hash);
             symbols.Add(symbol);
             documents.Add(ToSearchDocument(
-                $"symbol.{Slug(symbol.Symbol)}",
+                $"symbol.{SymbolKey(symbol.Symbol)}",
                 "symbol",
                 "current",
                 $"{symbol.Kind} {symbol.Symbol}",
@@ -269,7 +270,7 @@ public sealed class ProjectMemoryIndexer
             }
 
             var relation = new RelationRecord(
-                $"relation.{Slug(extractedRelation.FromId)}.{extractedRelation.Relation}.{Slug(extractedRelation.ToId)}",
+                $"relation.{RelationEndKey(extractedRelation.FromId)}.{extractedRelation.Relation}.{RelationEndKey(extractedRelation.ToId)}",
                 extractedRelation.FromId,
                 extractedRelation.Relation,
                 extractedRelation.ToId,
@@ -444,6 +445,23 @@ public sealed class ProjectMemoryIndexer
         }
 
         return Regex.Replace(builder.ToString(), "-+", "-").Trim('-');
+    }
+
+    internal static string TestSymbolReferenceEventId(string symbol, string path, int ordinal)
+        => $"event.test-symbol-reference.{SymbolKey(symbol)}.{ordinal}.{path}";
+
+    internal static string SymbolKey(string fullName)
+    {
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fullName)));
+        return $"{Slug(fullName)}-{hash[..12].ToLowerInvariant()}";
+    }
+
+    private static string RelationEndKey(string endId)
+    {
+        const string symbolPrefix = "symbol.";
+        return endId.StartsWith(symbolPrefix, StringComparison.Ordinal)
+            ? SymbolKey(endId[symbolPrefix.Length..])
+            : Slug(endId);
     }
 
     private static string SymbolSearchBody(SymbolRecord symbol)

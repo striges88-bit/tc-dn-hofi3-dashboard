@@ -7,14 +7,21 @@ namespace CryptoIndicatorApp.PilotB.Tests;
 [Collection(PilotBProcessBackedRunnerCollection.Name)]
 public sealed class PilotBEvidenceBundlePublisherTests
 {
+    public static IEnumerable<object[]> ClosedPayloadNames()
+        => PilotBEvidenceBundle.PayloadNames.Select(name => new object[] { name });
+
+    public static IEnumerable<object[]> PublicationFailureArtifacts()
+    {
+        foreach (var name in PilotBEvidenceBundle.PayloadNames)
+        {
+            yield return new object[] { name };
+        }
+
+        yield return new object[] { "integrity.json" };
+    }
+
     [Theory]
-    [InlineData("output.jsonl")]
-    [InlineData("stderr.txt")]
-    [InlineData("prompt.bin")]
-    [InlineData("manifest.json")]
-    [InlineData("pre-manifest.json")]
-    [InlineData("post-manifest.json")]
-    [InlineData("metadata.json")]
+    [MemberData(nameof(ClosedPayloadNames))]
     public async Task WriteNewBytesAsync_WhenPayloadExists_RejectsWithoutOverwrite(string payloadName)
     {
         var root = Directory.CreateTempSubdirectory("pilot-b-publisher-test-").FullName;
@@ -37,14 +44,7 @@ public sealed class PilotBEvidenceBundlePublisherTests
     }
 
     [Theory]
-    [InlineData("prompt.bin")]
-    [InlineData("manifest.json")]
-    [InlineData("pre-manifest.json")]
-    [InlineData("post-manifest.json")]
-    [InlineData("output.jsonl")]
-    [InlineData("stderr.txt")]
-    [InlineData("metadata.json")]
-    [InlineData("integrity.json")]
+    [MemberData(nameof(PublicationFailureArtifacts))]
     public async Task Runner_WhenPublicationCallFails_ReturnsUnsealedWithoutFingerprint(string failedArtifact)
     {
         using var fixture = PilotBRunnerTestFixture.Create();
@@ -55,11 +55,19 @@ public sealed class PilotBEvidenceBundlePublisherTests
 
         Assert.True(publisher.FailureObserved);
         Assert.Equal(PilotBEvidenceState.Unsealed, result.EvidenceState);
-        Assert.Null(result.RunValidity);
-        Assert.Null(result.Qualification);
+        Assert.Equal(PilotBRunnerStatus.Invalid, result.Status);
+        Assert.NotNull(result.Qualification);
+        Assert.Equal(result.Qualification.Validity, result.RunValidity);
+        Assert.DoesNotContain("seal-publication-failed", result.Qualification.InvalidReasons);
+        Assert.DoesNotContain("evidence-unsealed", result.Qualification.InvalidReasons);
         Assert.Null(result.DeterministicFingerprint);
         Assert.False(result.IntegrityFacts.ArtifactComplete);
         Assert.Contains("evidence-unsealed", result.InvalidReasons);
+        if (failedArtifact is "metadata.json" or "integrity.json")
+        {
+            Assert.Equal(PilotBRunValidity.Valid, result.Qualification.Validity);
+            Assert.Contains("seal-publication-failed", result.InvalidReasons);
+        }
     }
 
     [Fact]
@@ -79,6 +87,36 @@ public sealed class PilotBEvidenceBundlePublisherTests
 
         Assert.False(File.Exists(bundle.Paths.SealPath + ".tmp"));
         Assert.False(File.Exists(bundle.Paths.SealPath));
+    }
+
+    [Fact]
+    public async Task PublishSeal_RegularWriteLockIsAcceptedAndOmittedFromPrintedInventory()
+    {
+        using var fixture = PilotBRunnerTestFixture.Create();
+        var bundle = await PreparePublishableBundleAsync(fixture);
+        await File.WriteAllTextAsync(bundle.Paths.LockPath, "held");
+
+        await new PilotBEvidenceBundlePublisher().PublishSealAsync(
+            bundle.Paths,
+            bundle.Metadata,
+            bundle.SemanticFingerprint,
+            CancellationToken.None);
+
+        var seal = JsonNode.Parse(await File.ReadAllBytesAsync(bundle.Paths.SealPath))!.AsObject();
+        var printed = seal["payload_inventory"]!.AsArray()
+            .Select(node => node!["path"]!.GetValue<string>())
+            .ToArray();
+        Assert.Equal(PilotBEvidenceBundle.PayloadNames, printed);
+        Assert.DoesNotContain(Path.GetFileName(bundle.Paths.LockPath), printed);
+
+        File.Delete(bundle.Paths.LockPath);
+        var sealedVerification = new PilotBEvidenceBundleVerifier().Verify(bundle.Paths);
+        Assert.Equal(PilotBEvidenceState.Sealed, sealedVerification.EvidenceState);
+
+        await File.WriteAllTextAsync(bundle.Paths.LockPath, "leftover");
+        var leftover = new PilotBEvidenceBundleVerifier().Verify(bundle.Paths);
+        Assert.Equal(PilotBEvidenceState.Unsealed, leftover.EvidenceState);
+        Assert.Contains("artifact-inventory-not-closed", leftover.InvalidReasons);
     }
 
     [Fact]
@@ -344,8 +382,11 @@ public sealed class PilotBEvidenceBundlePublisherTests
         var result = await new PilotBRunner(new TamperingPublisher()).RunAsync(fixture.CreateRequest());
 
         Assert.Equal(PilotBEvidenceState.Unsealed, result.EvidenceState);
-        Assert.Null(result.RunValidity);
-        Assert.Null(result.Qualification);
+        Assert.Equal(PilotBRunnerStatus.Invalid, result.Status);
+        Assert.Equal(PilotBRunValidity.Valid, result.RunValidity);
+        Assert.NotNull(result.Qualification);
+        Assert.Equal(PilotBRunValidity.Valid, result.Qualification.Validity);
+        Assert.DoesNotContain("evidence-unsealed", result.Qualification.InvalidReasons);
         Assert.Null(result.DeterministicFingerprint);
     }
 

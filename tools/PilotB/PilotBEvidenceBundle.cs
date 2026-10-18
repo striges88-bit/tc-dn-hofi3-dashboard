@@ -379,6 +379,43 @@ internal static class PilotBEvidenceBundle
         }
     }
 
+    internal static void RequirePublishDirectory(PilotBArtifactPaths paths)
+    {
+        var expected = PayloadNames.OrderBy(name => name, StringComparer.Ordinal).ToList();
+        if (File.Exists(paths.LockPath))
+        {
+            if ((File.GetAttributes(paths.LockPath) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidDataException("The evidence ownership lock must be a regular file.");
+            }
+
+            expected.Add(Path.GetFileName(paths.LockPath));
+            expected.Sort(StringComparer.Ordinal);
+        }
+
+        var sealName = Path.GetFileName(paths.SealPath);
+        var actual = TopLevelNames(paths)
+            .Where(name => !string.Equals(name, sealName, StringComparison.Ordinal)
+                           && !string.Equals(name, sealName + ".tmp", StringComparison.Ordinal))
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+        if (!actual.SequenceEqual(expected, StringComparer.Ordinal))
+        {
+            throw new InvalidDataException("The evidence payload inventory is not closed.");
+        }
+    }
+
+    internal static string[] VerifiedEntryNames(PilotBArtifactPaths paths)
+        => PayloadNames
+            .Append(Path.GetFileName(paths.SealPath)!)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+    internal static IEnumerable<string> TopLevelNames(PilotBArtifactPaths paths)
+        => Directory.EnumerateFileSystemEntries(paths.Root, "*", SearchOption.TopDirectoryOnly)
+            .Select(Path.GetFileName)
+            .Where(name => name is not null)
+            .Cast<string>();
 }
 
 public sealed class PilotBEvidenceBundleVerifier
@@ -534,11 +571,8 @@ public sealed class PilotBEvidenceBundleVerifier
 
         Require((File.GetAttributes(paths.Root) & FileAttributes.ReparsePoint) == 0, "artifact-root-reparse-point");
 
-        var expected = PilotBEvidenceBundle.PayloadNames.Append(Path.GetFileName(paths.SealPath)).OrderBy(name => name, StringComparer.Ordinal).ToArray();
-        var actual = Directory.EnumerateFileSystemEntries(paths.Root, "*", SearchOption.TopDirectoryOnly)
-            .Select(Path.GetFileName)
-            .Where(name => name is not null)
-            .Cast<string>()
+        var expected = PilotBEvidenceBundle.VerifiedEntryNames(paths);
+        var actual = PilotBEvidenceBundle.TopLevelNames(paths)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
         Require(actual.SequenceEqual(expected, StringComparer.Ordinal), "artifact-inventory-not-closed");

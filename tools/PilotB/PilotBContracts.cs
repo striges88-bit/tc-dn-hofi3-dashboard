@@ -64,8 +64,8 @@ public sealed record PilotBMessage(
     int Sequence,
     string Text,
     PilotBMessageKind Kind,
-    string SourceEventType = "item.completed",
-    string Phase = "commentary");
+    string Phase,
+    string SourceEventType = "item.completed");
 
 public sealed record PilotBPairing(
     string PairId,

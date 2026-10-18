@@ -33,11 +33,15 @@ internal sealed class PilotBRunnerTestFixture : IDisposable
         var configuration = Directory.GetParent(
                 Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory))?.Name
             ?? throw new InvalidOperationException("Cannot determine the test output configuration.");
-        var fakePath = Path.GetFullPath(Path.Combine(
+        var fakeDirectory = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory,
             "..", "..", "..", "..",
-            "PilotB.FakeCli", "bin", configuration, "net8.0",
-            "CryptoIndicatorApp.PilotB.FakeCli.exe"));
+            "PilotB.FakeCli", "bin", configuration, "net8.0"));
+        var fakePath = Path.Combine(fakeDirectory, "CryptoIndicatorApp.PilotB.FakeCli.exe");
+        if (!File.Exists(fakePath))
+        {
+            fakePath = Path.Combine(fakeDirectory, "CryptoIndicatorApp.PilotB.FakeCli");
+        }
         Assert.True(File.Exists(fakePath), $"Fake CLI was not built: {fakePath}");
         return new PilotBRunnerTestFixture(root, fakePath);
     }

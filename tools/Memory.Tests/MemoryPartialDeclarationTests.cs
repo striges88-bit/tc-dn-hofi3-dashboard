@@ -44,15 +44,15 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
             $"working-tree refresh failed with exit code {refresh.ExitCode}\nSTDOUT:\n{refresh.StandardOutput}\nSTDERR:\n{refresh.StandardError}");
 
         var logicalSymbolSearch = fixture.RunMemoryCli("search", "--query", "Repro.Sample", "--json");
-        AssertSearchHitCount(logicalSymbolSearch, "symbol.repro-sample", "symbol", 1);
+        AssertSearchHitCount(logicalSymbolSearch, "Repro.Sample", "symbol", 1);
 
         var alphaSearch = fixture.RunMemoryCli("search", "--query", "Alpha", "--json");
-        AssertSearchHit(alphaSearch, "symbol.repro-sample-alpha-0", "symbol", "Repro/Sample.Alpha.Tests.cs");
-        AssertSearchHit(alphaSearch, "event.test-method.repro-sample-alpha-0", "event", "Repro/Sample.Alpha.Tests.cs");
+        AssertSearchHit(alphaSearch, "Repro.Sample.Alpha/0", "symbol", "Repro/Sample.Alpha.Tests.cs");
+        AssertSearchHit(alphaSearch, "Repro.Sample.Alpha/0", "event", "Repro/Sample.Alpha.Tests.cs");
 
         var betaSearch = fixture.RunMemoryCli("search", "--query", "Beta", "--json");
-        AssertSearchHit(betaSearch, "symbol.repro-sample-beta-0", "symbol", "Repro/Sample.Beta.Tests.cs");
-        AssertSearchHit(betaSearch, "event.test-method.repro-sample-beta-0", "event", "Repro/Sample.Beta.Tests.cs");
+        AssertSearchHit(betaSearch, "Repro.Sample.Beta/0", "symbol", "Repro/Sample.Beta.Tests.cs");
+        AssertSearchHit(betaSearch, "Repro.Sample.Beta/0", "event", "Repro/Sample.Beta.Tests.cs");
 
         var declarations = ReadDeclarations(fixture.DatabasePath);
         Assert.Equal(2, declarations.Count);
@@ -167,7 +167,7 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
         Assert.Equal(2, ReadDeclarations(fixture.DatabasePath, "Repro.Sample`1").Count);
 
         var search = fixture.RunMemoryCli("search", "--query", "Repro.Sample", "--json");
-        AssertSearchHitCount(search, "symbol.repro-sample-1", "symbol", 1);
+        AssertSearchHitCount(search, "Repro.Sample`1", "symbol", 1);
     }
 
     [Fact]
@@ -184,8 +184,8 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
             $"distinct-arity refresh failed with exit code {refresh.ExitCode}\nSTDOUT:\n{refresh.StandardOutput}\nSTDERR:\n{refresh.StandardError}");
 
         var search = fixture.RunMemoryCli("search", "--query", "Repro.Sample", "--json");
-        AssertSearchHitCount(search, "symbol.repro-sample", "symbol", 1);
-        AssertSearchHitCount(search, "symbol.repro-sample-1", "symbol", 1);
+        AssertSearchHitCount(search, "Repro.Sample", "symbol", 1);
+        AssertSearchHitCount(search, "Repro.Sample`1", "symbol", 1);
     }
 
     [Theory]
@@ -203,7 +203,7 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void DistinctSymbolsWithCollidingSearchIdsAreStillRejected()
+    public void DistinctSymbolsWhoseSlugsMatchRefreshAsSeparateDocuments()
     {
         using var fixture = MemoryProjectFixture.Create(output);
         fixture.Write("CryptoIndicatorApp.sln", string.Empty);
@@ -211,8 +211,18 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
         fixture.Write("Second.cs", "namespace Repro.Sample;\npublic class A { }\n");
 
         var refresh = fixture.RunMemoryCli("refresh", "--json");
-        Assert.Equal(1, refresh.ExitCode);
-        Assert.Contains("Duplicate search document id 'symbol.repro-sample-a'", refresh.StandardError, StringComparison.Ordinal);
+        Assert.True(
+            refresh.ExitCode == 0,
+            $"slug-collision refresh failed with exit code {refresh.ExitCode}\nSTDOUT:\n{refresh.StandardOutput}\nSTDERR:\n{refresh.StandardError}");
+        var search = fixture.RunMemoryCli("search", "--query", "Sample", "--json");
+        Assert.True(search.ExitCode == 0, search.StandardError);
+        using var document = JsonDocument.Parse(search.StandardOutput);
+        var hits = document.RootElement.GetProperty("results").EnumerateArray()
+            .Where(hit => hit.GetProperty("type").GetString() == "symbol")
+            .ToArray();
+        var underscore = Assert.Single(hits, hit => (hit.GetProperty("title").GetString() ?? "").EndsWith("Repro.Sample_A", StringComparison.Ordinal));
+        var dotted = Assert.Single(hits, hit => (hit.GetProperty("title").GetString() ?? "").EndsWith("Repro.Sample.A", StringComparison.Ordinal));
+        Assert.NotEqual(underscore.GetProperty("id").GetString(), dotted.GetProperty("id").GetString());
     }
 
     public static TheoryData<string, string> IncompatibleDuplicateDeclarations => new()
@@ -346,7 +356,7 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
         Assert.Equal(expectedSourceBlobSha, actual.SourceBlobSha);
     }
 
-    private static void AssertSearchHitCount(CliResult result, string id, string type, int expectedCount)
+    private static void AssertSearchHitCount(CliResult result, string symbol, string type, int expectedCount)
     {
         Assert.True(
             result.ExitCode == 0,
@@ -355,12 +365,12 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
         var hits = document.RootElement
             .GetProperty("results")
             .EnumerateArray()
-            .Where(hit => hit.GetProperty("id").GetString() == id && hit.GetProperty("type").GetString() == type)
+            .Where(hit => hit.GetProperty("type").GetString() == type && Names(hit, symbol, type))
             .ToArray();
         Assert.Equal(expectedCount, hits.Length);
     }
 
-    private static void AssertSearchHit(CliResult result, string id, string type, string sourcePath)
+    private static void AssertSearchHit(CliResult result, string symbol, string type, string sourcePath)
     {
         Assert.True(
             result.ExitCode == 0,
@@ -368,9 +378,22 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
         using var document = JsonDocument.Parse(result.StandardOutput);
         Assert.Contains(
             document.RootElement.GetProperty("results").EnumerateArray(),
-            hit => hit.GetProperty("id").GetString() == id
-                && hit.GetProperty("type").GetString() == type
-                && hit.GetProperty("source_path").GetString() == sourcePath);
+            hit => hit.GetProperty("type").GetString() == type
+                && hit.GetProperty("source_path").GetString() == sourcePath
+                && Names(hit, symbol, type));
+    }
+
+    private static bool Names(JsonElement hit, string symbol, string type)
+    {
+        var title = hit.GetProperty("title").GetString();
+        if (title is null)
+        {
+            return false;
+        }
+
+        return type == "symbol"
+            ? title.EndsWith(symbol, StringComparison.Ordinal)
+            : title.Contains(symbol, StringComparison.Ordinal);
     }
 
     private static IReadOnlyList<DeclarationProvenance> ReadDeclarations(string databasePath)

@@ -168,11 +168,12 @@ internal static class CSharpMemoryExtractor
 
     private static IEnumerable<EventRecordDraft> ExtractEvents(string path, string text, IReadOnlyList<CSharpSymbol> methods)
     {
-        foreach (Match match in RequiresSymbolRegex.Matches(text))
+        var matches = RequiresSymbolRegex.Matches(text);
+        for (var ordinal = 0; ordinal < matches.Count; ordinal++)
         {
-            var symbol = match.Groups["symbol"].Value;
+            var symbol = matches[ordinal].Groups["symbol"].Value;
             yield return new EventRecordDraft(
-                $"event.test-symbol-reference.{ProjectMemoryIndexer.Slug(symbol)}",
+                ProjectMemoryIndexer.TestSymbolReferenceEventId(symbol, path, ordinal),
                 "test_symbol_reference",
                 symbol,
                 $"requires_symbol={symbol}");
@@ -192,7 +193,7 @@ internal static class CSharpMemoryExtractor
             }
 
             yield return new EventRecordDraft(
-                $"event.test-method.{ProjectMemoryIndexer.Slug(method.FullName)}",
+                $"event.test-method.{ProjectMemoryIndexer.SymbolKey(method.FullName)}",
                 "test_method",
                 method.FullName,
                 $"test_method {method.FullName} observed_in {path}");
@@ -426,7 +427,18 @@ internal static class CSharpMemoryExtractor
 
     private static string ExtractParameterTypeKey(string parameter)
     {
-        parameter = Regex.Replace(parameter, @"\[[^\]]+\]", " ");
+        while (parameter.TrimStart().StartsWith('['))
+        {
+            parameter = parameter.TrimStart();
+            var end = parameter.IndexOf(']');
+            if (end < 0)
+            {
+                break;
+            }
+
+            parameter = parameter[(end + 1)..];
+        }
+
         var equalsIndex = parameter.IndexOf('=');
         if (equalsIndex >= 0)
         {
@@ -443,8 +455,7 @@ internal static class CSharpMemoryExtractor
         }
 
         var typeTokens = tokens.Length == 1 ? tokens : tokens[..^1];
-        var typeName = string.Concat(typeTokens);
-        return ProjectMemoryIndexer.Slug(typeName);
+        return string.Concat(typeTokens);
     }
 
     private static IEnumerable<string> SplitLines(string text)

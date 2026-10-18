@@ -102,8 +102,8 @@ public sealed class MemoryPartialMethodTests
         fixture.Write("A.cs", Wrap("public static partial TItem Check<TItem>(ref int[] values, TItem item) where TItem : class;"));
         fixture.Write("B.cs", Wrap("public static partial TItem Check<TItem>(ref int[] data, TItem other) /* ; { */ where TItem : class => other;"));
         var snapshot = await fixture.Snapshot();
-        Assert.Single(snapshot.Symbols, s => s.Symbol == "Repro.Box`1.Check`1/int-titem");
-        Assert.Equal(2, snapshot.SymbolDeclarations.Count(d => d.Symbol == "Repro.Box`1.Check`1/int-titem"));
+        Assert.Single(snapshot.Symbols, s => s.Symbol == "Repro.Box`1.Check`1/int[]-TItem");
+        Assert.Equal(2, snapshot.SymbolDeclarations.Count(d => d.Symbol == "Repro.Box`1.Check`1/int[]-TItem"));
     }
 
     [Theory]
@@ -173,7 +173,7 @@ public sealed class MemoryPartialMethodTests
         Assert.Single(snapshot.Events, e => e.Symbol == "Repro.Box`1.Check/int");
         using var store = new MemoryStore(":memory:");
         store.Refresh(snapshot);
-        Assert.Contains(store.Search("Check").Results, h => h.Id == "symbol.repro-box-1-check-int");
+        Assert.Contains(store.Search("Check").Results, hit => hit.Type == "symbol" && hit.Title.EndsWith("Repro.Box`1.Check/int", StringComparison.Ordinal));
         Assert.Empty(store.StaleCheck(fixture.Root).Issues);
     }
 }

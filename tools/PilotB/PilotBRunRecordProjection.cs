@@ -2,30 +2,30 @@ namespace CryptoIndicatorApp.PilotB;
 
 public static class PilotBRunRecordProjection
 {
-    public static IReadOnlyList<PilotBMessage> ProjectCommentary(
+    public static IReadOnlyList<PilotBMessage> ProjectSemanticMessages(
         PilotBTranscriptParseResult transcript,
         IReadOnlyList<PilotBMessageKind> adjudicationKinds)
     {
         ArgumentNullException.ThrowIfNull(transcript);
         ArgumentNullException.ThrowIfNull(adjudicationKinds);
 
-        if (adjudicationKinds.Count != transcript.Commentary.Count)
+        if (adjudicationKinds.Count != transcript.SemanticMessages.Count)
         {
             throw new ArgumentException(
-                "One adjudication kind is required for each commentary message.",
+                "One adjudication kind is required for each semantic message.",
                 nameof(adjudicationKinds));
         }
 
-        var messages = new PilotBMessage[transcript.Commentary.Count];
+        var messages = new PilotBMessage[transcript.SemanticMessages.Count];
         for (var index = 0; index < messages.Length; index++)
         {
-            var commentary = transcript.Commentary[index];
+            var message = transcript.SemanticMessages[index];
             messages[index] = new PilotBMessage(
-                commentary.Sequence,
-                commentary.Text,
+                message.Sequence,
+                message.Text,
                 adjudicationKinds[index],
-                "item.completed",
-                commentary.Phase);
+                message.Phase,
+                "item.completed");
         }
 
         return messages;
