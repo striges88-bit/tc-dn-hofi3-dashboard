@@ -20,7 +20,7 @@ public sealed class MemorySymbolIdentityTests
         Assert.Equal(2, snapshot.Relations.Count);
         using var store = new MemoryStore(":memory:");
         store.Refresh(snapshot);
-        Assert.Contains(store.Search("Invoice").Results, h => h.Id == "symbol.repro-invoice-1");
+        Assert.Contains(store.Search("Invoice").Results, h => h.Id == SymbolSearchId("Repro.Invoice`1"));
         Assert.Empty(store.StaleCheck(fixture.Root).Issues);
     }
 
@@ -68,7 +68,7 @@ public sealed class MemorySymbolIdentityTests
         Assert.Contains(snapshot.Events, e => e.EventType == "test_symbol_reference" && e.Symbol == "Repro.Box`2");
         using var store = new MemoryStore(":memory:");
         store.Refresh(snapshot);
-        Assert.Contains(store.Search("Box").Results, hit => hit.Id == "symbol.repro-box-1");
+        Assert.Contains(store.Search("Box").Results, hit => hit.Id == SymbolSearchId("Repro.Box`1"));
         Assert.Empty(store.StaleCheck(fixture.Root).Issues);
     }
 
@@ -85,7 +85,48 @@ public sealed class MemorySymbolIdentityTests
             }
             """);
         var snapshot = await fixture.Snapshot();
-        Assert.Contains(snapshot.Symbols, symbol => symbol.Symbol == "Repro.Box`1.M/Foo.Bar");
-        Assert.Contains(snapshot.Symbols, symbol => symbol.Symbol == "Repro.Box`1.M/Foo_Bar");
+        const string dotted = "Repro.Box`1.M/Foo.Bar";
+        const string underscored = "Repro.Box`1.M/Foo_Bar";
+        Assert.Contains(snapshot.Symbols, symbol => symbol.Symbol == dotted);
+        Assert.Contains(snapshot.Symbols, symbol => symbol.Symbol == underscored);
+        Assert.Contains(snapshot.Relations, relation => relation.Id == Owns("Repro.Box`1", dotted));
+        Assert.Contains(snapshot.Relations, relation => relation.Id == Owns("Repro.Box`1", underscored));
+        using var store = new MemoryStore(":memory:");
+        store.Refresh(snapshot);
+        var hits = store.Search("Foo").Results;
+        Assert.Contains(hits, hit => hit.Id == SymbolSearchId(dotted) && hit.Type == "symbol");
+        Assert.Contains(hits, hit => hit.Id == SymbolSearchId(underscored) && hit.Type == "symbol");
     }
+
+    [Fact]
+    public async Task SymbolsThatDifferOnlyByCaseStayDistinctAfterRefresh()
+    {
+        using var fixture = new SymbolProjectFixture();
+        fixture.Write("A.cs", """
+            namespace Repro;
+            public class Foo { }
+            public class foo { }
+            """);
+        var snapshot = await fixture.Snapshot();
+        const string upper = "Repro.Foo";
+        const string lower = "Repro.foo";
+        Assert.Contains(snapshot.Symbols, symbol => symbol.Symbol == upper);
+        Assert.Contains(snapshot.Symbols, symbol => symbol.Symbol == lower);
+        Assert.Contains(snapshot.Relations, relation => relation.Id == ModuleOwns(upper));
+        Assert.Contains(snapshot.Relations, relation => relation.Id == ModuleOwns(lower));
+        using var store = new MemoryStore(":memory:");
+        store.Refresh(snapshot);
+        var hits = store.Search("Foo").Results;
+        Assert.Contains(hits, hit => hit.Id == SymbolSearchId(upper) && hit.Type == "symbol");
+        Assert.Contains(hits, hit => hit.Id == SymbolSearchId(lower) && hit.Type == "symbol");
+    }
+
+    private static string SymbolSearchId(string fullName)
+        => $"symbol.{ProjectMemoryIndexer.SymbolKey(fullName)}";
+
+    private static string Owns(string ownerFullName, string ownedFullName)
+        => $"relation.{ProjectMemoryIndexer.SymbolKey(ownerFullName)}.owns.{ProjectMemoryIndexer.SymbolKey(ownedFullName)}";
+
+    private static string ModuleOwns(string ownedFullName)
+        => $"relation.{ProjectMemoryIndexer.Slug("module.Repro")}.owns.{ProjectMemoryIndexer.SymbolKey(ownedFullName)}";
 }

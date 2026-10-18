@@ -1,3 +1,4 @@
+using CryptoIndicatorApp.Memory;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
@@ -357,8 +358,8 @@ public sealed class MemoryCliTests
             .Where(id => id is not null && id.Contains("buildpoints", StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
-        Assert.Contains(symbols, id => id!.EndsWith("buildpoints-int", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(symbols, id => id!.EndsWith("buildpoints-int-int", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(symbols, id => id == $"symbol.{ProjectMemoryIndexer.SymbolKey("CryptoIndicatorApp.Desktop.Rendering.OverloadedChartGeometryBuilder.BuildPoints/int")}");
+        Assert.Contains(symbols, id => id == $"symbol.{ProjectMemoryIndexer.SymbolKey("CryptoIndicatorApp.Desktop.Rendering.OverloadedChartGeometryBuilder.BuildPoints/int-int")}");
     }
 
     [Fact]

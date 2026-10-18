@@ -1,3 +1,4 @@
+using CryptoIndicatorApp.Memory;
 using Xunit.Abstractions;
 using System.Security.Cryptography;
 using System.Text;
@@ -70,7 +71,7 @@ public sealed class MemoryIdentityCommittedTests(ITestOutputHelper output)
             Assert.True(search.ExitCode == 0, search.StandardError);
             using var result = JsonDocument.Parse(search.StandardOutput);
             Assert.Single(result.RootElement.GetProperty("results").EnumerateArray(),
-                h => h.GetProperty("id").GetString() == "symbol.repro-box-1-check-int");
+                h => h.GetProperty("id").GetString() == $"symbol.{ProjectMemoryIndexer.SymbolKey("Repro.Box`1.Check/int")}");
             var stale = fixture.RunMemoryCli("stale-check", "--json");
             Assert.True(stale.ExitCode == 0, stale.StandardError + stale.StandardOutput);
             using var staleJson = JsonDocument.Parse(stale.StandardOutput);

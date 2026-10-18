@@ -172,7 +172,7 @@ internal static class CSharpMemoryExtractor
         {
             var symbol = match.Groups["symbol"].Value;
             yield return new EventRecordDraft(
-                $"event.test-symbol-reference.{ProjectMemoryIndexer.Slug(symbol)}",
+                $"event.test-symbol-reference.{ProjectMemoryIndexer.SymbolKey(symbol)}",
                 "test_symbol_reference",
                 symbol,
                 $"requires_symbol={symbol}");
@@ -192,7 +192,7 @@ internal static class CSharpMemoryExtractor
             }
 
             yield return new EventRecordDraft(
-                $"event.test-method.{ProjectMemoryIndexer.Slug(method.FullName)}",
+                $"event.test-method.{ProjectMemoryIndexer.SymbolKey(method.FullName)}",
                 "test_method",
                 method.FullName,
                 $"test_method {method.FullName} observed_in {path}");

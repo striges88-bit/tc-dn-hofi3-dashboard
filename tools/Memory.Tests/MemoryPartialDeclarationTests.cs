@@ -1,3 +1,4 @@
+using CryptoIndicatorApp.Memory;
 using Xunit.Abstractions;
 using System.Security.Cryptography;
 using System.Text;
@@ -44,15 +45,15 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
             $"working-tree refresh failed with exit code {refresh.ExitCode}\nSTDOUT:\n{refresh.StandardOutput}\nSTDERR:\n{refresh.StandardError}");
 
         var logicalSymbolSearch = fixture.RunMemoryCli("search", "--query", "Repro.Sample", "--json");
-        AssertSearchHitCount(logicalSymbolSearch, "symbol.repro-sample", "symbol", 1);
+        AssertSearchHitCount(logicalSymbolSearch, SymbolSearchId("Repro.Sample"), "symbol", 1);
 
         var alphaSearch = fixture.RunMemoryCli("search", "--query", "Alpha", "--json");
-        AssertSearchHit(alphaSearch, "symbol.repro-sample-alpha-0", "symbol", "Repro/Sample.Alpha.Tests.cs");
-        AssertSearchHit(alphaSearch, "event.test-method.repro-sample-alpha-0", "event", "Repro/Sample.Alpha.Tests.cs");
+        AssertSearchHit(alphaSearch, SymbolSearchId("Repro.Sample.Alpha/0"), "symbol", "Repro/Sample.Alpha.Tests.cs");
+        AssertSearchHit(alphaSearch, TestMethodEventId("Repro.Sample.Alpha/0"), "event", "Repro/Sample.Alpha.Tests.cs");
 
         var betaSearch = fixture.RunMemoryCli("search", "--query", "Beta", "--json");
-        AssertSearchHit(betaSearch, "symbol.repro-sample-beta-0", "symbol", "Repro/Sample.Beta.Tests.cs");
-        AssertSearchHit(betaSearch, "event.test-method.repro-sample-beta-0", "event", "Repro/Sample.Beta.Tests.cs");
+        AssertSearchHit(betaSearch, SymbolSearchId("Repro.Sample.Beta/0"), "symbol", "Repro/Sample.Beta.Tests.cs");
+        AssertSearchHit(betaSearch, TestMethodEventId("Repro.Sample.Beta/0"), "event", "Repro/Sample.Beta.Tests.cs");
 
         var declarations = ReadDeclarations(fixture.DatabasePath);
         Assert.Equal(2, declarations.Count);
@@ -167,7 +168,7 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
         Assert.Equal(2, ReadDeclarations(fixture.DatabasePath, "Repro.Sample`1").Count);
 
         var search = fixture.RunMemoryCli("search", "--query", "Repro.Sample", "--json");
-        AssertSearchHitCount(search, "symbol.repro-sample-1", "symbol", 1);
+        AssertSearchHitCount(search, SymbolSearchId("Repro.Sample`1"), "symbol", 1);
     }
 
     [Fact]
@@ -184,8 +185,8 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
             $"distinct-arity refresh failed with exit code {refresh.ExitCode}\nSTDOUT:\n{refresh.StandardOutput}\nSTDERR:\n{refresh.StandardError}");
 
         var search = fixture.RunMemoryCli("search", "--query", "Repro.Sample", "--json");
-        AssertSearchHitCount(search, "symbol.repro-sample", "symbol", 1);
-        AssertSearchHitCount(search, "symbol.repro-sample-1", "symbol", 1);
+        AssertSearchHitCount(search, SymbolSearchId("Repro.Sample"), "symbol", 1);
+        AssertSearchHitCount(search, SymbolSearchId("Repro.Sample`1"), "symbol", 1);
     }
 
     [Theory]
@@ -203,7 +204,7 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void DistinctSymbolsWithCollidingSearchIdsAreStillRejected()
+    public void DistinctSymbolsWhoseSlugsMatchRefreshAsSeparateDocuments()
     {
         using var fixture = MemoryProjectFixture.Create(output);
         fixture.Write("CryptoIndicatorApp.sln", string.Empty);
@@ -211,8 +212,12 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
         fixture.Write("Second.cs", "namespace Repro.Sample;\npublic class A { }\n");
 
         var refresh = fixture.RunMemoryCli("refresh", "--json");
-        Assert.Equal(1, refresh.ExitCode);
-        Assert.Contains("Duplicate search document id 'symbol.repro-sample-a'", refresh.StandardError, StringComparison.Ordinal);
+        Assert.True(
+            refresh.ExitCode == 0,
+            $"slug-collision refresh failed with exit code {refresh.ExitCode}\nSTDOUT:\n{refresh.StandardOutput}\nSTDERR:\n{refresh.StandardError}");
+        var search = fixture.RunMemoryCli("search", "--query", "Sample", "--json");
+        AssertSearchHitCount(search, SymbolSearchId("Repro.Sample_A"), "symbol", 1);
+        AssertSearchHitCount(search, SymbolSearchId("Repro.Sample.A"), "symbol", 1);
     }
 
     public static TheoryData<string, string> IncompatibleDuplicateDeclarations => new()
@@ -326,6 +331,12 @@ public sealed class MemoryPartialDeclarationTests(ITestOutputHelper output)
         }
         public void WriteLine(string format, params object[] args) => WriteLine(string.Format(format, args));
     }
+
+    private static string SymbolSearchId(string fullName)
+        => $"symbol.{ProjectMemoryIndexer.SymbolKey(fullName)}";
+
+    private static string TestMethodEventId(string fullName)
+        => $"event.test-method.{ProjectMemoryIndexer.SymbolKey(fullName)}";
 
     private static void AssertDeclaration(
         DeclarationProvenance actual,
