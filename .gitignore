@@ -4,6 +4,9 @@ obj/
 TestResults/
 publish/
 
+# Dashboard verification proof. The skill keeps this across cleanup; git does not.
+.cursor/skills/verify-tc-dn-hofi3/evidence/
+
 # IDE and user-local files
 .vs/
 .vscode/
