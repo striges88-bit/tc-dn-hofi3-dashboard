@@ -55,10 +55,15 @@ public sealed class PilotBEvidenceBundlePublisherTests
 
         Assert.True(publisher.FailureObserved);
         Assert.Equal(PilotBEvidenceState.Unsealed, result.EvidenceState);
-        Assert.Null(result.RunValidity);
-        Assert.Null(result.Qualification);
+        Assert.Equal(PilotBRunnerStatus.Invalid, result.Status);
+        Assert.Equal(PilotBRunValidity.Valid, result.RunValidity);
+        Assert.NotNull(result.Qualification);
+        Assert.Equal(PilotBRunValidity.Valid, result.Qualification.Validity);
+        Assert.DoesNotContain("seal-publication-failed", result.Qualification.InvalidReasons);
+        Assert.DoesNotContain("evidence-unsealed", result.Qualification.InvalidReasons);
         Assert.Null(result.DeterministicFingerprint);
         Assert.False(result.IntegrityFacts.ArtifactComplete);
+        Assert.Contains("seal-publication-failed", result.InvalidReasons);
         Assert.Contains("evidence-unsealed", result.InvalidReasons);
     }
 
@@ -374,8 +379,11 @@ public sealed class PilotBEvidenceBundlePublisherTests
         var result = await new PilotBRunner(new TamperingPublisher()).RunAsync(fixture.CreateRequest());
 
         Assert.Equal(PilotBEvidenceState.Unsealed, result.EvidenceState);
-        Assert.Null(result.RunValidity);
-        Assert.Null(result.Qualification);
+        Assert.Equal(PilotBRunnerStatus.Invalid, result.Status);
+        Assert.Equal(PilotBRunValidity.Valid, result.RunValidity);
+        Assert.NotNull(result.Qualification);
+        Assert.Equal(PilotBRunValidity.Valid, result.Qualification.Validity);
+        Assert.DoesNotContain("evidence-unsealed", result.Qualification.InvalidReasons);
         Assert.Null(result.DeterministicFingerprint);
     }
 
