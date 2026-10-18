@@ -71,6 +71,20 @@ public sealed partial class PilotBScorerTests
         Assert.Equal(PilotBDecision.Pass, Score(records).Decision);
     }
 
+    [Fact]
+    public void Scorer_AcceptsFinalPhaseOnTheSemanticRecord()
+    {
+        var records = CreateBatch(10, 2).ToArray();
+        records[1] = records[1] with
+        {
+            Messages = [records[1].Messages[0] with { Phase = "final" }]
+        };
+
+        var result = Score(records);
+        Assert.Equal(PilotBDecision.Pass, result.Decision);
+        Assert.DoesNotContain("unsupported-primary-event", result.InvalidReasons);
+    }
+
     [Theory]
     [InlineData("root")]
     [InlineData("pairing")]

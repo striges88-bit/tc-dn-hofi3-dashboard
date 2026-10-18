@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CryptoIndicatorApp.PilotB;
 
 namespace CryptoIndicatorApp.PilotB.Tests;
@@ -154,17 +155,51 @@ public sealed class PilotBTranscriptParserTests
         var parsed = PilotBTranscriptParser.Parse(jsonl);
         var projected = PilotBRunRecordProjection.ProjectCommentary(
             parsed,
-            [PilotBMessageKind.Routine, PilotBMessageKind.Observable]);
+            [PilotBMessageKind.Routine, PilotBMessageKind.Observable, PilotBMessageKind.Routine]);
 
-        Assert.Equal([1, 2], projected.Select(message => message.Sequence));
-        Assert.Equal(["first  exact\nline", "second exact Ω"], projected.Select(message => message.Text));
-        Assert.Equal([PilotBMessageKind.Routine, PilotBMessageKind.Observable], projected.Select(message => message.Kind));
-        Assert.All(projected, message =>
+        Assert.Equal([1, 2, 3], projected.Select(message => message.Sequence));
+        Assert.Equal(
+            ["first  exact\nline", "second exact Ω", "final is retained elsewhere"],
+            projected.Select(message => message.Text));
+        Assert.Equal(
+            [PilotBMessageKind.Routine, PilotBMessageKind.Observable, PilotBMessageKind.Routine],
+            projected.Select(message => message.Kind));
+        Assert.Equal(["commentary", "commentary", "final"], projected.Select(message => message.Phase));
+        Assert.All(projected, message => Assert.Equal("item.completed", message.SourceEventType));
+
+        using var fingerprint = JsonDocument.Parse(PilotBRunFingerprintWriter.Write(new PilotBRunFingerprintInput(
+            new string('a', 64),
+            new string('b', 64),
+            new PilotBArmManifest(
+                "manifest-a",
+                "treatment",
+                "codex-1.2.3",
+                new string('c', 64),
+                "gpt-5.6-sol",
+                "max",
+                "native-windows",
+                "never",
+                @"C:\storage\a",
+                new string('d', 64),
+                new string('e', 64),
+                new string('f', 64),
+                MutableAuthenticationLanePresent: false),
+            parsed,
+            new string('1', 64),
+            new string('2', 64),
+            IsQualification: false,
+            new PilotBRunQualificationResult(PilotBRunValidity.Valid, []),
+            ExitCode: 0,
+            TimedOut: false)));
+        var fingerprintMessages = fingerprint.RootElement.GetProperty("semantic_transcript").GetProperty("messages");
+        Assert.Equal(projected.Count, fingerprintMessages.GetArrayLength());
+        for (var index = 0; index < projected.Count; index++)
         {
-            Assert.Equal("item.completed", message.SourceEventType);
-            Assert.Equal("commentary", message.Phase);
-        });
-        Assert.DoesNotContain(projected, message => message.Text.Contains("final", StringComparison.Ordinal));
+            var message = fingerprintMessages[index];
+            Assert.Equal(projected[index].Sequence, message.GetProperty("sequence").GetInt32());
+            Assert.Equal(projected[index].Text, message.GetProperty("text").GetString());
+            Assert.Equal(projected[index].Phase, message.GetProperty("phase").GetString());
+        }
     }
 
     [Theory]
