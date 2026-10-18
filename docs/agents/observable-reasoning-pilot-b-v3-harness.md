@@ -288,13 +288,13 @@ combinations are:
 
 | Evidence state | Run validity | Meaning |
 | --- | --- | --- |
-| `UNSEALED` | `null` | Publication/integrity incomplete; diagnostic only |
+| `UNSEALED` | computed validity | Publication/integrity incomplete; pre-seal qualification stays, fingerprint is null |
 | `SEALED` | `INVALID` | Complete evidence records an unusable run |
 | `SEALED` | `VALID` | Run may be projected into downstream scoring input |
 
-`UNSEALED + VALID` and `UNSEALED + INVALID` are invalid by construction. The
-runner stores no `IsScored` state; scoring eligibility is derived from sealed,
-valid, non-qualification evidence.
+An unsealed result may carry `VALID` or `INVALID` from the qualification the
+runner already computed. That result is not scoring input. Scoring eligibility
+stays sealed, valid, non-qualification evidence.
 
 ### Run qualification
 
@@ -326,8 +326,8 @@ those same bytes.
 
 Controlled malformed/partial/nonzero/timeout or drift outcomes may therefore
 be `SEALED + INVALID` when their evidence is fully captured and verified.
-Publication or verification failure is `UNSEALED + null` and has no trusted
-fingerprint.
+Publication or verification failure is `UNSEALED` with that computed
+qualification and has no trusted fingerprint.
 
 `metadata.json.prompt_sha256` and the semantic fingerprint retain the hash of
 the original exact prompt bytes supplied to the runner. The payload inventory
@@ -488,8 +488,8 @@ timeout cleanup keeps its token and secondary termination diagnostic.
 
 If the root exits while a descendant still holds a capture pipe, the drain
 deadline still applies. The existing root-based terminator cannot guarantee
-termination of an orphaned descendant: incomplete capture produces bounded
-`UNSEALED + null`, never a seal or trusted fingerprint. The regression test
+termination of an orphaned descendant: incomplete capture produces a bounded
+`UNSEALED` result with the computed qualification and no trusted fingerprint. The regression test
 explicitly owns final cleanup of that descendant. This is the existing
 termination-failure contract, not a process-containment guarantee.
 
@@ -523,7 +523,8 @@ cleanup for its observed PIDs.
 A runner-controlled timeout is a normal failure fact. The runner terminates the
 owned process and, when capture and publication can complete, returns
 `SEALED + INVALID`. If process termination or publication cannot establish a
-closed immutable artifact set, the result is `UNSEALED + null`. Issue #48 does
+closed immutable artifact set, the result is `UNSEALED` with the computed
+qualification and no fingerprint. Issue #48 does
 not change that existing classification; the expanded controlled-invalid
 matrix remains Issue #49.
 
@@ -607,7 +608,8 @@ Reserved temp/final seal collisions are handled by those native
 create-new/rename operations, while any other undeclared pre-seal entry fails
 before a temporary seal is created. The runner still returns a fingerprint
 only after a separate `PilotBEvidenceBundleVerifier` pass; injected publication
-failure or post-publication tamper returns `UNSEALED + null`.
+failure or post-publication tamper returns `UNSEALED` with the computed
+qualification and a null fingerprint.
 
 The regression matrix must retain all existing tests and cover:
 

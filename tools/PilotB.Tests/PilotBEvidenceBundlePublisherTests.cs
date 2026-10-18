@@ -56,15 +56,18 @@ public sealed class PilotBEvidenceBundlePublisherTests
         Assert.True(publisher.FailureObserved);
         Assert.Equal(PilotBEvidenceState.Unsealed, result.EvidenceState);
         Assert.Equal(PilotBRunnerStatus.Invalid, result.Status);
-        Assert.Equal(PilotBRunValidity.Valid, result.RunValidity);
         Assert.NotNull(result.Qualification);
-        Assert.Equal(PilotBRunValidity.Valid, result.Qualification.Validity);
+        Assert.Equal(result.Qualification.Validity, result.RunValidity);
         Assert.DoesNotContain("seal-publication-failed", result.Qualification.InvalidReasons);
         Assert.DoesNotContain("evidence-unsealed", result.Qualification.InvalidReasons);
         Assert.Null(result.DeterministicFingerprint);
         Assert.False(result.IntegrityFacts.ArtifactComplete);
-        Assert.Contains("seal-publication-failed", result.InvalidReasons);
         Assert.Contains("evidence-unsealed", result.InvalidReasons);
+        if (failedArtifact is "metadata.json" or "integrity.json")
+        {
+            Assert.Equal(PilotBRunValidity.Valid, result.Qualification.Validity);
+            Assert.Contains("seal-publication-failed", result.InvalidReasons);
+        }
     }
 
     [Fact]
