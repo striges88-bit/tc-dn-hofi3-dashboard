@@ -1,39 +1,24 @@
-# Architecture
+# Архитектура
 
-The application uses a layered single-process WPF architecture:
+Четыре слоя C4 для TC-DN-HOFI3. Публичные типы читай в коде. Здесь только то, чего из одного открытого файла не видно.
 
-```text
-CryptoIndicatorApp.Desktop
-  -> CryptoIndicatorApp.Application
-  -> CryptoIndicatorApp.Domain
+## Контекст
 
-CryptoIndicatorApp.Desktop
-  -> CryptoIndicatorApp.Infrastructure
-```
+Оператор смотрит один инструмент USDS-M. Система считает TC-DN-HOFI3 и заявки не ставит. Снаружи публичные REST и WebSocket Binance, плюс локальный JSONL. `tools/Memory` и `tools/PilotB` к этой системе не относятся.
 
-`Application` depends on `Domain` only. `Infrastructure` is composed from the desktop boundary so Binance DTOs, JSONL storage details, and third-party client APIs do not leak into the indicator engine.
+## Контейнеры
 
-## Layers
+Процесс окна `CryptoIndicatorApp.Desktop` собран на `net8.0-windows`. Процесс `tools/LiveDryRun` собран на `net8.0` и гоняет тот же пайплайн. Domain, Application и Infrastructure это библиотеки, не процессы.
 
-- `Domain`: project-owned market events, local order book sequencing, TC-DN-HOFI3 calculation, rolling statistics, health flags, and context calculators.
-- `Application`: live/replay sessions, event pipeline orchestration, recording coordination, chart buffers, and context refresh sessions.
-- `Infrastructure`: Binance USDS-M Futures adapters, REST snapshot/resync, WebSocket stream mapping, JSONL read/write, and external payload boundaries.
-- `Desktop`: WPF views, ViewModels, configuration binding, user-facing error/status text, and composition of concrete adapters.
+## Компоненты
 
-## Data Flow
+Сборка адаптеров лежит в `CryptoIndicatorApp.Infrastructure/Composition`. Её вызывают и окно, и LiveDryRun. Сессии и `IndicatorPipeline` живут в Application. `TcDnHofi3Engine` и `LocalOrderBook` живут в Domain. `JsonlMarketEventStore` пишет и читает JSONL. `BinanceNetUsdFuturesMarketDataClient` ходит в Binance. `ContextModuleSession` работает только в live. `DashboardViewModel` есть только в окне.
 
-Live and replay modes feed the same internal event types into the same pipeline:
+Окно по-прежнему само создаёт клиент для списка символов. Этот вызов не идёт через `Composition`.
 
-```text
-Live Binance streams -> Infrastructure mapping -> Application pipeline -> Domain engine -> Desktop state
-JSONL replay         -> Infrastructure mapping -> Application pipeline -> Domain engine -> Desktop state
-```
+## Код
 
-This keeps live behavior reproducible through recorded JSONL files.
-
-## Boundaries
-
-- Do not add REST calls to the hot indicator path.
-- Do not reference `Infrastructure` from `Application`.
-- Do not expose Binance client DTOs to `Domain`.
-- Keep generated memory/graph exports outside Git until their schema is approved.
+- Application зависит только от Domain. Do not reference `Infrastructure` from `Application`. Обратная ссылка есть. Infrastructure ссылается на Application, потому что адаптеры реализуют порты Application.
+- Do not expose Binance DTOs to Domain. Пакет `Binance.Net` закрыт у Infrastructure через `PrivateAssets` со значением `compile`. Окно против типов клиента не компилируется. Сборка окна по-прежнему копирует `Binance.Net.dll` в выход.
+- Конверт JSONL приватный внутри `JsonlMarketEventStore`. Схема 1. Снаружи ходят доменные события.
+- Поля доменных событий с биржевыми идентификаторами являются контрактом записи JSONL. Вместе со схемой их не вычищать.

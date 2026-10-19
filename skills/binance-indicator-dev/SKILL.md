@@ -11,11 +11,7 @@ Use this skill to work safely inside the TC-DN-HOFI3 project. Keep the repositor
 
 ## Start Here
 
-1. Read `AGENTS.md` first and follow it when it conflicts with generic guidance.
-2. Check `tasks/todo.md` for the active plan and update checkboxes for non-trivial work.
-3. Check `tasks/lessons.md` for feedback-driven rules before repeating a risky pattern.
-4. Use source priority from `docs/memory/contract.md`: current code/tests/config first, then `AGENTS.md`, ADRs, formula docs, human memory docs, generated memory, and external stores last.
-5. If a fact may have changed, inspect the source instead of relying on chat memory.
+Открой нужную строку `docs/index.md`.
 
 ## Project Boundaries
 
@@ -27,7 +23,7 @@ Use this skill to work safely inside the TC-DN-HOFI3 project. Keep the repositor
 ## Architecture Rules
 
 - Preserve layers: `Domain`, `Application`, `Infrastructure`, `Desktop`, and tests.
-- Keep `Application` dependent on `Domain` only. Compose `Infrastructure` from `Desktop` or another outer boundary.
+- Keep `Application` dependent on `Domain` only. Infrastructure references Application and hosts the port adapters in `Composition`. Desktop and `tools/LiveDryRun` call that composition.
 - Keep Binance DTOs and third-party client models out of `Domain` and the indicator engine.
 - Avoid global state, service locators, static mutable coupling, generic dumping-ground folders, and broad abstractions that do not protect a concrete boundary.
 - Keep non-generated source files near or below 500 lines when touching them; extract focused code instead of growing already-large files.
@@ -63,12 +59,9 @@ Use this skill to work safely inside the TC-DN-HOFI3 project. Keep the repositor
 ## Verification
 
 - Before claiming completion, run the narrowest meaningful tests and report anything not verified.
-- For shared/high-risk changes, run the relevant project tests and build the solution with the project-local SDK when available: `.\.dotnet\dotnet.exe`.
-- Useful commands:
-  - `.\.dotnet\dotnet.exe test CryptoIndicatorApp.sln --no-restore`
-  - `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore`
-  - `.\.dotnet\dotnet.exe publish CryptoIndicatorApp.Desktop\CryptoIndicatorApp.Desktop.csproj -c Release -o publish\desktop --no-restore`
-  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh.ps1`
+- The solution check for a human is the command in `README.md`.
+- Publish the window with `dotnet publish CryptoIndicatorApp.Desktop\CryptoIndicatorApp.Desktop.csproj -c Release -o publish\desktop`.
+- Refresh project memory with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh.ps1`.
 
 ## Continuity And Memory
 
