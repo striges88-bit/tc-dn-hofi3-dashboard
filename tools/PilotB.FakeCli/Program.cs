@@ -51,15 +51,15 @@ switch (prompt)
         var childMarker = GetMarkerPath(".pilot-b-fake-child-ready");
         await WriteProcessMarkerAsync(GetMarkerPath(".pilot-b-fake-parent-ready"));
         using (var child = new Process
-               {
-                   StartInfo = new ProcessStartInfo
-                   {
-                       FileName = Environment.ProcessPath
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = Environment.ProcessPath
                            ?? throw new InvalidOperationException("Cannot resolve the fake CLI process path."),
-                       UseShellExecute = false,
-                       CreateNoWindow = true
-                   }
-               })
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }
+        })
         {
             child.StartInfo.ArgumentList.Add("--pilot-b-fake-child");
             child.StartInfo.ArgumentList.Add(childMarker);
@@ -75,15 +75,15 @@ switch (prompt)
     case "pilot-b.fake.parent-exit-child-holds-pipe":
         var parentExitChildMarker = GetMarkerPath(".pilot-b-fake-parent-exit-child-ready");
         using (var child = new Process
-               {
-                   StartInfo = new ProcessStartInfo
-                   {
-                       FileName = Environment.ProcessPath
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = Environment.ProcessPath
                            ?? throw new InvalidOperationException("Cannot resolve the fake CLI process path."),
-                       UseShellExecute = false,
-                       CreateNoWindow = true
-                   }
-               })
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }
+        })
         {
             child.StartInfo.ArgumentList.Add("--pilot-b-fake-child-holds-pipe");
             child.StartInfo.ArgumentList.Add(parentExitChildMarker);
