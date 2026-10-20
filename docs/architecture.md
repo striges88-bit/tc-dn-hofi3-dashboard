@@ -2,7 +2,7 @@
 
 Карта C4 для TC-DN-HOFI3 в том виде, в каком она собрана сейчас. Публичные типы читай в коде. Здесь связи, которых не видно из одного файла.
 
-Решение 2026-05-28: один процесс WPF на .NET 8. Application зависит только от Domain. Desktop собирает Infrastructure. Текст: [checkpoint](thread-checkpoints-2026-10-02.md#approved-product-and-architecture). Рядом с окном есть консольный `tools/LiveDryRun`: тот же пайплайн, отдельные копии адаптеров.
+Решение 2026-05-28 оставило один процесс WPF на .NET 8 и запрет ссылки Application на Infrastructure. Сборку адаптеров внешним хостом заменило [решение 0009](decisions/0009-infrastructure-references-application.md): адаптеры портов лежат в `CryptoIndicatorApp.Infrastructure/Composition`, поэтому Infrastructure ссылается на Application. Application по-прежнему не ссылается на Infrastructure. Окно и `tools/LiveDryRun` вызывают эту общую сборку.
 
 ## Контекст
 
@@ -22,7 +22,7 @@ C4Context
 
 ## Контейнеры
 
-Два процесса гоняют один индикаторный пайплайн. Domain, Application и Infrastructure — библиотеки внутри этих процессов, не отдельные сервисы.
+Два процесса гоняют один индикаторный пайплайн и вызывают одни и те же адаптеры. Domain, Application и Infrastructure — библиотеки внутри этих процессов, не отдельные сервисы.
 
 ```mermaid
 C4Container
@@ -31,8 +31,8 @@ C4Container
     System_Ext(binance, "Binance USDS-M", "Публичные REST и WebSocket")
     System_Ext(jsonl, "Файл JSONL", "Сырые события, схема 1")
     System_Boundary(hosts, "Дашборд") {
-        Container(desktop, "Desktop", "WPF, net8.0-windows", "Окно. Адаптеры в Desktop/Composition")
-        Container(dryrun, "LiveDryRun", "консоль, net8.0", "Тот же пайплайн без окна. Свои адаптеры в Program.cs")
+        Container(desktop, "Desktop", "WPF, net8.0-windows", "Окно. Вызывает Infrastructure/Composition")
+        Container(dryrun, "LiveDryRun", "консоль, net8.0", "Тот же пайплайн и те же адаптеры")
     }
     Rel(operator, desktop, "Старт, стоп, символ, график")
     Rel(desktop, binance, "Live и список символов")
@@ -45,7 +45,7 @@ C4Container
 
 ## Компоненты
 
-Стрелка на схеме — прямая `ProjectReference`. Application не ссылается на Infrastructure. Infrastructure не ссылается на Application: у него в проекте только Domain.
+Стрелка на схеме — прямая `ProjectReference`. Application не ссылается на Infrastructure. Infrastructure ссылается на Application.
 
 ```mermaid
 flowchart LR
@@ -54,6 +54,7 @@ flowchart LR
     desktop --> domain["Domain"]
     dryrun["LiveDryRun"] --> application
     dryrun --> infrastructure
+    infrastructure --> application
     application --> domain
     infrastructure --> domain
 ```
@@ -63,24 +64,23 @@ C4Component
     title Компоненты окна Desktop
     Container_Boundary(desktop, "CryptoIndicatorApp.Desktop") {
         Component(view, "ViewModels и WPF", "DashboardViewModel", "Экран оператора")
-        Component(composition, "Desktop/Composition", "C#", "Адаптеры портов Application")
+        Component(composition, "Infrastructure/Composition", "C#", "Общие адаптеры портов Application")
         Component(sessions, "Application", "Sessions, IndicatorPipeline", "Live, replay и контекст")
         Component(engine, "Domain", "TcDnHofi3Engine, LocalOrderBook", "Формула и книга")
         Component(binance, "Infrastructure/Binance", "BinanceNetUsdFuturesMarketDataClient", "REST и WebSocket")
         Component(jsonl, "Infrastructure/Jsonl", "JsonlMarketEventStore", "Чтение и запись JSONL")
     }
     Rel(view, sessions, "Запускает сессию")
+    Rel(view, composition, "Вызывает адаптеры")
     Rel(composition, sessions, "Реализует порты")
     Rel(composition, binance, "Live и контекст")
     Rel(composition, jsonl, "Запись и replay")
     Rel(sessions, engine, "События в формулу")
 ```
 
-В `CryptoIndicatorApp.Desktop/Composition` лежат `BinanceLiveMarketEventSource`, `BinanceContextDataSource`, `JsonlMarketEventRecorder`, `JsonlMarketEventSource` и `BinanceProxyOptionsMapper`.
+В `CryptoIndicatorApp.Infrastructure/Composition` лежат `BinanceLiveMarketEventSource`, `BinanceContextDataSource`, `JsonlMarketEventRecorder` и `JsonlMarketEventSource`. Их вызывают и окно, и `tools/LiveDryRun`. `BinanceProxyOptionsMapper` остаётся в `Desktop/Composition`.
 
-У `tools/LiveDryRun` общего проекта адаптеров нет. `Program.cs` держит свои `LiveSourceAdapter`, `JsonlRecorderAdapter`, `JsonlSourceAdapter` и `ContextSmokeDataSource`. Они вызывают те же типы Infrastructure и те же сессии Application.
-
-Список символов окно собирает само: `MainWindow` создаёт `BinanceNetUsdFuturesMarketDataClient` напрямую, не через `Desktop/Composition`.
+Список символов окно собирает само: `MainWindow` создаёт `BinanceNetUsdFuturesMarketDataClient` напрямую, не через `Composition`.
 
 ## Поток
 
@@ -98,7 +98,10 @@ Live и replay подают одни и те же внутренние собы�
 ## Границы
 
 - Не вызывать REST на горячем пути расчёта глубины и сделок. Снимок книги и ресинк — только для сборки локальной книги.
-- Do not reference `Infrastructure` from `Application`. Адаптеры JSONL и Binance собираются в Desktop или в другом внешнем хосте.
-- Do not expose Binance DTOs to Domain. Пакет `Binance.Net` подключён в Infrastructure и транзитивно виден проектам, которые на него ссылаются.
+- Do not reference `Infrastructure` from `Application`.
+- Do not expose Binance DTOs to Domain.
+- Infrastructure ссылается на Application, потому что адаптеры реализуют порты Application. Это [решение 0009](decisions/0009-infrastructure-references-application.md).
+- Пакет `Binance.Net` закрыт у Infrastructure через `PrivateAssets` со значением `compile`: хост против типов клиента не компилируется. Сборка по-прежнему копирует `Binance.Net.dll`.
+- `System.Text.Json` и `System.Threading.Channels` подключены в Infrastructure явно, версия `10.0.1`, как у `CryptoExchange.Net` 11.1.0. Иначе хост на `net8.0` собирается против сборок 8.0 из общего фреймворка и конфликтует с 10.0.
 - Конверт JSONL приватный внутри `JsonlMarketEventStore`. Схема 1. Снаружи ходят доменные события, включая биржевые идентификаторы обновлений и сделок.
 - Сгенерированные экспорты памяти и графа не коммитить, пока их схема не одобрена.

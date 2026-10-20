@@ -19,10 +19,10 @@ Agent map: [docs/index.md](docs/index.md). Layer map: [docs/architecture.md](doc
 
 - `CryptoIndicatorApp.Domain/`: market events, order book, indicator math, context calculators.
 - `CryptoIndicatorApp.Application/`: live/replay orchestration, chart buffers, context sessions.
-- `CryptoIndicatorApp.Infrastructure/`: Binance adapters, JSONL reader/writer, external data mapping.
-- `CryptoIndicatorApp.Desktop/`: WPF UI, configuration binding, desktop composition.
+- `CryptoIndicatorApp.Infrastructure/`: Binance adapters, JSONL reader/writer, and the shared port adapters in `Composition`. This project references Application.
+- `CryptoIndicatorApp.Desktop/`: WPF UI and configuration binding. It calls `Infrastructure/Composition` instead of owning those adapters.
 - `*.Tests/`: deterministic unit and boundary tests.
-- `tools/`: non-GUI utilities such as live dry-run/replay checks.
+- `tools/`: non-GUI utilities. `tools/LiveDryRun` calls the same `Infrastructure/Composition` adapters as the window.
 - `docs/`: durable project knowledge and architecture decisions.
 - `tasks/`: working todo/results log and lessons learned.
 - `recordings/`: local JSONL recordings; recording data is intentionally ignored by Git.

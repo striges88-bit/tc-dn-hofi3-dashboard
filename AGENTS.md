@@ -14,7 +14,7 @@
 
 - Это аналитика. Автоматическая торговля, выставление заявок и исполнение портфельного риска не добавлять без отдельного одобренного дизайна.
 - Формулу TC-DN-HOFI3, пороги, фильтры и шаг расчёта не менять без явного одобрения.
-- Слои: Domain, Application, Infrastructure, Desktop. Application зависит только от Domain. Desktop собирает Infrastructure. Границы: [`docs/architecture.md`](docs/architecture.md).
+- Слои: Domain, Application, Infrastructure, Desktop. Application зависит только от Domain и не ссылается на Infrastructure. Infrastructure ссылается на Application: адаптеры портов лежат в `Composition`, их вызывают Desktop и `tools/LiveDryRun`. Это [решение 0009](docs/decisions/0009-infrastructure-references-application.md). Границы: [`docs/architecture.md`](docs/architecture.md).
 - Live и replay подают одни и те же внутренние события в один индикаторный пайплайн.
 
 ## Проверка

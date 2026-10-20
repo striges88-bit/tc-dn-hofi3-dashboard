@@ -16,7 +16,7 @@
 ## Approved Product And Architecture
 
 - Windows C#/WPF, .NET 8, single-process layered option A; not Electron, services, or .NET 10.
-- Replace broad Core with Domain + Application. Desktop composes Infrastructure. Application references Domain only; this later explicit correction supersedes the original Application -> Infrastructure reference.
+- Replace broad Core with Domain + Application. Desktop composes Infrastructure. Application references Domain only; this later explicit correction supersedes the original Application -> Infrastructure reference. Superseded on 2026-10-20 for adapter placement only: Infrastructure references Application and hosts the port adapters. History of this sentence stays here. Current text: [0009](decisions/0009-infrastructure-references-application.md).
 - Domain has project-owned events, book sequencing, indicator math and health. Binance DTOs stay in Infrastructure; Application depends on source/recorder interfaces, not JsonlMarketEventStore.
 - Binance.Net is JKorf third-party software, not an official Binance SDK. Current pinned package is 12.12.0; historical proxy investigation used CryptoExchange.Net 11.1.0.
 - USDS-M Futures only; one selected symbol at a time, no multi-symbol scanning. Analytics/research hypothesis, not proven trading signal.

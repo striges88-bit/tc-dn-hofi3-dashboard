@@ -4,7 +4,7 @@
 
 | Дата | Решение | Почему | Статус |
 | --- | --- | --- | --- |
-| 2026-05-28 | [Один процесс WPF/.NET 8. Слои Domain и Application; Desktop собирает Infrastructure](../thread-checkpoints-2026-10-02.md#approved-product-and-architecture) | Индикатор не должен зависеть от Binance и от UI | действует |
+| 2026-05-28 | [Один процесс WPF/.NET 8. Слои Domain и Application; Desktop собирает Infrastructure](../thread-checkpoints-2026-10-02.md#approved-product-and-architecture) | Индикатор не должен зависеть от Binance и от UI | сборка адаптеров заменена [0009](0009-infrastructure-references-application.md). WPF, слои Domain и Application и запрет ссылки Application на Infrastructure действуют |
 | 2026-05-28 | [Один символ USDS-M, без торговли и без смены формулы без одобрения](../thread-checkpoints-2026-10-02.md#approved-product-and-architecture) | Это исследовательская аналитика, не сигнал к сделкам | действует |
 | 2026-05-28 | [JSONL сырых событий; live и replay идут в один пайплайн](../thread-checkpoints-2026-10-02.md#pipeline-and-recording) | Иначе live-поведение нельзя воспроизвести | действует |
 | 2026-05-28 | [Ликвидации и открытый интерес — медленный контекст, не вход сигнала](../thread-checkpoints-2026-10-02.md#independent-liquidation-and-oi-context) | Иначе медленные данные попадают в hot path | действует |
@@ -18,3 +18,4 @@
 | 2026-06-30 | [0007. Индекс памяти строится от коммита `HEAD`; hook пишет только маркер](0007-commit-addressed-memory-refresh.md) | Незакоммиченное дерево нельзя считать источником фактов | действует |
 | 2026-06-30 | [0008. Внешний retain выключен, пока нет политики отбора и удаления](0008-curated-retain-and-memory-lifecycle-policy.md) | Иначе в память попадают секреты и сырые записи | действует |
 | 2026-10-16 | [Режим дискуссии: правки, коммиты и push только после явного одобрения объёма](../../AGENTS.md) | Иначе агент меняет репозиторий сам | действует |
+| 2026-10-20 | [0009. Infrastructure ссылается на Application; адаптеры в Composition](0009-infrastructure-references-application.md) | Адаптеры реализуют порты Application. Application не ссылается на Infrastructure | действует |

@@ -1,16 +1,11 @@
-using CryptoIndicatorApp.Application.MarketData;
 using CryptoIndicatorApp.Application.Context;
 using CryptoIndicatorApp.Application.Sessions;
-using CryptoIndicatorApp.Domain.Context;
 using CryptoIndicatorApp.Domain.Indicators;
-using CryptoIndicatorApp.Domain.MarketData;
-using CryptoIndicatorApp.Infrastructure.Binance;
-using CryptoIndicatorApp.Infrastructure.Jsonl;
+using CryptoIndicatorApp.Infrastructure.Composition;
 using CryptoIndicatorApp.LiveDryRun;
 using System.Globalization;
 
 var options = DryRunOptions.Parse(args);
-var store = new JsonlMarketEventStore();
 
 if (options.ContextOnly)
 {
@@ -29,7 +24,7 @@ if (options.ReplayOnly)
     Console.WriteLine($"Symbol: {options.Symbol}");
     Console.WriteLine($"InputPath: {options.InputPath}");
 
-    var replayOnlyResult = await ReplayAsync(store, options.Symbol, options.InputPath);
+    var replayOnlyResult = await ReplayAsync(options.Symbol, options.InputPath);
     Console.WriteLine($"RecordedEvents: {replayOnlyResult.RecordedEventCount}");
     Console.WriteLine($"ReplaySamples: {replayOnlyResult.SampleCount}");
     Console.WriteLine($"LastReplayZOfi: {FormatDecimal(replayOnlyResult.LastSample?.ZOfi ?? 0m)}");
@@ -52,14 +47,8 @@ Console.WriteLine($"DurationSeconds: {options.Duration.TotalSeconds:0}");
 Console.WriteLine($"OutputPath: {options.OutputPath}");
 Console.WriteLine($"ProxyEnabled: {options.Proxy.Enabled}");
 
-using var client = new BinanceNetUsdFuturesMarketDataClient(new BinanceConnectionOptions
-{
-    Proxy = options.Proxy
-});
-
-var liveSource = new LiveSourceAdapter(
-    new BinanceUsdFuturesLiveMarketEventSource(options.Symbol, client));
-var recorder = new JsonlRecorderAdapter(store, options.OutputPath);
+using var liveSource = BinanceLiveMarketEventSource.Create(options.Symbol, options.Proxy);
+var recorder = JsonlMarketEventRecorder.Create(options.OutputPath);
 var liveSession = new LiveIndicatorSession(options.Symbol, liveSource, recorder);
 
 var liveSampleCount = 0;
@@ -80,7 +69,7 @@ using (var cancellation = new CancellationTokenSource(options.Duration))
     }
 }
 
-var replayResult = await ReplayAsync(store, options.Symbol, options.OutputPath);
+var replayResult = await ReplayAsync(options.Symbol, options.OutputPath);
 
 Console.WriteLine($"RecordedEvents: {replayResult.RecordedEventCount}");
 Console.WriteLine($"LiveSamples: {liveSampleCount}");
@@ -95,7 +84,7 @@ Console.WriteLine($"LastLiveTimestampUtc: {lastLiveSample?.Timestamp.UtcDateTime
 Console.WriteLine($"LastReplayTimestampUtc: {replayResult.LastSample?.Timestamp.UtcDateTime:o}");
 WriteReplaySummary(replayResult.Summary);
 
-static async Task<ReplayRunResult> ReplayAsync(JsonlMarketEventStore store, string symbol, string path)
+static async Task<ReplayRunResult> ReplayAsync(string symbol, string path)
 {
     var recordedEventCount = File.Exists(path)
         ? File.ReadLines(path).Count()
@@ -106,7 +95,7 @@ static async Task<ReplayRunResult> ReplayAsync(JsonlMarketEventStore store, stri
         throw new InvalidOperationException("Replay input contains zero JSONL events.");
     }
 
-    var replaySource = new JsonlSourceAdapter(store, path);
+    var replaySource = JsonlMarketEventSource.Create(path);
     var replaySession = new ReplayIndicatorSession(symbol, replaySource);
     var replaySampleCount = 0;
     IndicatorSample? lastReplaySample = null;
@@ -140,11 +129,7 @@ static async Task RunContextSmokeAsync(DryRunOptions options)
     Console.WriteLine($"OpenInterestHistoryLimit: {options.OpenInterestHistoryLimit}");
     Console.WriteLine($"ProxyEnabled: {options.Proxy.Enabled}");
 
-    using var client = new BinanceNetUsdFuturesMarketDataClient(new BinanceConnectionOptions
-    {
-        Proxy = options.Proxy
-    });
-    var source = new ContextSmokeDataSource(client);
+    using var source = BinanceContextDataSource.Create(options.Proxy);
     var session = new ContextModuleSession(
         options.Symbol,
         options.ContextFrame,
@@ -213,61 +198,6 @@ static string FormatDecimal(decimal value)
 static string FormatDouble(double value)
 {
     return value.ToString("0.###", CultureInfo.InvariantCulture);
-}
-
-sealed class LiveSourceAdapter(BinanceUsdFuturesLiveMarketEventSource source) : IMarketEventSource
-{
-    public IAsyncEnumerable<IMarketEvent> ReadAllAsync(CancellationToken cancellationToken = default)
-    {
-        return source.ReadAllAsync(cancellationToken);
-    }
-}
-
-sealed class JsonlRecorderAdapter(JsonlMarketEventStore store, string path) : IMarketEventRecorder
-{
-    public ValueTask AppendAsync(IMarketEvent marketEvent, CancellationToken cancellationToken = default)
-    {
-        return new ValueTask(store.AppendAsync(path, marketEvent, cancellationToken));
-    }
-}
-
-sealed class JsonlSourceAdapter(JsonlMarketEventStore store, string path) : IMarketEventSource
-{
-    public IAsyncEnumerable<IMarketEvent> ReadAllAsync(CancellationToken cancellationToken = default)
-    {
-        return store.ReadAsync(path, cancellationToken);
-    }
-}
-
-sealed class ContextSmokeDataSource(BinanceNetUsdFuturesMarketDataClient client) : IContextDataSource
-{
-    public bool LiquidationSubscriptionConnected { get; private set; }
-
-    public Task<IReadOnlyList<OpenInterestPoint>> GetOpenInterestHistoryAsync(
-        string symbol,
-        ContextFrame frame,
-        int limit,
-        CancellationToken cancellationToken = default)
-    {
-        return client.GetOpenInterestHistoryAsync(symbol, frame, limit, cancellationToken);
-    }
-
-    public async IAsyncEnumerable<LiquidationEvent> ReadLiquidationsAsync(
-        string symbol,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        var channel = System.Threading.Channels.Channel.CreateUnbounded<LiquidationEvent>();
-        await using var lease = await client.SubscribeLiquidationsAsync(
-            symbol,
-            item => channel.Writer.TryWrite(item),
-            cancellationToken);
-        LiquidationSubscriptionConnected = true;
-
-        await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken))
-        {
-            yield return item;
-        }
-    }
 }
 
 sealed record ReplayRunResult(

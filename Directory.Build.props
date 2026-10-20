@@ -8,6 +8,8 @@
     <AnalysisLevel>8.0</AnalysisLevel>
     <AnalysisMode>Default</AnalysisMode>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- TreatWarningsAsErrors does not promote MSB*. This does, including MSB3277. -->
+    <MSBuildTreatWarningsAsErrors>true</MSBuildTreatWarningsAsErrors>
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
     <!-- High and critical advisories fail the build. Low and moderate stay visible. -->

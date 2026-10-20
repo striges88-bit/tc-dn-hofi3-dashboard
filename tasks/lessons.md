@@ -8,7 +8,7 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 
 - When the session context approaches 50% full, stop at a clean handoff point for `/compact`; record completed verification, remaining work, and the next pending command before continuing substantial work.
 - When a WPF project references a layer named `Application`, fully qualify `System.Windows.Application` in `App.xaml.cs` because the project namespace can shadow the WPF type.
-- Keep the `Application` layer independent from concrete Infrastructure services such as `JsonlMarketEventStore`; expose source/recorder interfaces in Application and compose JSONL/Binance adapters only in Desktop or another outer layer.
+- Keep the `Application` layer independent from concrete Infrastructure services such as `JsonlMarketEventStore`. Expose source and recorder interfaces in Application. The port adapters live in `CryptoIndicatorApp.Infrastructure/Composition`, so Infrastructure references Application. Desktop and `tools/LiveDryRun` call that composition. ADR 0009 superseded the 2026-05-28 rule that an outer host alone composes those adapters.
 - After adding package references, run restore before `--no-restore` verification; otherwise compile errors can be caused by stale assets rather than source code.
 - Do not request or store Binance API keys for public market-data features; USDS-M depth snapshots, diff depth streams, and aggTrade streams are public.
 - Treat manual ticker refresh and proxy settings as outer infrastructure/config features, not as part of indicator formula or Application pipeline logic.
