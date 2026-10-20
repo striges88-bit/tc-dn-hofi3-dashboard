@@ -27,7 +27,7 @@ Use this skill to work safely inside the TC-DN-HOFI3 project. Keep the repositor
 ## Architecture Rules
 
 - Preserve layers: `Domain`, `Application`, `Infrastructure`, `Desktop`, and tests.
-- Keep `Application` dependent on `Domain` only. Infrastructure references Application and hosts the port adapters in `Composition`. Desktop and `tools/LiveDryRun` call that composition. This departs from the 2026-05-28 decision that an outer host composes the adapters and Infrastructure depends only on Domain.
+- Keep `Application` dependent on `Domain` only. Do not reference `Infrastructure` from `Application`. Infrastructure references Application and hosts the port adapters in `Composition`. Desktop and `tools/LiveDryRun` call that composition. This is ADR 0009. The 2026-05-28 outer-host placement is superseded.
 - Keep Binance DTOs and third-party client models out of `Domain` and the indicator engine.
 - Avoid global state, service locators, static mutable coupling, generic dumping-ground folders, and broad abstractions that do not protect a concrete boundary.
 - Keep non-generated source files near or below 500 lines when touching them; extract focused code instead of growing already-large files.

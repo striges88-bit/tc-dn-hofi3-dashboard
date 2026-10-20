@@ -1,8 +1,8 @@
 # Архитектура
 
-Карта C4 для TC-DN-HOFI3 после переноса адаптеров портов в Infrastructure. Публичные типы читай в коде. Здесь связи, которых не видно из одного файла.
+Карта C4 для TC-DN-HOFI3 в том виде, в каком она собрана сейчас. Публичные типы читай в коде. Здесь связи, которых не видно из одного файла.
 
-Решение 2026-05-28 оставляло сборку адаптеров внешнему хосту, а Infrastructure зависел только от Domain. Текст: [checkpoint](thread-checkpoints-2026-10-02.md#approved-product-and-architecture). Сейчас адаптеры одни на оба хоста и лежат в `CryptoIndicatorApp.Infrastructure/Composition`, поэтому Infrastructure ссылается на Application. Application по-прежнему не ссылается на Infrastructure. Отдельный проект композиции сохранил бы старое направление; его нет.
+Решение 2026-05-28 оставило один процесс WPF на .NET 8 и запрет ссылки Application на Infrastructure. Сборку адаптеров внешним хостом заменило [решение 0009](decisions/0009-infrastructure-references-application.md): адаптеры портов лежат в `CryptoIndicatorApp.Infrastructure/Composition`, поэтому Infrastructure ссылается на Application. Application по-прежнему не ссылается на Infrastructure. Окно и `tools/LiveDryRun` вызывают эту общую сборку.
 
 ## Контекст
 
@@ -41,9 +41,11 @@ C4Container
     Rel(dryrun, jsonl, "Запись и replay")
 ```
 
+`tools/LiveDryRun` гоняет replay там, где окно WPF не запускается. Ограничения Linux: [AGENTS.md](../AGENTS.md), раздел Cursor Cloud.
+
 ## Компоненты
 
-Стрелка на схеме — прямая `ProjectReference`. Новая стрелка: Infrastructure ссылается на Application. Обратной стрелки нет.
+Стрелка на схеме — прямая `ProjectReference`. Application не ссылается на Infrastructure. Infrastructure ссылается на Application.
 
 ```mermaid
 flowchart LR
@@ -76,7 +78,7 @@ C4Component
     Rel(sessions, engine, "События в формулу")
 ```
 
-В `CryptoIndicatorApp.Infrastructure/Composition` лежат `BinanceLiveMarketEventSource`, `BinanceContextDataSource`, `JsonlMarketEventRecorder` и `JsonlMarketEventSource`. Их вызывают и окно, и `tools/LiveDryRun`. `BinanceProxyOptionsMapper` остаётся в `Desktop/Composition`: настройки прокси окна по-прежнему переводятся там.
+В `CryptoIndicatorApp.Infrastructure/Composition` лежат `BinanceLiveMarketEventSource`, `BinanceContextDataSource`, `JsonlMarketEventRecorder` и `JsonlMarketEventSource`. Их вызывают и окно, и `tools/LiveDryRun`. `BinanceProxyOptionsMapper` остаётся в `Desktop/Composition`.
 
 Список символов окно собирает само: `MainWindow` создаёт `BinanceNetUsdFuturesMarketDataClient` напрямую, не через `Composition`.
 
@@ -98,7 +100,8 @@ Live и replay подают одни и те же внутренние собы�
 - Не вызывать REST на горячем пути расчёта глубины и сделок. Снимок книги и ресинк — только для сборки локальной книги.
 - Do not reference `Infrastructure` from `Application`.
 - Do not expose Binance DTOs to Domain.
-- Infrastructure ссылается на Application, потому что адаптеры реализуют порты Application. Это и есть отступление от решения 2026-05-28.
-- Не показывать DTO клиента Binance в Domain. Пакет `Binance.Net` закрыт у Infrastructure через `PrivateAssets` со значением `compile`: хост против типов клиента не компилируется. Сборка по-прежнему копирует `Binance.Net.dll`. Прямых пакетов `System.Text.Json` и `System.Threading.Channels` нет: эти API входят в `net8.0`, а `CryptoExchange.Net` 11.1.0 и так зависит от их сборок 10.0.1.
+- Infrastructure ссылается на Application, потому что адаптеры реализуют порты Application. Это [решение 0009](decisions/0009-infrastructure-references-application.md).
+- Пакет `Binance.Net` закрыт у Infrastructure через `PrivateAssets` со значением `compile`: хост против типов клиента не компилируется. Сборка по-прежнему копирует `Binance.Net.dll`.
+- `System.Text.Json` и `System.Threading.Channels` подключены в Infrastructure явно, версия `10.0.1`, как у `CryptoExchange.Net` 11.1.0. Иначе хост на `net8.0` собирается против сборок 8.0 из общего фреймворка и конфликтует с 10.0.
 - Конверт JSONL приватный внутри `JsonlMarketEventStore`. Схема 1. Снаружи ходят доменные события, включая биржевые идентификаторы обновлений и сделок.
 - Сгенерированные экспорты памяти и графа не коммитить, пока их схема не одобрена.
