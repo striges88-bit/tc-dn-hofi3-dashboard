@@ -32,3 +32,7 @@
 | На чём остановились | [`STATUS.md`](STATUS.md) |
 
 `docs/memory/` не открывать, если задача не про память. Перед push, PR или правкой ADR/формулы открыть строку Memory в индексе.
+
+## Cursor Cloud
+
+Облачный агент — Linux. `dotnet` в этом окружении выставляет `EnableWindowsTargeting=true`, иначе проекты `net8.0-windows` не восстанавливаются. Окно WPF и `CryptoIndicatorApp.Desktop.Tests` здесь не запускаются: рантайма `Microsoft.WindowsDesktop.App` для Linux нет. Живой Binance из этого региона отвечает `restricted location`; локальный replay идёт через `tools/LiveDryRun`. `powershell.exe` — это PowerShell 7. Скрипты памяти, которые вызывают `where.exe`, читают `LOCALAPPDATA` или строят Windows-URI, на Linux падают. Узкая проверка: `dotnet test` для Domain, Application и Memory, затем `dotnet run --project tools/LiveDryRun -- --symbol BTCUSDT --input <jsonl> --replay-only`.
