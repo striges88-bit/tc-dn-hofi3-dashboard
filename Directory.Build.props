@@ -3,7 +3,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <AnalysisLevel>latest</AnalysisLevel>
+    <!-- Pin to the net8.0 analyzer set. `latest` follows the host SDK, and the
+         Windows image's .NET 10 SDK turns on CA2024 for the JSONL reader. -->
+    <AnalysisLevel>8.0</AnalysisLevel>
     <AnalysisMode>Default</AnalysisMode>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <NuGetAudit>true</NuGetAudit>
