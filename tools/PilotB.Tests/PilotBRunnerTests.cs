@@ -54,7 +54,7 @@ public sealed class PilotBRunnerTests
         Assert.Equal(7, inventory.GetArrayLength());
         Assert.Equal(
             ["output.jsonl", "stderr.txt", "prompt.bin", "manifest.json", "pre-manifest.json", "post-manifest.json", "metadata.json"],
-            inventory.EnumerateArray().Select(entry => entry.GetProperty("path").GetString()).ToArray());
+            inventory.EnumerateArray().Select(entry => entry.GetProperty("path").GetString()));
         Assert.Equal(result.DeterministicFingerprint, root.GetProperty("semantic_fingerprint").GetString());
         Assert.Matches("^[0-9a-f]{64}$", result.DeterministicFingerprint);
         Assert.Equal(await File.ReadAllBytesAsync(fixture.ManifestPath), await File.ReadAllBytesAsync(result.Artifacts.ManifestPath));

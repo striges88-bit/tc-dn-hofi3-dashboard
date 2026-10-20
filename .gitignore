@@ -46,3 +46,8 @@ project-memory.sqlite
 .graphify/
 .mem0/
 .graphiti/
+
+# Local environment. .env.example stays tracked when it exists.
+.env
+.env.*
+!.env.example
