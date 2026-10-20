@@ -4,7 +4,7 @@ Windows WPF analytics application for the TC-DN-HOFI3 Binance USDS-M Futures ind
 
 The project is research and monitoring software. It does not place orders, manage positions, or provide automated trading execution.
 
-Agent map: [docs/index.md](docs/index.md).
+Agent map: [docs/index.md](docs/index.md). Layer map: [docs/architecture.md](docs/architecture.md).
 
 ## Current Scope
 
