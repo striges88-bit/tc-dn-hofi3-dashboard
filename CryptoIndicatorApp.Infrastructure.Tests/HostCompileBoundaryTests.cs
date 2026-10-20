@@ -23,6 +23,8 @@ public sealed class HostCompileBoundaryTests
             .Single(element => element.Attribute("Include")?.Value == "Binance.Net");
 
         Assert.Equal("compile", package.Element("PrivateAssets")?.Value);
+        Assert.DoesNotContain("System.Text.Json", PackageIncludes(infrastructure));
+        Assert.DoesNotContain("System.Threading.Channels", PackageIncludes(infrastructure));
     }
 
     private static XDocument LoadProject(string relativePath)

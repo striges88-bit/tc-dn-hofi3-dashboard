@@ -1,39 +1,104 @@
-# Architecture
+# Архитектура
 
-The application uses a layered single-process WPF architecture:
+Карта C4 для TC-DN-HOFI3 после переноса адаптеров портов в Infrastructure. Публичные типы читай в коде. Здесь связи, которых не видно из одного файла.
 
-```text
-CryptoIndicatorApp.Desktop
-  -> CryptoIndicatorApp.Application
-  -> CryptoIndicatorApp.Domain
+Решение 2026-05-28 оставляло сборку адаптеров внешнему хосту, а Infrastructure зависел только от Domain. Текст: [checkpoint](thread-checkpoints-2026-10-02.md#approved-product-and-architecture). Сейчас адаптеры одни на оба хоста и лежат в `CryptoIndicatorApp.Infrastructure/Composition`, поэтому Infrastructure ссылается на Application. Application по-прежнему не ссылается на Infrastructure. Отдельный проект композиции сохранил бы старое направление; его нет.
 
-CryptoIndicatorApp.Desktop
-  -> CryptoIndicatorApp.Infrastructure
+## Контекст
+
+Оператор смотрит один инструмент USDS-M. Система считает TC-DN-HOFI3 и заявки не ставит. Снаружи публичные REST и WebSocket Binance и локальный файл JSONL. `tools/Memory` и `tools/PilotB` к этой системе не относятся.
+
+```mermaid
+C4Context
+    title Контекст TC-DN-HOFI3
+    Person(operator, "Оператор", "Смотрит один инструмент USDS-M")
+    System(dashboard, "Дашборд TC-DN-HOFI3", "Считает индикатор. Заявки не ставит.")
+    System_Ext(binance, "Binance USDS-M", "Публичные REST и WebSocket")
+    System_Ext(jsonl, "Локальный JSONL", "Сырые рыночные события, схема 1")
+    Rel(operator, dashboard, "Смотрит график и статус")
+    Rel(dashboard, binance, "Читает книгу, сделки, OI и ликвидации")
+    Rel(dashboard, jsonl, "Пишет live и читает replay")
 ```
 
-`Application` depends on `Domain` only. `Infrastructure` is composed from the desktop boundary so Binance DTOs, JSONL storage details, and third-party client APIs do not leak into the indicator engine.
+## Контейнеры
 
-## Layers
+Два процесса гоняют один индикаторный пайплайн и вызывают одни и те же адаптеры. Domain, Application и Infrastructure — библиотеки внутри этих процессов, не отдельные сервисы.
 
-- `Domain`: project-owned market events, local order book sequencing, TC-DN-HOFI3 calculation, rolling statistics, health flags, and context calculators.
-- `Application`: live/replay sessions, event pipeline orchestration, recording coordination, chart buffers, and context refresh sessions.
-- `Infrastructure`: Binance USDS-M Futures adapters, REST snapshot/resync, WebSocket stream mapping, JSONL read/write, and external payload boundaries.
-- `Desktop`: WPF views, ViewModels, configuration binding, user-facing error/status text, and composition of concrete adapters.
-
-## Data Flow
-
-Live and replay modes feed the same internal event types into the same pipeline:
-
-```text
-Live Binance streams -> Infrastructure mapping -> Application pipeline -> Domain engine -> Desktop state
-JSONL replay         -> Infrastructure mapping -> Application pipeline -> Domain engine -> Desktop state
+```mermaid
+C4Container
+    title Контейнеры TC-DN-HOFI3
+    Person(operator, "Оператор", "Один инструмент USDS-M")
+    System_Ext(binance, "Binance USDS-M", "Публичные REST и WebSocket")
+    System_Ext(jsonl, "Файл JSONL", "Сырые события, схема 1")
+    System_Boundary(hosts, "Дашборд") {
+        Container(desktop, "Desktop", "WPF, net8.0-windows", "Окно. Вызывает Infrastructure/Composition")
+        Container(dryrun, "LiveDryRun", "консоль, net8.0", "Тот же пайплайн и те же адаптеры")
+    }
+    Rel(operator, desktop, "Старт, стоп, символ, график")
+    Rel(desktop, binance, "Live и список символов")
+    Rel(desktop, jsonl, "Запись и replay")
+    Rel(dryrun, binance, "Live dry-run и контекст")
+    Rel(dryrun, jsonl, "Запись и replay")
 ```
 
-This keeps live behavior reproducible through recorded JSONL files.
+## Компоненты
 
-## Boundaries
+Стрелка на схеме — прямая `ProjectReference`. Новая стрелка: Infrastructure ссылается на Application. Обратной стрелки нет.
 
-- Do not add REST calls to the hot indicator path.
+```mermaid
+flowchart LR
+    desktop["Desktop"] --> application["Application"]
+    desktop --> infrastructure["Infrastructure"]
+    desktop --> domain["Domain"]
+    dryrun["LiveDryRun"] --> application
+    dryrun --> infrastructure
+    infrastructure --> application
+    application --> domain
+    infrastructure --> domain
+```
+
+```mermaid
+C4Component
+    title Компоненты окна Desktop
+    Container_Boundary(desktop, "CryptoIndicatorApp.Desktop") {
+        Component(view, "ViewModels и WPF", "DashboardViewModel", "Экран оператора")
+        Component(composition, "Infrastructure/Composition", "C#", "Общие адаптеры портов Application")
+        Component(sessions, "Application", "Sessions, IndicatorPipeline", "Live, replay и контекст")
+        Component(engine, "Domain", "TcDnHofi3Engine, LocalOrderBook", "Формула и книга")
+        Component(binance, "Infrastructure/Binance", "BinanceNetUsdFuturesMarketDataClient", "REST и WebSocket")
+        Component(jsonl, "Infrastructure/Jsonl", "JsonlMarketEventStore", "Чтение и запись JSONL")
+    }
+    Rel(view, sessions, "Запускает сессию")
+    Rel(view, composition, "Вызывает адаптеры")
+    Rel(composition, sessions, "Реализует порты")
+    Rel(composition, binance, "Live и контекст")
+    Rel(composition, jsonl, "Запись и replay")
+    Rel(sessions, engine, "События в формулу")
+```
+
+В `CryptoIndicatorApp.Infrastructure/Composition` лежат `BinanceLiveMarketEventSource`, `BinanceContextDataSource`, `JsonlMarketEventRecorder` и `JsonlMarketEventSource`. Их вызывают и окно, и `tools/LiveDryRun`. `BinanceProxyOptionsMapper` остаётся в `Desktop/Composition`: настройки прокси окна по-прежнему переводятся там.
+
+Список символов окно собирает само: `MainWindow` создаёт `BinanceNetUsdFuturesMarketDataClient` напрямую, не через `Composition`.
+
+## Поток
+
+```mermaid
+flowchart LR
+    live["Live Binance"] --> map["Infrastructure"]
+    replay["JSONL replay"] --> map
+    map --> pipeline["Application pipeline"]
+    pipeline --> engine["Domain engine"]
+    engine --> state["Состояние окна или вывод LiveDryRun"]
+```
+
+Live и replay подают одни и те же внутренние события в один `IndicatorPipeline`. Контекст открытого интереса и ликвидаций идёт отдельной сессией `ContextModuleSession`, не через JSONL replay.
+
+## Границы
+
+- Не вызывать REST на горячем пути расчёта глубины и сделок. Снимок книги и ресинк — только для сборки локальной книги.
 - Do not reference `Infrastructure` from `Application`.
-- Do not expose Binance client DTOs to `Domain`.
-- Keep generated memory/graph exports outside Git until their schema is approved.
+- Do not expose Binance DTOs to Domain.
+- Infrastructure ссылается на Application, потому что адаптеры реализуют порты Application. Это и есть отступление от решения 2026-05-28.
+- Не показывать DTO клиента Binance в Domain. Пакет `Binance.Net` закрыт у Infrastructure через `PrivateAssets` со значением `compile`: хост против типов клиента не компилируется. Сборка по-прежнему копирует `Binance.Net.dll`. Прямых пакетов `System.Text.Json` и `System.Threading.Channels` нет: эти API входят в `net8.0`, а `CryptoExchange.Net` 11.1.0 и так зависит от их сборок 10.0.1.
+- Конверт JSONL приватный внутри `JsonlMarketEventStore`. Схема 1. Снаружи ходят доменные события, включая биржевые идентификаторы обновлений и сделок.
+- Сгенерированные экспорты памяти и графа не коммитить, пока их схема не одобрена.

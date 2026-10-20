@@ -1,3 +1,4 @@
+using CryptoIndicatorApp.Application.Context;
 using CryptoIndicatorApp.Application.MarketData;
 using CryptoIndicatorApp.Domain.Context;
 using CryptoIndicatorApp.Domain.MarketData;
@@ -72,6 +73,12 @@ public sealed class CompositionAdapterTests
 
         Assert.IsType<DepthSnapshotEvent>(events[0]);
         Assert.IsType<DepthUpdateEvent>(events[1]);
+    }
+
+    [Fact]
+    public void Binance_context_source_implements_application_boundary()
+    {
+        Assert.True(typeof(IContextDataSource).IsAssignableFrom(typeof(BinanceContextDataSource)));
     }
 
     [Fact]
