@@ -1,0 +1,31 @@
+# Matches the C# already in this repository.
+# 4-space indent, LF, UTF-8, Allman braces, file-scoped namespaces.
+# Do not set dotnet_sort_system_directives_first: either value makes
+# `dotnet format` reorder usings that are intentionally mixed.
+# using placement stays at none for the same reason; namespaces are already file-scoped.
+
+root = true
+
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.{csproj,props,targets,yml,yaml,json,md,sln}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_using_directive_placement = outside_namespace:none
