@@ -1,36 +1,29 @@
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using CryptoIndicatorApp.Application.Context;
+using CryptoIndicatorApp.Desktop.Configuration;
 using CryptoIndicatorApp.Domain.Context;
 using CryptoIndicatorApp.Infrastructure.Binance;
 
-namespace CryptoIndicatorApp.Infrastructure.Composition;
+namespace CryptoIndicatorApp.Desktop.Composition;
 
 public sealed class BinanceContextDataSource : IContextDataSource, IDisposable
 {
-    private readonly IBinanceUsdFuturesMarketDataClient _client;
-    private readonly IDisposable? _owned;
+    private readonly BinanceNetUsdFuturesMarketDataClient _client;
 
-    public BinanceContextDataSource(IBinanceUsdFuturesMarketDataClient client)
+    private BinanceContextDataSource(BinanceNetUsdFuturesMarketDataClient client)
     {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
+        _client = client;
     }
 
-    private BinanceContextDataSource(IBinanceUsdFuturesMarketDataClient client, IDisposable owned)
+    public static BinanceContextDataSource Create(ProxyOptions? proxyOptions = null)
     {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-        _owned = owned ?? throw new ArgumentNullException(nameof(owned));
-    }
-
-    public bool LiquidationSubscriptionConnected { get; private set; }
-
-    public static BinanceContextDataSource Create(BinanceProxyOptions? proxy = null)
-    {
-        var client = new BinanceNetUsdFuturesMarketDataClient(new BinanceConnectionOptions
+        var options = new BinanceConnectionOptions
         {
-            Proxy = proxy ?? new BinanceProxyOptions()
-        });
-        return new BinanceContextDataSource(client, client);
+            Proxy = BinanceProxyOptionsMapper.ToInfrastructure(proxyOptions)
+        };
+
+        return new BinanceContextDataSource(new BinanceNetUsdFuturesMarketDataClient(options));
     }
 
     public Task<IReadOnlyList<OpenInterestPoint>> GetOpenInterestHistoryAsync(
@@ -51,7 +44,6 @@ public sealed class BinanceContextDataSource : IContextDataSource, IDisposable
             symbol,
             item => channel.Writer.TryWrite(item),
             cancellationToken);
-        LiquidationSubscriptionConnected = true;
 
         await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken))
         {
@@ -61,6 +53,6 @@ public sealed class BinanceContextDataSource : IContextDataSource, IDisposable
 
     public void Dispose()
     {
-        _owned?.Dispose();
+        _client.Dispose();
     }
 }

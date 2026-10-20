@@ -7,7 +7,7 @@
 | [`README.md`](../README.md) | Назначение и как собрать/проверить | Первый заход в репозиторий |
 | [`STATUS.md`](../STATUS.md) | Текущая точка и что не доказано | Перед продолжением работы |
 | [`AGENTS.md`](../AGENTS.md) | Режим дискуссии и инварианты | Уже в контексте; не дублировать в ответ |
-| [`docs/architecture.md`](architecture.md) | C4: контекст, контейнеры, компоненты и скрытые связи кода | Перед сменой ссылки между проектами или пайплайна |
+| [`docs/architecture.md`](architecture.md) | Диаграмма C4: контекст, контейнеры, компоненты | Перед сменой ссылки между проектами или пайплайна |
 | [`docs/decisions/timeline.md`](decisions/timeline.md) | Хронология решений и почему | Перед тем как отменить или обойти решение |
 | [`docs/decisions/`](decisions/) | Полный текст одного ADR | Только номер, который назвал таймлайн |
 | [`TC-DN-HOFI3.md`](../TC-DN-HOFI3.md) | Канон формулы | Вопрос или правка формулы |
@@ -15,7 +15,7 @@
 | [`docs/data-sources.md`](data-sources.md) | Hot path и медленный контекст | Смена входов Binance |
 | [`docs/configuration.md`](configuration.md) | Смысл `appsettings` | Смена настроек |
 | [`skills/binance-indicator-dev/SKILL.md`](../skills/binance-indicator-dev/SKILL.md) | Правила реализации | Пайплайн, книга, JSONL, формула, WPF, тесты |
-| `tools/LiveDryRun` | Replay на Linux без окна | Окно WPF и `CryptoIndicatorApp.Desktop.Tests` на Linux не запускаются. Для `net8.0-windows` нужен `EnableWindowsTargeting=true`. Живой Binance из этого региона отвечает `restricted location`. Команда replay: `dotnet run --project tools/LiveDryRun -- --symbol BTCUSDT --input <jsonl> --replay-only`. |
+| `tools/LiveDryRun` | Replay того же пайплайна без окна | Проверка на Linux. Ограничения облака — раздел Cursor Cloud в [`AGENTS.md`](../AGENTS.md) |
 | [`tasks/todo.md`](../tasks/todo.md) | Рабочий журнал | Верхний незакрытый блок. Файл целиком не читать |
 | [`tasks/lessons.md`](../tasks/lessons.md) | Инциденты и правила после них | Перед рискованной правкой и после исправления |
 | [`docs/thread-checkpoints-2026-10-02.md`](thread-checkpoints-2026-10-02.md) | Снимок продуктовых решений | Когда таймлайн даёт ссылку. Это не замена `STATUS.md` |

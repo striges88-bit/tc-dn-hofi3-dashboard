@@ -11,7 +11,6 @@ using CryptoIndicatorApp.Desktop.Configuration;
 using CryptoIndicatorApp.Desktop.Rendering;
 using CryptoIndicatorApp.Desktop.ViewModels;
 using CryptoIndicatorApp.Infrastructure.Binance;
-using CryptoIndicatorApp.Infrastructure.Composition;
 
 namespace CryptoIndicatorApp.Desktop;
 
@@ -152,9 +151,7 @@ public partial class MainWindow : Window
     {
         var recordingPath = ResolvePath(_viewModel.RecordingPath);
 
-        using var source = BinanceLiveMarketEventSource.Create(
-            symbol,
-            BinanceProxyOptionsMapper.ToInfrastructure(_options.Proxy));
+        using var source = BinanceLiveMarketEventSource.Create(symbol, _options.Proxy);
         IMarketEventRecorder recorder = JsonlMarketEventRecorder.Create(recordingPath);
         var session = new LiveIndicatorSession(
             symbol,
@@ -180,8 +177,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            using var source = BinanceContextDataSource.Create(
-                BinanceProxyOptionsMapper.ToInfrastructure(_options.Proxy));
+            using var source = BinanceContextDataSource.Create(_options.Proxy);
             var context = _options.Context;
             var session = new ContextModuleSession(
                 symbol,

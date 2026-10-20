@@ -13,10 +13,12 @@ namespace CryptoIndicatorApp.Infrastructure.Binance;
 
 public sealed class BinanceNetUsdFuturesMarketDataClient :
     IBinanceUsdFuturesMarketDataClient,
+    IBinanceUsdFuturesSymbolProvider,
     IDisposable
 {
     private readonly IBinanceRestClient _restClient;
     private readonly IBinanceSocketClient _socketClient;
+    private readonly bool _ownsClients;
 
     public BinanceNetUsdFuturesMarketDataClient()
         : this(new BinanceConnectionOptions())
@@ -24,16 +26,25 @@ public sealed class BinanceNetUsdFuturesMarketDataClient :
     }
 
     public BinanceNetUsdFuturesMarketDataClient(BinanceConnectionOptions options)
-        : this(CreateRestClient(options), CreateSocketClient(options))
+        : this(CreateRestClient(options), CreateSocketClient(options), ownsClients: true)
+    {
+    }
+
+    public BinanceNetUsdFuturesMarketDataClient(
+        IBinanceRestClient restClient,
+        IBinanceSocketClient socketClient)
+        : this(restClient, socketClient, ownsClients: false)
     {
     }
 
     private BinanceNetUsdFuturesMarketDataClient(
         IBinanceRestClient restClient,
-        IBinanceSocketClient socketClient)
+        IBinanceSocketClient socketClient,
+        bool ownsClients)
     {
         _restClient = restClient ?? throw new ArgumentNullException(nameof(restClient));
         _socketClient = socketClient ?? throw new ArgumentNullException(nameof(socketClient));
+        _ownsClients = ownsClients;
     }
 
     private static BinanceRestClient CreateRestClient(BinanceConnectionOptions options)
@@ -209,6 +220,11 @@ public sealed class BinanceNetUsdFuturesMarketDataClient :
 
     public void Dispose()
     {
+        if (!_ownsClients)
+        {
+            return;
+        }
+
         (_socketClient as IDisposable)?.Dispose();
         (_restClient as IDisposable)?.Dispose();
     }

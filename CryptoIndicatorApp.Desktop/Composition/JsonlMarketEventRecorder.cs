@@ -2,7 +2,7 @@ using CryptoIndicatorApp.Application.MarketData;
 using CryptoIndicatorApp.Domain.MarketData;
 using CryptoIndicatorApp.Infrastructure.Jsonl;
 
-namespace CryptoIndicatorApp.Infrastructure.Composition;
+namespace CryptoIndicatorApp.Desktop.Composition;
 
 public sealed class JsonlMarketEventRecorder : IMarketEventRecorder
 {
