@@ -22,6 +22,8 @@ The denylist remains excluded from all retain/import flows: `recordings/*.jsonl`
 
 The optional post-commit marker hook remains marker-only. It may write a stale-memory marker, but it must not run rebuild, retain, Cloud calls, `memory-refresh-all`, LanceDB rebuild/eval, Hindsight retain, or Codex auto-retain.
 
+Update 2026-10-21: the LanceDB rebuild/eval mentions no longer apply; the sidecar was removed entirely (ADR 0010). The retain policy, the allowlist and denylist, and the marker-only hook limit remain in force.
+
 ## Rationale
 
 Auto-retain is dangerous before lifecycle controls exist. It can preserve local paths, secrets, proxy details, raw recordings, failed experiment noise, or stale facts as if they were current project memory.

@@ -8,6 +8,8 @@ Use SQLite FTS5 as the canonical local generated memory store for agent tooling.
 
 Update 2026-06-29: LanceDB moved from deferred candidate to active local spike, then to a production-candidate semantic quality layer using local FastEmbed/ONNX. This does not change the canonical source priority: SQLite owns generated status/source metadata, and LanceDB remains a sidecar cache.
 
+Update 2026-10-21: the LanceDB sidecar was removed entirely (ADR 0010). SQLite FTS5 is the only generated local store, the "LanceDB below SQLite" clauses no longer apply, and any future semantic sidecar needs a new ADR that keeps it below SQLite and outside mandatory gates.
+
 The WPF/.NET application runtime must not depend on the memory store or semantic sidecars.
 
 ## Rationale

@@ -395,29 +395,8 @@ if (Test-Path -LiteralPath $sqlitePath) {
     }
 }
 
-$evalJsonPath = Join-Path $generatedRoot 'lancedb-sidecar-report.json'
-$evalMarkdownPath = Join-Path $generatedRoot 'lancedb-eval-report.md'
-$evalReport = Read-JsonFileOrNull -Path $evalJsonPath
-$evalStatus = 'missing'
-$evalPassed = $null
-$evalPassedCount = $null
-$evalFailedCount = $null
-$evalCommand = $null
-$evalBaseline = $null
-
-if ($null -ne $evalReport) {
-    $evalStatus = if ($null -ne $evalReport.PSObject.Properties['status']) { [string]$evalReport.status } else { 'unknown' }
-    $evalPassed = if ($null -ne $evalReport.PSObject.Properties['passed']) { [bool]$evalReport.passed } else { $null }
-    $evalPassedCount = if ($null -ne $evalReport.PSObject.Properties['passed_count']) { [int]$evalReport.passed_count } else { $null }
-    $evalFailedCount = if ($null -ne $evalReport.PSObject.Properties['failed_count']) { [int]$evalReport.failed_count } else { $null }
-    $evalCommand = if ($null -ne $evalReport.PSObject.Properties['command']) { [string]$evalReport.command } else { $null }
-    $evalBaseline = if ($null -ne $evalReport.PSObject.Properties['embedding_pooling_baseline']) { [string]$evalReport.embedding_pooling_baseline } else { $null }
-}
-
 $generatedReports = @(
     (New-GeneratedReportInfo -Root $root -Name 'memory-refresh-all' -Path (Join-Path $generatedRoot 'memory-refresh-all-report.json') -Json),
-    (New-GeneratedReportInfo -Root $root -Name 'lancedb-eval-json' -Path $evalJsonPath -Json),
-    (New-GeneratedReportInfo -Root $root -Name 'lancedb-eval-markdown' -Path $evalMarkdownPath),
     (New-GeneratedReportInfo -Root $root -Name 'memory-pre-push-check' -Path (Join-Path $generatedRoot 'memory-pre-push-check-report.json') -Json),
     (New-GeneratedReportInfo -Root $root -Name 'curated-retain-dry-run' -Path (Join-Path $generatedRoot 'curated-retain-dry-run-report.json') -Json),
     (New-GeneratedReportInfo -Root $root -Name 'curated-retain-export-dry-run' -Path (Join-Path $generatedRoot 'curated-retain-export-dry-run-report.json') -Json),
@@ -444,8 +423,7 @@ $observations = @(
     (New-Observation -Name 'git-head' -Status $gitHeadObservationStatus -Detail 'Read current branch and HEAD from Git.'),
     (New-Observation -Name 'memory-status' -Status $memoryStatusObservationStatus -Detail 'Read tools/Memory status only when the generated SQLite store exists.'),
     (New-Observation -Name 'marker-status' -Status 'reported' -Detail 'Checked marker file presence only.'),
-    (New-Observation -Name 'generated-reports' -Status 'reported' -Detail 'Read generated report metadata as evidence only.'),
-    (New-Observation -Name 'lancedb-eval' -Status $evalStatus -Detail 'Read latest LanceDB eval report metadata when present.')
+    (New-Observation -Name 'generated-reports' -Status 'reported' -Detail 'Read generated report metadata as evidence only.')
 )
 
 $existingReportCount = @($generatedReports | Where-Object { $_.exists -eq $true }).Count
@@ -492,23 +470,10 @@ $report = [ordered]@{
         path = Convert-ToRepoPath -Root $root -Path $markerPath
         exists = Test-Path -LiteralPath $markerPath
     }
-    lancedb_eval = [ordered]@{
-        json_report_path = Convert-ToRepoPath -Root $root -Path $evalJsonPath
-        markdown_report_path = Convert-ToRepoPath -Root $root -Path $evalMarkdownPath
-        markdown_report_exists = Test-Path -LiteralPath $evalMarkdownPath
-        status = $evalStatus
-        command = $evalCommand
-        passed = $evalPassed
-        passed_count = $evalPassedCount
-        failed_count = $evalFailedCount
-        embedding_pooling_baseline = $evalBaseline
-    }
     summary = [ordered]@{
         needs_refresh = $memoryStatus.needs_refresh
         needs_refresh_is_known = [bool]$memoryStatus.needs_refresh_is_known
         marker_exists = [bool]$memoryStatus.marker_exists
-        lancedb_eval_status = $evalStatus
-        lancedb_eval_passed = $evalPassed
         generated_reports_present = $existingReportCount
         generated_reports_missing = $missingReportCount
     }

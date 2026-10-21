@@ -57,9 +57,9 @@ Install-spike update:
 
 - Keep Hindsight as a historical/failed spike, not the roadmap-preferred memory store.
 - SQLite FTS5 is the canonical local memory store for generated retrieval/status metadata.
-- LanceDB is the active local semantic sidecar spike.
+- The LanceDB sidecar was removed on 2026-10-21 (ADR 0010); SQLite FTS5 is the only generated local store.
 - Keep Hindsight outside the WPF/.NET application runtime, build, and test dependencies.
-- Keep source priority unchanged: `code/tests/config` -> `AGENTS.md`/ADRs/formula docs -> `docs/memory/*` -> generated SQLite/FTS indexes -> LanceDB -> historical external spikes.
+- Keep source priority unchanged: `code/tests/config` -> `AGENTS.md`/ADRs/formula docs -> `docs/memory/*` -> generated SQLite/FTS indexes -> historical external spikes.
 - Do not use Hindsight as a source of truth. It is a retrieval/cache layer under current code, tests, ADRs, formula docs, and human-authored memory docs.
 - Do not enable Codex auto-retain during MVP. Auto-retain can store stale hypotheses, raw transcript noise, local paths, proxy details, or accidental secrets before review.
 - Use curated import first: `docs/memory/*.md`, `docs/decisions/*.md`, `docs/formulas.md`, `AGENTS.md`, and `tasks/lessons.md`.

@@ -291,15 +291,11 @@ $memoryCliLockPath = Join-Path $root 'docs\memory\generated\memory-cli.lock'
 $dotnetPath = Find-Dotnet -Root $root
 $memoryProject = Join-Path $root 'tools\Memory\CryptoIndicatorApp.Memory.csproj'
 $legacyRefreshScript = Join-Path $root 'scripts\memory-refresh.ps1'
-$lanceDbScript = Join-Path $root 'scripts\lancedb-sidecar.ps1'
 
 $steps = @(
     (New-Step -Name 'legacy-json-refresh' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $legacyRefreshScript, '-ProjectRoot', $root)),
     (New-Step -Name 'sqlite-refresh' -FilePath $dotnetPath -Arguments @('run', '--no-restore', '--project', $memoryProject, '--', 'refresh-from-commit', '--commit', 'HEAD', '--project-root', $root, '--json') -UsesMemoryCliLock $true),
-    (New-Step -Name 'sqlite-stale-check' -FilePath $dotnetPath -Arguments @('run', '--no-restore', '--project', $memoryProject, '--', 'stale-check', '--project-root', $root, '--json') -UsesMemoryCliLock $true),
-    (New-Step -Name 'lancedb-cleanup' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $lanceDbScript, '-ProjectRoot', $root, '-Command', 'cleanup')),
-    (New-Step -Name 'lancedb-rebuild' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $lanceDbScript, '-ProjectRoot', $root, '-Command', 'rebuild')),
-    (New-Step -Name 'lancedb-eval' -FilePath 'powershell.exe' -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $lanceDbScript, '-ProjectRoot', $root, '-Command', 'eval'))
+    (New-Step -Name 'sqlite-stale-check' -FilePath $dotnetPath -Arguments @('run', '--no-restore', '--project', $memoryProject, '--', 'stale-check', '--project-root', $root, '--json') -UsesMemoryCliLock $true)
 )
 
 $startedAt = (Get-Date).ToUniversalTime().ToString('o')

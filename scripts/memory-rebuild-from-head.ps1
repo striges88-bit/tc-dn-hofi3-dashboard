@@ -245,15 +245,7 @@ $deleteTargets = @(
     (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\memory-refresh-all-report.json' -Recursive $false),
     (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\memory-pre-push-check-report.json' -Recursive $false),
     (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\memory-daily-check-report.json' -Recursive $false),
-    (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\memory-needs-refresh.marker.json' -Recursive $false),
-    (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\lancedb-probe-report.json' -Recursive $false),
-    (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\lancedb-search-report.json' -Recursive $false),
-    (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\lancedb-explain-report.json' -Recursive $false),
-    (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\lancedb-cleanup-report.json' -Recursive $false),
-    (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\lancedb-rebuild-report.json' -Recursive $false),
-    (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\lancedb-sidecar-report.json' -Recursive $false),
-    (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\lancedb-eval-report.md' -Recursive $false),
-    (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\lancedb' -Recursive $true)
+    (New-DeleteTarget -Root $root -GeneratedRoot $generatedRoot -RelativePath 'docs\memory\generated\memory-needs-refresh.marker.json' -Recursive $false)
 )
 Assert-DeleteTargetsAreSafe -Targets $deleteTargets
 

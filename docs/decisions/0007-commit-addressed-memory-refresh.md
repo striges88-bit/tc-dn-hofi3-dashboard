@@ -16,6 +16,8 @@ The optional post-commit hook is marker-only. It may write `docs/memory/generate
 
 Curated retain remains a separate future stage behind a redaction/delete/export policy. The intended allowlist is `AGENTS.md`, `docs/decisions/*.md`, `docs/formulas.md`, `TC-DN-HOFI3.md`, `docs/memory/*.md`, and `tasks/lessons.md`. Denylisted material remains excluded: `recordings/*.jsonl`, `docs/memory/generated/`, `.hindsight/`, secrets, `bin/`, `obj/`, `publish/`, local proxy details, and raw experiment dumps.
 
+Update 2026-10-21: the LanceDB sidecar clauses no longer apply; the sidecar was removed entirely (ADR 0010). Commit-addressed refresh from `HEAD`, the marker-only hook, and the stale-status rule remain in force for the SQLite store alone.
+
 ## Rationale
 
 Working-tree refresh can index intermediate local edits as fresh memory. Commit-addressed refresh makes generated memory reproducible: the database can say exactly which Git commit and blob each fact came from.

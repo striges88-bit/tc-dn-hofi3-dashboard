@@ -85,9 +85,6 @@ public sealed class MemoryRefreshAllTests
                 "legacy-json-refresh",
                 "sqlite-refresh",
                 "sqlite-stale-check",
-                "lancedb-cleanup",
-                "lancedb-rebuild",
-                "lancedb-eval",
             },
             steps.Select(step => step.GetProperty("name").GetString()).ToArray());
 
@@ -132,8 +129,6 @@ public sealed class MemoryRefreshAllTests
         Assert.Contains("scripts/memory-refresh-all.ps1", readme, StringComparison.Ordinal);
         Assert.Contains("legacy JSON", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("SQLite refresh", readme, StringComparison.Ordinal);
-        Assert.Contains("LanceDB", readme, StringComparison.Ordinal);
-        Assert.Contains("eval", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("scripts/memory-rebuild-from-head.ps1", readme, StringComparison.Ordinal);
         Assert.Contains("generated memory artifacts", readme, StringComparison.OrdinalIgnoreCase);
 
@@ -212,7 +207,6 @@ public sealed class MemoryRefreshAllTests
 
         var plannedDeletes = root.GetProperty("delete_plan").EnumerateArray().ToArray();
         Assert.Contains(plannedDeletes, item => item.GetProperty("path").GetString() == "docs/memory/generated/project-memory.sqlite");
-        Assert.Contains(plannedDeletes, item => item.GetProperty("path").GetString() == "docs/memory/generated/lancedb");
         Assert.Contains(plannedDeletes, item => item.GetProperty("path").GetString() == "docs/memory/generated/memory-needs-refresh.marker.json");
 
         Assert.All(plannedDeletes, item =>

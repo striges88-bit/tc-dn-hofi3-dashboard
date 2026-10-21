@@ -10,7 +10,7 @@ Use this order when project memory conflicts:
 2. `AGENTS.md`, ADRs, `docs/formulas.md`, and `TC-DN-HOFI3.md`: durable project rules, decisions, and canonical formula material.
 3. `docs/memory/*.md`: human-authored memory map, glossary, entities, open questions, and this contract.
 4. `docs/memory/generated/`: generated indexes and tool exports. SQLite FTS5 is the canonical local memory store for generated status/index/retrieval metadata, but it is still refreshed from higher-priority sources.
-5. LanceDB or another semantic/vector sidecar. This is a cache below SQLite and must preserve SQLite status/source metadata.
+5. No semantic/vector sidecar exists. The LanceDB sidecar was removed on 2026-10-21 (ADR 0010); any future sidecar needs a new ADR and must stay a cache below SQLite status/source metadata.
 6. Historical external memory spikes such as Hindsight, GBrain, Mem0, Graphiti, or another agent store.
 
 Generated memory must never override current code, tests, ADRs, formula docs, or project instructions.
@@ -20,7 +20,7 @@ Generated memory must never override current code, tests, ADRs, formula docs, or
 - Human-authored source: `docs/memory/*.md`, `docs/decisions/*.md`, `tasks/lessons.md`, and approved design/spec docs.
 - Generated source: only files under `docs/memory/generated/`; this directory stays ignored until a committed schema/export policy is approved.
 - Experiments: live/replay/JSONL observations stay as separate experiment summaries with links to recordings or reports. Raw JSONL and bulk runtime observations do not belong in the project memory graph.
-- Local stores: SQLite FTS5 is the canonical local generated memory store. LanceDB is an active local semantic sidecar and production-candidate semantic quality layer below SQLite. Hindsight and GBrain are historical/secondary spikes, not sources of truth.
+- Local stores: SQLite FTS5 is the canonical local generated memory store. The LanceDB semantic sidecar was removed on 2026-10-21 (ADR 0010). Hindsight and GBrain are historical/secondary spikes, not sources of truth.
 
 ## Curated Retain Policy
 
@@ -57,7 +57,7 @@ Use `scripts/curated-retain-export-dry-run.ps1` and `scripts/curated-retain-dele
 
 Use `scripts/curated-retain-redacted-subset.ps1 -SourcePath <repo/path.md>` only after reviewing the dry-run findings for selected allowlisted sources. It rejects files whose current hash no longer matches the dry-run source hash, writes a local generated report with `redaction_status=redacted`, original source hashes, and reviewed `redacted_text`; it does not import, retain, rebuild, install hooks, call Cloud, or call Codex retain.
 
-Use `scripts/curated-retain-import.ps1` only for controlled local import after dry-run review or reviewed redacted-subset generation. It wraps SQLite `retain-import`, reads clean candidates from the selected Git commit tree, and stores reviewed redacted text for redacted entries while preserving commit/source metadata. It writes an ignored generated report and must not call external retain providers, Codex memory, Cloud, hooks, LanceDB rebuild, raw JSONL, generated exports, secrets, or build artifacts.
+Use `scripts/curated-retain-import.ps1` only for controlled local import after dry-run review or reviewed redacted-subset generation. It wraps SQLite `retain-import`, reads clean candidates from the selected Git commit tree, and stores reviewed redacted text for redacted entries while preserving commit/source metadata. It writes an ignored generated report and must not call external retain providers, Codex memory, Cloud, hooks, raw JSONL, generated exports, secrets, or build artifacts.
 
 ## Node Schema
 
@@ -131,7 +131,7 @@ Required tables:
 - `search_documents_fts`
 - `query_log`
 
-Typed records must preserve source grounding: `id`, `status`, `source_path`, `source_hash`, `commit_sha`, `tree_sha`, `source_blob_sha`, `indexed_at`, `created_at` or `updated_at`, `valid_from`, `valid_until`, and `confidence` where applicable. Canonical status lives in SQLite; LanceDB may copy status and commit/source metadata only for filtering, validation, and reranking.
+Typed records must preserve source grounding: `id`, `status`, `source_path`, `source_hash`, `commit_sha`, `tree_sha`, `source_blob_sha`, `indexed_at`, `created_at` or `updated_at`, `valid_from`, `valid_until`, and `confidence` where applicable. Canonical status lives in SQLite. No sidecar copies it since the LanceDB sidecar was removed (ADR 0010).
 
 The code-memory MVP extracts lightweight C# facts directly from indexed `.cs` files without loading MSBuild or Roslyn workspaces. It records namespace/type/method symbols in `symbols`, `owns` relations in `relations`, xUnit test-method and `requires_symbol=` markers in `events`, `TODO` markers in `todos`, and `experiment_outcome=` markers in `experiments`. These records are searchable typed documents in `search_documents`; generic chunks remain fallback context, not the preferred answer when a typed symbol/event/relation exists. Stale-check must validate `requires_symbol=` events against the extracted `symbols` table.
 
@@ -145,9 +145,8 @@ Retrieval is always staged:
 
 1. Exact search / FTS over code, tests, config, and docs through SQLite FTS5.
 2. Generated graph/code index lookup.
-3. Semantic search in optional LanceDB sidecar. LanceDB must use SQLite status/source metadata and must not rank stale generated facts above current SQLite/ADR/formula records.
-4. Graph traversal and reranking.
-5. Freshness check before answering: source priority, source date/hash, contradiction status, confidence, and explicit gap notes.
+3. Graph traversal and reranking.
+4. Freshness check before answering: source priority, source date/hash, contradiction status, confidence, and explicit gap notes.
 
 Known retrieval facts that must remain easy to answer:
 
@@ -180,9 +179,9 @@ Use SQLite diagnostics only:
 
 ## Refresh Rules
 
-The MVP refresh mechanism is a manual or commit-addressed refresh command. Do not add a git post-commit hook as a memory refresh path because Git/PATH availability is fragile on Windows and hidden refresh can index mixed worktree states. A post-commit marker hook is allowed only as an explicit opt-in local helper that writes `docs/memory/generated/memory-needs-refresh.marker.json`; it must not run rebuild, `memory-refresh-all`, LanceDB rebuild/eval, curated retain, Cloud, or Codex auto-retain.
+The MVP refresh mechanism is a manual or commit-addressed refresh command. Do not add a git post-commit hook as a memory refresh path because Git/PATH availability is fragile on Windows and hidden refresh can index mixed worktree states. A post-commit marker hook is allowed only as an explicit opt-in local helper that writes `docs/memory/generated/memory-needs-refresh.marker.json`; it must not run rebuild, `memory-refresh-all`, curated retain, Cloud, or Codex auto-retain.
 
-Use `scripts/memory-refresh-all.ps1` as the preferred manual full rebuild wrapper. It runs legacy JSON refresh, SQLite `refresh-from-commit --commit HEAD`, SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order, then writes an ignored report under `docs/memory/generated/`.
+Use `scripts/memory-refresh-all.ps1` as the preferred manual full rebuild wrapper. It runs legacy JSON refresh, SQLite `refresh-from-commit --commit HEAD`, and SQLite stale-check in order, then writes an ignored report under `docs/memory/generated/`.
 
 Use `scripts/memory-rebuild-from-head.ps1` only for local recovery proof or local generated-store corruption. It must expose `-PlanOnly`, may delete only allowlisted generated memory artifacts under `docs/memory/generated/`, then runs `scripts/memory-refresh-all.ps1` and verifies `memory status needs_refresh=false`. It must not delete source files, raw JSONL recordings, secrets, `.hindsight/`, `bin/`, `obj/`, `publish/`, hooks, Cloud data, Codex memory, external retain data, or human-authored memory docs.
 
@@ -194,20 +193,14 @@ Use `scripts/memory-pre-push-check.ps1` as a manual evidence gate after `memory-
 
 The manual refresh script and `tools/Memory` CLI may write ignored files under `docs/memory/generated/`, including `project-memory.sqlite`. They must not rewrite human-authored docs, app code, formulas, config, or tests.
 
-LanceDB sidecar refresh is manual during the spike. `memory-refresh-all` must not install hooks, enable Codex auto-retain, call Cloud services, crawl project files directly for LanceDB, or import raw JSONL recordings, generated exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps. Do not install a git post-commit refresh hook, after-save hook, or background updater until local clean rebuild/delete/reindex behavior and the semantic quality gate are verified and documented with the generated JSON/Markdown eval reports.
-
-Use `scripts/memory-semantic-doctor.ps1` before relying on the LanceDB semantic gate on a fresh or repaired machine. It is a local dependency preflight for `uv`, `lancedb==0.34.0`, `pyarrow==24.0.0`, `fastembed==0.8.0`, cache policy, and offline runtime availability. The memory gate path must use offline `uv` execution and block hidden network downloads; dependency or model downloads require an explicit preflight and must keep cache/model state outside the repo.
+`memory-refresh-all` must not install hooks, enable Codex auto-retain, call Cloud services, or import raw JSONL recordings, generated exports, secrets, local proxy details, build artifacts, or unreviewed experiment dumps. Do not install a git post-commit refresh hook, after-save hook, or background updater.
 
 Do not add post-commit auto-refresh for project memory. The allowed Git helpers are explicit opt-in only: the pre-push wrapper around `memory-pre-push-check`, and the post-commit marker helper that marks stale memory but does not run rebuild.
 
 ## Tool Strategy
 
 - SQLite FTS5 is the canonical local memory store for generated retrieval/status metadata. Use `tools/Memory` for `refresh-from-commit`, `status`, `search`, `explain`, and `stale-check`. Keep plain `refresh` only as a working-tree diagnostic path.
-- LanceDB is an active local semantic sidecar spike and production-candidate semantic quality layer. It may add embeddings, hybrid search, metadata filtering, cleanup, and reranking, but SQLite remains the canonical status store and LanceDB must not own canonical status.
-- Use `scripts/lancedb-sidecar.ps1` for local `probe`, `rebuild`, `search`, `explain`, `eval`, and `cleanup`. It reads SQLite `search_documents` only and writes generated data under `docs/memory/generated/lancedb`.
-- The current LanceDB candidate uses local FastEmbed/ONNX by default with logical model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, runtime custom-model alias `embedding_runtime_model=tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean`, wrapper pins `lancedb==0.34.0`, `pyarrow==24.0.0`, and `fastembed==0.8.0`, `embedding_pooling=mean`, `embedding_pooling_baseline=mean-pooling`, and `embedding_warning_policy=production-custom-alias-no-suppression`. This baseline is accepted only while LanceDB `eval` passes `11/11`; changing package, model, runtime alias, provider, dimensions, pooling, or warning policy requires rerun cleanup/rebuild/eval and an updated baseline report.
-- The LanceDB semantic quality gate must cover current OFI formula retrieval, formula owner retrieval, funding-source decision retrieval, Binance DTO boundary retrieval, REST hot-path ban retrieval, live/replay shared-pipeline retrieval, funding slow-context retrieval, exchange adapter impact retrieval, strict no-answer for superseded/failed-only facts, and no-answer/low-confidence behavior before any automation is added.
-- LanceDB `eval` must write compact generated JSON/Markdown reports with query, expected ids/types, matched rank, source path, confidence, gap notes, FastEmbed package/model metadata, `embedding_runtime_model`, `embedding_pooling`, `embedding_pooling_baseline`, `embedding_warning_policy`, and the baseline eval gate. LanceDB `search` and `explain` must include `freshness_check`, `minimum_retrieval_confidence`, returned count, and gap notes so weak or stale matches are visible instead of silently becoming answers. These reports are review evidence only; they do not override SQLite status, ADRs, formulas, or source code.
+- There is no semantic sidecar. ADR 0010 removed the LanceDB sidecar; semantic retrieval is SQLite FTS5 only, and a second runtime needs a new ADR that keeps it below SQLite and outside mandatory gates.
 - Hindsight is a historical/failed spike. Its upstream Codex, CLI, MCP, and embedded-daemon surfaces are confirmed in `docs/memory/hindsight-spike.md`, but billing/auth, Rust CLI forwarding, retain/import, and operational complexity blocked MVP use.
 - Hindsight must stay below SQLite and generated indexes in source priority and must not become a WPF/.NET runtime dependency.
 - Codex auto-retain must stay disabled during MVP. Use `scripts/hindsight-curated-import.ps1` to generate a pre-install manifest for curated import sources: `AGENTS.md`, `docs/decisions/*.md`, `docs/formulas.md`, `TC-DN-HOFI3.md`, `docs/memory/*.md`, and `tasks/lessons.md`.

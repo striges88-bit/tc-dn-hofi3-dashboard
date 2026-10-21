@@ -1,6 +1,6 @@
 # Project Memory
 
-This folder prepares the project for a multi-layer memory workflow. SQLite FTS5 is the canonical local generated memory store. LanceDB is an active local semantic sidecar and production-candidate semantic quality layer below SQLite. Hindsight is now a historical/failed spike, and GBrain is kept only as a historical/secondary candidate.
+This folder prepares the project for a multi-layer memory workflow. SQLite FTS5 is the canonical local generated memory store and the only one. The LanceDB semantic sidecar was removed on 2026-10-21 (ADR 0010). Hindsight is now a historical/failed spike, and GBrain is kept only as a historical/secondary candidate.
 
 The application runtime must not depend on these files or generated stores.
 
@@ -10,12 +10,11 @@ The application runtime must not depend on these files or generated stores.
 - `generated-memory.schema.json`: schema for generated memory indexes.
 - `glossary.md`: stable project terms.
 - `entities.md`: domain and architecture entities that graph tools may later ingest.
-- `rules.md`: typed current/superseded project rules used by SQLite/LanceDB quality gates.
+- `rules.md`: typed current/superseded project rules used by SQLite quality gates.
 - `retain-policy.md`: curated retain lifecycle gates, including redaction, delete/export policy, allowlist, and denylist.
 - `operations-runbook.md`: short operator flow for daily checks, commit refresh, push/PR gates, recovery, clone-like proof, and `/compact`.
 - `project-map.md`: high-level module map.
 - `hindsight-spike.md`: confirmed upstream Hindsight surface and why it is now historical/failed for this MVP.
-- `lancedb-spike.md`: active local semantic sidecar rules and spike gates.
 - `hindsight-install-spike.md`: selected Python/uvx embedded daemon install-spike path and safety gates.
 - `gbrain-spike.md`: confirmed upstream GBrain CLI/API surface and current local availability.
 - `open-questions.md`: unresolved questions that should not be silently encoded as facts.
@@ -34,7 +33,7 @@ Run a read-only operator snapshot before deciding whether a heavier refresh/chec
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-daily-check.ps1 -PlanOnly
 ```
 
-This writes `docs/memory/generated/memory-daily-check-report.json` and reports the current branch, `HEAD`, indexed commit when the generated SQLite store already exists, `needs_refresh`, marker status, latest LanceDB eval status, and generated report presence. If the Memory CLI is unavailable, the report says `CLI unavailable` and leaves `needs_refresh unknown` instead of pretending memory is stale. It does not run `memory-refresh-all`, rebuild memory, import curated retain, install hooks, call Cloud, call Hindsight, or call Codex retain.
+This writes `docs/memory/generated/memory-daily-check-report.json` and reports the current branch, `HEAD`, indexed commit when the generated SQLite store already exists, `needs_refresh`, marker status, and generated report presence. If the Memory CLI is unavailable, the report says `CLI unavailable` and leaves `needs_refresh unknown` instead of pretending memory is stale. It does not run `memory-refresh-all`, rebuild memory, import curated retain, install hooks, call Cloud, call Hindsight, or call Codex retain.
 
 Run the full manual memory refresh sequence:
 
@@ -42,7 +41,7 @@ Run the full manual memory refresh sequence:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh-all.ps1
 ```
 
-This runs legacy JSON refresh, SQLite refresh from commit (`refresh-from-commit --commit HEAD`), SQLite stale-check, LanceDB cleanup, LanceDB rebuild, and LanceDB `eval` in order. It writes an ignored wrapper report to `docs/memory/generated/memory-refresh-all-report.json`; LanceDB diagnostic steps write command-specific generated JSON reports, and the LanceDB eval step writes `docs/memory/generated/lancedb-sidecar-report.json` plus `docs/memory/generated/lancedb-eval-report.md`. It does not install hooks, enable Codex auto-retain, use Cloud, crawl project files directly for LanceDB, or import raw JSONL/generated exports/secrets/local proxy details/build artifacts.
+This runs legacy JSON refresh, SQLite refresh from commit (`refresh-from-commit --commit HEAD`), and SQLite stale-check in order. It writes an ignored wrapper report to `docs/memory/generated/memory-refresh-all-report.json`. It does not install hooks, enable Codex auto-retain, use Cloud, or import raw JSONL/generated exports/secrets/local proxy details/build artifacts.
 
 Rebuild local generated memory artifacts from committed `HEAD` after local store corruption or recovery testing:
 
@@ -67,7 +66,7 @@ Run the manual pre-push evidence gate after `memory-refresh-all`:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-pre-push-check.ps1
 ```
 
-The helper validates the generated refresh/eval reports and writes `docs/memory/generated/memory-pre-push-check-report.json`. It does not rebuild memory by default, install hooks, enable post-commit automation, or treat generated exports as source memory.
+The helper validates the generated refresh report and writes `docs/memory/generated/memory-pre-push-check-report.json`. It does not rebuild memory by default, install hooks, enable post-commit automation, or treat generated exports as source memory.
 
 Optionally install a local managed `pre-push` hook after reviewing the manual gate:
 
@@ -87,7 +86,7 @@ Optionally install a local managed `post-commit` marker hook:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install-memory-post-commit-marker-hook.ps1 -Confirm
 ```
 
-The optional hook calls `scripts/memory-mark-needs-refresh.ps1` only. It writes `docs/memory/generated/memory-needs-refresh.marker.json` after a commit and does not run rebuild, `memory-refresh-all`, LanceDB, curated retain, Cloud, or Codex auto-retain. `-TimeoutSeconds` must be positive, and marker reports include the lock path used for coordination. Local validation should use a custom temporary `-HookPath`/`-OutputPath`; the generated installer report records `targets_default_repo_hook`, `custom_hook_path`, and `actual_repo_hook_touched` so reviewers can confirm the real `.git/hooks/post-commit` was not touched. Disable it with:
+The optional hook calls `scripts/memory-mark-needs-refresh.ps1` only. It writes `docs/memory/generated/memory-needs-refresh.marker.json` after a commit and does not run rebuild, `memory-refresh-all`, curated retain, Cloud, or Codex auto-retain. `-TimeoutSeconds` must be positive, and marker reports include the lock path used for coordination. Local validation should use a custom temporary `-HookPath`/`-OutputPath`; the generated installer report records `targets_default_repo_hook`, `custom_hook_path`, and `actual_repo_hook_touched` so reviewers can confirm the real `.git/hooks/post-commit` was not touched. Disable it with:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\install-memory-post-commit-marker-hook.ps1 -Disable -Confirm
@@ -134,39 +133,6 @@ Run stale checks:
 ```powershell
 .\.dotnet\dotnet.exe run --no-restore --project tools\Memory\CryptoIndicatorApp.Memory.csproj -- stale-check --project-root . --json
 ```
-
-Probe the local LanceDB sidecar without installing hooks, importing raw files, or using Cloud:
-
-Script path: `scripts/lancedb-sidecar.ps1`.
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command probe
-```
-
-The default probe report is `docs/memory/generated/lancedb-probe-report.json`; it must not overwrite `docs/memory/generated/lancedb-sidecar-report.json`, which is reserved for eval evidence.
-
-Check local semantic dependency readiness before a rebuild/eval gate:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-semantic-doctor.ps1
-```
-
-Use `-PlanOnly` for a report-only preview. The doctor records `uv` discovery, `lancedb==0.34.0`, `pyarrow==24.0.0`, `fastembed==0.8.0`, cache/venv policy, and whether the pinned runtime is available offline. It does not rebuild memory, import retain data, install hooks, call Cloud, or call Codex retain. Memory gates use `uv --offline`; if the local cache is missing, run an explicit dependency preflight instead of letting `memory-refresh-all` download packages or models in the background.
-
-Rebuild, query, and evaluate the local LanceDB sidecar from SQLite `search_documents` only:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command rebuild
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command search -Query "actual OFI formula"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command explain -Query "actual OFI formula"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\lancedb-sidecar.ps1 -Command eval
-```
-
-The LanceDB candidate uses local FastEmbed/ONNX embeddings by default with logical model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` through pinned `lancedb==0.34.0`, `pyarrow==24.0.0`, and `fastembed==0.8.0`, plus typed/exact-token reranking and an explicit `eval` gate. The production runtime registers the explicit custom alias `embedding_runtime_model=tc-dn-hofi3/paraphrase-multilingual-MiniLM-L12-v2-mean` with `embedding_pooling=mean` instead of suppressing FastEmbed's upstream mean-pooling warning. The accepted semantic baseline records `embedding_pooling_baseline=mean-pooling` and `embedding_warning_policy=production-custom-alias-no-suppression`; it is current only while LanceDB `eval` passes `11/11`. The old token-hash provider is fallback/test-only.
-
-The generated eval reports are evidence artifacts for hook/automation review. They include query, expected ids/types, matched rank, source path, confidence, no-answer/low-confidence cases, and gap notes, but they are not a source of truth. `search` and `explain` reports also include `freshness_check`, `minimum_retrieval_confidence`, and top-level `gap_notes`; a low-confidence query should return no results with a gap note instead of a random current fact.
-
-Non-eval LanceDB commands write command-specific generated JSON reports (`lancedb-search-report.json`, `lancedb-explain-report.json`, `lancedb-cleanup-report.json`, and `lancedb-rebuild-report.json`) so diagnostics cannot silently replace the latest eval evidence.
 
 Generate the pre-install Hindsight curated import manifest without calling Hindsight:
 

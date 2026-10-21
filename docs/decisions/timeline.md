@@ -11,7 +11,7 @@
 | 2026-05-28 | [На графике оставлен сырой TFI; палитра четырёх цветов не выбрана](../thread-checkpoints-2026-10-02.md#chart-decision-history-and-pending-visual-test) | Усиленный overlay прятал OFI | открыто |
 | 2026-06-28 | [0001. Репозиторий без переноса в `src/`/`tests/`; память пока только документами](0001-repository-and-memory-structure.md) | Перенос слоёв ничего не чинит и ломает ссылки | действует |
 | 2026-06-28 | [0002. Память — отдельный tooling, не часть WPF](0002-agent-memory-contract.md) | Непроверенные движки памяти плодят устаревшие факты | действует |
-| 2026-06-28 | [0003. Канон памяти — SQLite FTS5; LanceDB ниже; Hindsight исторический](0003-sqlite-fts5-canonical-memory.md) | SQLite можно проверить и пересобрать из репозитория | действует |
+| 2026-06-28 | [0003. Канон памяти — SQLite FTS5; LanceDB ниже; Hindsight исторический](0003-sqlite-fts5-canonical-memory.md) | SQLite можно проверить и пересобрать из репозитория | действует, sidecar-часть снесена [0010](0010-remove-lancedb-semantic-sidecar.md) |
 | 2026-06-29 | [0004. Funding — медленный контекст, не hot path](0004-funding-source-context.md) | У funding другой каденс, чем у потока заявок | действует |
 | 2026-06-29 | [0005. Обновление памяти вручную, без автоматического refresh после коммита](0005-manual-memory-gate.md) | Автоиндекс смешанного дерева записывает ложные свежие факты | действует |
 | 2026-06-29 | [0006. Pre-push hook памяти только явной установкой](0006-optional-memory-pre-push-hook.md) | Hook не должен скрывать пересборку | действует |
@@ -19,3 +19,4 @@
 | 2026-06-30 | [0008. Внешний retain выключен, пока нет политики отбора и удаления](0008-curated-retain-and-memory-lifecycle-policy.md) | Иначе в память попадают секреты и сырые записи | действует |
 | 2026-10-16 | [Режим дискуссии: правки, коммиты и push только после явного одобрения объёма](../../AGENTS.md) | Иначе агент меняет репозиторий сам | действует |
 | 2026-10-20 | [0009. Infrastructure ссылается на Application; адаптеры в Composition](0009-infrastructure-references-application.md) | Адаптеры реализуют порты Application. Application не ссылается на Infrastructure | действует |
+| 2026-10-21 | [0010. Semantic sidecar LanceDB снесён; канон остаётся SQLite FTS5](0010-remove-lancedb-semantic-sidecar.md) | Второй Python-рантайм с хрупким кэшем ломал обязательный gate на окружении, а не на логике; SQLite FTS5 покрывает поиск | действует |

@@ -11,7 +11,7 @@ Retained memory is never a source of truth. The priority remains:
 1. `code/tests/config`
 2. `AGENTS.md`, ADRs, `TC-DN-HOFI3.md`, and `docs/formulas.md`
 3. `docs/memory/*.md`
-4. generated SQLite/LanceDB indexes
+4. generated SQLite indexes
 5. external retained memory
 
 ## Allowlist
@@ -119,12 +119,12 @@ Use `scripts/curated-retain-redacted-subset.ps1 -SourcePath <repo/path.md>` to t
 
 Import is allowed only when every source is allowlisted, current for the selected commit, and either a redaction-clean `candidate` with zero findings or reviewed `redacted` with `redacted_text`. Denylisted paths, stale hashes, missing source metadata, missing redacted text, or redaction review findings block the whole batch. The generated report is `docs/memory/generated/curated-retain-import-report.json`.
 
-Controlled local import does not enable external retain, Codex auto-retain, Cloud, Hindsight, hooks, refresh wrappers, LanceDB rebuild, raw JSONL import, generated export import, or build-artifact import.
+Controlled local import does not enable external retain, Codex auto-retain, Cloud, Hindsight, hooks, refresh wrappers, raw JSONL import, generated export import, or build-artifact import.
 
 ## Controlled Local Export And Delete
 
 After controlled local import, retained SQLite rows must be lifecycle-testable before any external memory is considered. Use `scripts/curated-retain-export.ps1` to export local retained rows into `docs/memory/generated/curated-retain-export-report.json`.
 
-Use `scripts/curated-retain-delete.ps1 -SourcePath <repo/path.md>` to delete local retained rows for one source path. Delete must not remove source files, generated dry-run reports, hooks, LanceDB data, Cloud data, or Codex memory. The proof is: import a clean source, find it through `retain-search`, export it, delete it, then verify the phrase is absent from retain-search.
+Use `scripts/curated-retain-delete.ps1 -SourcePath <repo/path.md>` to delete local retained rows for one source path. Delete must not remove source files, generated dry-run reports, hooks, Cloud data, or Codex memory. The proof is: import a clean source, find it through `retain-search`, export it, delete it, then verify the phrase is absent from retain-search.
 
 These lifecycle commands are local SQLite operations. They do not change repository source of truth and do not enable external retain or Codex auto-retain.

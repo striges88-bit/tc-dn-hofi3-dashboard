@@ -127,7 +127,7 @@ public sealed class MemoryContractTests
 
         Assert.Contains("historical/secondary candidate", spike, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("SQLite FTS5 is now the canonical local memory store", spike, StringComparison.Ordinal);
-        Assert.Contains("LanceDB is the active local semantic sidecar", spike, StringComparison.Ordinal);
+        Assert.Contains("the LanceDB sidecar was removed on 2026-10-21", spike, StringComparison.Ordinal);
         Assert.Contains("garrytan/gbrain", spike, StringComparison.Ordinal);
         Assert.Contains("gbrain init --pglite", spike, StringComparison.Ordinal);
         Assert.Contains("codex mcp add gbrain -- gbrain serve", spike, StringComparison.Ordinal);
@@ -177,7 +177,8 @@ public sealed class MemoryContractTests
         Assert.Contains("Do not import raw JSONL recordings", spike, StringComparison.Ordinal);
 
         Assert.Contains("SQLite FTS5 is the canonical local memory store", contract, StringComparison.Ordinal);
-        Assert.Contains("LanceDB is an active local semantic sidecar spike", contract, StringComparison.Ordinal);
+        Assert.Contains("ADR 0010", contract, StringComparison.Ordinal);
+        Assert.DoesNotContain("active local semantic sidecar", contract, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("EXPLAIN QUERY PLAN", contract, StringComparison.Ordinal);
         Assert.Contains("query_log", contract, StringComparison.Ordinal);
         Assert.DoesNotContain("pg_stat_statements", contract, StringComparison.OrdinalIgnoreCase);
@@ -185,7 +186,7 @@ public sealed class MemoryContractTests
         Assert.Contains("Codex auto-retain must stay disabled during MVP", contract, StringComparison.Ordinal);
         Assert.Contains("docs/memory/*.md", contract, StringComparison.Ordinal);
         Assert.Contains("SQLite FTS5", readme, StringComparison.Ordinal);
-        Assert.Contains("LanceDB", readme, StringComparison.Ordinal);
+        Assert.Contains("ADR 0010", readme, StringComparison.Ordinal);
         Assert.Contains("historical/failed", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("historical/secondary candidate", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("uvx hindsight-embed --help", openQuestions, StringComparison.Ordinal);

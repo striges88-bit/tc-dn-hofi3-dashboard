@@ -12,6 +12,8 @@ Use a manual memory gate before push or PR review:
 
 Do not add post-commit memory refresh automation. A later commit-addressed stage may allow an explicit opt-in post-commit marker hook, but that hook must only write a refresh-needed marker and must not run rebuild, `memory-refresh-all`, LanceDB rebuild/eval, curated retain, Cloud, or Codex auto-retain. Do not install Git hooks automatically. ADR 0006 allows only an explicit opt-in local pre-push hook installer that wraps the manual helper without rebuilding memory.
 
+Update 2026-10-21: the LanceDB rebuild/eval gate clauses no longer apply; the sidecar was removed entirely (ADR 0010). The manual gate itself, the no-post-commit-automation rule, and the marker-only hook limits remain in force for the SQLite store.
+
 ## Rationale
 
 Automatic post-commit or after-save memory refresh can index intermediate or mixed worktree states. That creates fresh but false memory facts, which is more dangerous than an obviously stale index.

@@ -1,9 +1,7 @@
 # Open Questions
 
 - SQLite FTS5 is now the canonical local memory store. `tools/Memory` owns `refresh`, `search`, `explain`, and `stale-check` for the MVP memory layer.
-- LanceDB is an active local semantic sidecar and production-candidate semantic quality layer below SQLite. Its wrapper is `scripts/lancedb-sidecar.ps1`, its generated store is `docs/memory/generated/lancedb`, and it imports only SQLite `search_documents` records with current/proposed status and valid source metadata.
-- LanceDB automation remains disabled: no git post-commit hook, no after-save hook, and no background refresh until clean rebuild/delete/reindex behavior is repeatable.
-- LanceDB semantic quality gate is now explicit. The current candidate uses local FastEmbed/ONNX with model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`; remaining open work is tuning recall thresholds, deciding whether a heavier local model is justified, and adding cases only when they have source-backed typed records.
+- The LanceDB semantic sidecar was removed on 2026-10-21 (ADR 0010). There is no open semantic-sidecar question; SQLite FTS5 is the only generated retrieval path, and any future sidecar needs a new ADR below SQLite and outside mandatory gates.
 - Hindsight is historical/failed for MVP in `docs/memory/hindsight-spike.md`; Python/uvx embedded daemon status remains recorded for traceability only.
 - The Hindsight install-spike report exists as ignored generated output. `uv` and `uvx hindsight-embed --help` are verified locally. Project profile `tc-dn-hofi3` exists on port `9077`; daemon `/health`, `/mcp/`, and `/metrics` endpoints answer HTTP `200`.
 - Curated retain now has lifecycle policy plus tested dry-runs for redaction scan, export metadata, and deletion planning. Real retain/import remains disabled until actual redaction, retained-text export, verified provider delete/search behavior, and an explicit enablement decision exist.

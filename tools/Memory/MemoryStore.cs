@@ -262,7 +262,7 @@ public sealed class MemoryStore : IDisposable
         return new RefreshResult(
             SchemaVersion,
             "sqlite-fts5",
-            "lancedb-fastembed-local-candidate",
+            "none",
             "historical-failed",
             metadata.RefreshSource,
             metadata.CommitSha,
