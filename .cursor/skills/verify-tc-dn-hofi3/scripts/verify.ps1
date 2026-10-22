@@ -227,7 +227,7 @@ function Invoke-Launch {
         Fail "dotnet build exited $LASTEXITCODE."
     }
 
-    $builtExe = Join-Path $RepoRoot 'CryptoIndicatorApp.Desktop\bin\Debug\net8.0-windows\CryptoIndicatorApp.Desktop.exe'
+    $builtExe = Join-Path $RepoRoot 'CryptoIndicatorApp.Desktop\bin\Debug\net10.0-windows\CryptoIndicatorApp.Desktop.exe'
     if (-not (Test-Path -LiteralPath $builtExe)) {
         Fail "Build did not produce $builtExe."
     }

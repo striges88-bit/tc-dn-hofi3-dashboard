@@ -30,13 +30,14 @@ internal sealed class PilotBRunnerTestFixture : IDisposable
     public static PilotBRunnerTestFixture Create()
     {
         var root = Directory.CreateTempSubdirectory("pilot-b-runner-test-").FullName;
-        var configuration = Directory.GetParent(
-                Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory))?.Name
+        var outputDirectory = Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory);
+        var targetFramework = Path.GetFileName(outputDirectory);
+        var configuration = Directory.GetParent(outputDirectory)?.Name
             ?? throw new InvalidOperationException("Cannot determine the test output configuration.");
         var fakeDirectory = Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory,
             "..", "..", "..", "..",
-            "PilotB.FakeCli", "bin", configuration, "net8.0"));
+            "PilotB.FakeCli", "bin", configuration, targetFramework));
         var fakePath = Path.Combine(fakeDirectory, "CryptoIndicatorApp.PilotB.FakeCli.exe");
         if (!File.Exists(fakePath))
         {

@@ -4,7 +4,7 @@
 
 | Дата | Решение | Почему | Статус |
 | --- | --- | --- | --- |
-| 2026-05-28 | [Один процесс WPF/.NET 8. Слои Domain и Application; Desktop собирает Infrastructure](../thread-checkpoints-2026-10-02.md#approved-product-and-architecture) | Индикатор не должен зависеть от Binance и от UI | сборка адаптеров заменена [0009](0009-infrastructure-references-application.md). WPF, слои Domain и Application и запрет ссылки Application на Infrastructure действуют |
+| 2026-05-28 | [Один процесс WPF/.NET 8. Слои Domain и Application; Desktop собирает Infrastructure](../thread-checkpoints-2026-10-02.md#approved-product-and-architecture) | Индикатор не должен зависеть от Binance и от UI | сборка адаптеров заменена [0009](0009-infrastructure-references-application.md), .NET 8 заменён [0011](0011-target-dotnet-10.md). WPF, слои Domain и Application и запрет ссылки Application на Infrastructure действуют |
 | 2026-05-28 | [Один символ USDS-M, без торговли и без смены формулы без одобрения](../thread-checkpoints-2026-10-02.md#approved-product-and-architecture) | Это исследовательская аналитика, не сигнал к сделкам | действует |
 | 2026-05-28 | [JSONL сырых событий; live и replay идут в один пайплайн](../thread-checkpoints-2026-10-02.md#pipeline-and-recording) | Иначе live-поведение нельзя воспроизвести | действует |
 | 2026-05-28 | [Ликвидации и открытый интерес — медленный контекст, не вход сигнала](../thread-checkpoints-2026-10-02.md#independent-liquidation-and-oi-context) | Иначе медленные данные попадают в hot path | действует |
@@ -20,3 +20,4 @@
 | 2026-10-16 | [Режим дискуссии: правки, коммиты и push только после явного одобрения объёма](../../AGENTS.md) | Иначе агент меняет репозиторий сам | действует |
 | 2026-10-20 | [0009. Infrastructure ссылается на Application; адаптеры в Composition](0009-infrastructure-references-application.md) | Адаптеры реализуют порты Application. Application не ссылается на Infrastructure | действует |
 | 2026-10-21 | [0010. Semantic sidecar LanceDB снесён; канон остаётся SQLite FTS5](0010-remove-lancedb-semantic-sidecar.md) | Второй Python-рантайм с хрупким кэшем ломал обязательный gate на окружении, а не на логике; SQLite FTS5 покрывает поиск | действует |
+| 2026-10-22 | [0011. Все проекты на .NET 10](0011-target-dotnet-10.md) | Поддержка .NET 8 заканчивается 10 ноября 2026, .NET 10 — LTS до ноября 2028; переход убирает пин анализаторов и прямые ссылки на пакеты фреймворка | действует |
