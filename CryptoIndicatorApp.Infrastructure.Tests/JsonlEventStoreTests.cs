@@ -34,6 +34,21 @@ public class JsonlEventStoreTests
     }
 
     [Fact]
+    public async Task TrailingNewlineDoesNotAddRow()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"indic-{Guid.NewGuid():N}.jsonl");
+        var row = """{"schemaVersion":1,"source":"binance-usdsm-futures","stream":"aggTrade","eventType":"aggTrade","symbol":"BTCUSDT","exchangeTime":"2026-05-25T08:00:00Z","receiveTime":"2026-05-25T08:00:00Z","payload":{"aggregateTradeId":1,"price":100,"quantity":2,"firstTradeId":1,"lastTradeId":1,"tradeTime":"2026-05-25T08:00:00Z","isBuyerMaker":false}}""";
+        await File.WriteAllTextAsync(path, row + "\n" + row + "\n");
+
+        var store = new JsonlMarketEventStore();
+
+        var events = await store.ReadAsync(path, CancellationToken.None).ToListAsync();
+
+        Assert.Equal(2, events.Count);
+        Assert.All(events, e => Assert.IsType<AggTradeEvent>(e));
+    }
+
+    [Fact]
     public async Task RejectsUnsupportedSchemaVersion()
     {
         var path = Path.Combine(Path.GetTempPath(), $"indic-{Guid.NewGuid():N}.jsonl");

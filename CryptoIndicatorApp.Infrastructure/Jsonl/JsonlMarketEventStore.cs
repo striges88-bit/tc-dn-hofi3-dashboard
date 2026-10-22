@@ -37,10 +37,10 @@ public sealed class JsonlMarketEventStore
         using var reader = new StreamReader(stream);
 
         var rowNumber = 0;
-        while (!reader.EndOfStream)
+        string? line;
+        while ((line = await reader.ReadLineAsync(cancellationToken)) is not null)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var line = await reader.ReadLineAsync(cancellationToken);
             rowNumber++;
 
             if (string.IsNullOrWhiteSpace(line))
