@@ -6,7 +6,7 @@ Date: 2026-10-20
 
 Accepted. Supersedes only the adapter-placement sentence of the 2026-05-28 architecture decision recorded in the [2 October checkpoint](../thread-checkpoints-2026-10-02.md#approved-product-and-architecture): "Desktop composes Infrastructure" and "compose the adapters in an outer host so Infrastructure depends only on Domain."
 
-Still in force from 2026-05-28: one WPF process on .NET 8, Domain and Application as the indicator layers, and Application referencing Domain only. Application still must not reference Infrastructure.
+Still in force from 2026-05-28: one WPF process, Domain and Application as the indicator layers, and Application referencing Domain only. Application still must not reference Infrastructure. The .NET 8 platform choice is superseded by [ADR 0011](0011-target-dotnet-10.md).
 
 ## Context
 
@@ -25,5 +25,5 @@ The adapters implement Application ports (`IMarketEventSource`, `IMarketEventRec
 - Do not reference `Infrastructure` from `Application`.
 - Do not put a second copy of the port adapters in Desktop or LiveDryRun. `BinanceProxyOptionsMapper` stays in Desktop because it maps window settings.
 - `Binance.Net` compile assets stay private to Infrastructure (`PrivateAssets` = `compile`). Hosts still receive the runtime assembly.
-- `System.Text.Json` and `System.Threading.Channels` are explicit Infrastructure package references at `10.0.1`, the version `CryptoExchange.Net` 11.1.0 already requires. The `net8.0` shared framework supplies 8.0. Without the aligned references, Desktop and LiveDryRun hit MSB3277. Do not hide that conflict with `NoWarn`.
+- Superseded by [ADR 0011](0011-target-dotnet-10.md): `System.Text.Json` and `System.Threading.Channels` were explicit Infrastructure package references at `10.0.1` to avoid MSB3277 on `net8.0`. On `net10.0` the shared framework supplies them.
 - The 2026-05-28 checkpoint text stays as history. Its adapter-placement sentence is not the current rule.

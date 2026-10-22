@@ -2,7 +2,7 @@
 
 Карта C4 для TC-DN-HOFI3 в том виде, в каком она собрана сейчас. Публичные типы читай в коде. Здесь связи, которых не видно из одного файла.
 
-Решение 2026-05-28 оставило один процесс WPF на .NET 8 и запрет ссылки Application на Infrastructure. Сборку адаптеров внешним хостом заменило [решение 0009](decisions/0009-infrastructure-references-application.md): адаптеры портов лежат в `CryptoIndicatorApp.Infrastructure/Composition`, поэтому Infrastructure ссылается на Application. Application по-прежнему не ссылается на Infrastructure. Окно и `tools/LiveDryRun` вызывают эту общую сборку.
+Решение 2026-05-28 оставило один процесс WPF и запрет ссылки Application на Infrastructure. Сборку адаптеров внешним хостом заменило [решение 0009](decisions/0009-infrastructure-references-application.md): адаптеры портов лежат в `CryptoIndicatorApp.Infrastructure/Composition`, поэтому Infrastructure ссылается на Application. Application по-прежнему не ссылается на Infrastructure. Окно и `tools/LiveDryRun` вызывают эту общую сборку. Платформа — .NET 10 по [решению 0011](decisions/0011-target-dotnet-10.md).
 
 ## Контекст
 
@@ -31,8 +31,8 @@ C4Container
     System_Ext(binance, "Binance USDS-M", "Публичные REST и WebSocket")
     System_Ext(jsonl, "Файл JSONL", "Сырые события, схема 1")
     System_Boundary(hosts, "Дашборд") {
-        Container(desktop, "Desktop", "WPF, net8.0-windows", "Окно. Вызывает Infrastructure/Composition")
-        Container(dryrun, "LiveDryRun", "консоль, net8.0", "Тот же пайплайн и те же адаптеры")
+        Container(desktop, "Desktop", "WPF, net10.0-windows", "Окно. Вызывает Infrastructure/Composition")
+        Container(dryrun, "LiveDryRun", "консоль, net10.0", "Тот же пайплайн и те же адаптеры")
     }
     Rel(operator, desktop, "Старт, стоп, символ, график")
     Rel(desktop, binance, "Live и список символов")
@@ -102,6 +102,6 @@ Live и replay подают одни и те же внутренние собы�
 - Do not expose Binance DTOs to Domain.
 - Infrastructure ссылается на Application, потому что адаптеры реализуют порты Application. Это [решение 0009](decisions/0009-infrastructure-references-application.md).
 - Пакет `Binance.Net` закрыт у Infrastructure через `PrivateAssets` со значением `compile`: хост против типов клиента не компилируется. Сборка по-прежнему копирует `Binance.Net.dll`.
-- `System.Text.Json` и `System.Threading.Channels` подключены в Infrastructure явно, версия `10.0.1`, как у `CryptoExchange.Net` 11.1.0. Иначе хост на `net8.0` собирается против сборок 8.0 из общего фреймворка и конфликтует с 10.0.
+- `System.Text.Json` и `System.Threading.Channels` приходят из общего фреймворка `net10.0`. Прямые ссылки на эти пакеты не добавлять: [решение 0011](decisions/0011-target-dotnet-10.md).
 - Конверт JSONL приватный внутри `JsonlMarketEventStore`. Схема 1. Снаружи ходят доменные события, включая биржевые идентификаторы обновлений и сделок.
 - Сгенерированные экспорты памяти и графа не коммитить, пока их схема не одобрена.
