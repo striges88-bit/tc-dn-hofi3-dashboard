@@ -1,0 +1,11 @@
+---
+description: Предупреждения не глушить без явного да. Сборка на SDK из PATH не воспроизводит CA2024
+globs: "**/*.csproj, Directory.Build.props, .editorconfig, global.json, .github/workflows/**"
+alwaysApply: false
+---
+
+# Не глушить предупреждения
+
+- Не добавляй `NoWarn`, `#pragma warning disable`, пин `AnalysisLevel`, `WarningsNotAsErrors` или пин SDK без моего явного "да". Сначала предложи исправление кода.
+- Шаги CI бери из `.github/workflows/ci.yml`. Зелёные `dotnet --version`, `dotnet restore`, `dotnet format` и `dotnet build` на SDK из PATH не воспроизводят CA2024. Это предупреждение включает самый новый установленный SDK при `AnalysisLevel=latest`.
+- Если меняешь пакет или его версию, опиши в PR, какой пакет что приносит транзитивно.
