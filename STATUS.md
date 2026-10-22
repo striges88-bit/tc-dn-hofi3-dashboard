@@ -1,6 +1,6 @@
 # PRJCT-INDIC: актуальный статус
 
-Актуализировано: **2026-10-13**. Проверка — исходники и документы; приложение, сеть, тесты и публикация сегодня не запускались.
+Актуализировано: **2026-10-22**. Переход на .NET 10 проверен локально 2026-10-22 (SDK 10.0.402: restore, `dotnet format --verify-no-changes`, сборка Release — 0 предупреждений и 0 ошибок, `dotnet test` 464/464, Desktop Live на BTCUSDT 30 секунд). Остальные утверждения карточки сверены **2026-10-13** по исходникам и документам; приложение, сеть, тесты и публикация в тот день не запускались.
 
 - **Цель и этап:** аналитический MVP TC-DN-HOFI3 для одного Binance USDS-M Futures инструмента, Windows WPF/.NET 10 ([0011](docs/decisions/0011-target-dotnet-10.md)), live и JSONL replay. Автоматическая торговля и изменение формулы не входят в этот этап.
 - **Подтверждено сейчас:** [Desktop.csproj](CryptoIndicatorApp.Desktop/CryptoIndicatorApp.Desktop.csproj) задаёт WPF/.NET 10 и внешнюю композицию; [Application.csproj](CryptoIndicatorApp.Application/CryptoIndicatorApp.Application.csproj) ссылается только на Domain. В просмотренной части [MainWindow.xaml.cs](CryptoIndicatorApp.Desktop/MainWindow.xaml.cs) есть Start/Stop/Restart, Refresh инструментов и выбор Live/Replay.
