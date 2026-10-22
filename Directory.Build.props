@@ -3,9 +3,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <!-- Pin to the net8.0 analyzer set. `latest` follows the host SDK, and the
-         Windows image's .NET 10 SDK turns on CA2024 for the JSONL reader. -->
-    <AnalysisLevel>8.0</AnalysisLevel>
+    <AnalysisLevel>latest</AnalysisLevel>
     <AnalysisMode>Default</AnalysisMode>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- TreatWarningsAsErrors does not promote MSB*. This does, including MSB3277. -->

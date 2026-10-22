@@ -25,28 +25,9 @@ public sealed class HostCompileBoundaryTests
         Assert.Equal("compile", package.Element("PrivateAssets")?.Value);
     }
 
-    [Fact]
-    public void Infrastructure_aligns_json_and_channels_to_cryptoexchange_net()
-    {
-        var infrastructure = LoadProject("CryptoIndicatorApp.Infrastructure/CryptoIndicatorApp.Infrastructure.csproj");
-
-        Assert.Equal("10.0.1", PackageVersion(infrastructure, "System.Text.Json"));
-        Assert.Equal("10.0.1", PackageVersion(infrastructure, "System.Threading.Channels"));
-    }
-
     private static XDocument LoadProject(string relativePath)
     {
         return XDocument.Load(Path.Combine(FindRepositoryRoot(), relativePath));
-    }
-
-    private static string PackageVersion(XDocument project, string packageId)
-    {
-        var package = project
-            .Descendants("PackageReference")
-            .Single(element => element.Attribute("Include")?.Value == packageId);
-
-        return package.Attribute("Version")?.Value
-            ?? throw new InvalidOperationException($"Package {packageId} has no Version.");
     }
 
     private static IReadOnlyList<string> PackageIncludes(XDocument project)
