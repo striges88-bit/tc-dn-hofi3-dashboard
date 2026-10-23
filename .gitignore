@@ -11,8 +11,17 @@ publish/
 .vs/
 .vscode/
 .idea/
+.obsidian/
 *.user
 *.suo
+
+# Local /teach workspace. Not product source. Root-anchored so tasks/lessons.md stays tracked.
+/MISSION.md
+/NOTES.md
+/RESOURCES.md
+/assets/
+/lessons/
+/reference/
 
 # Local SDK/tool/package caches
 .dotnet/
