@@ -6,7 +6,7 @@
 
 ## Контекст
 
-Оператор смотрит один инструмент USDS-M. Система считает TC-DN-HOFI3 и заявки не ставит. Снаружи публичные REST и WebSocket Binance и локальный файл JSONL. `tools/Memory` и `tools/PilotB` к этой системе не относятся.
+Оператор смотрит один инструмент USDS-M. Система считает TC-DN-HOFI3 и заявки не ставит. Снаружи публичные REST и WebSocket Binance и локальный файл JSONL. `tools/Memory` к этой системе не относится.
 
 ```mermaid
 C4Context
