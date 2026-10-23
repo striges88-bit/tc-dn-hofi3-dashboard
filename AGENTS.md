@@ -31,8 +31,8 @@
 | Что уже ломалось | [`tasks/lessons.md`](tasks/lessons.md) |
 | На чём остановились | [`STATUS.md`](STATUS.md) |
 
-`docs/memory/` не открывать, если задача не про память. Перед push, PR или правкой ADR/формулы открыть строку Memory в индексе.
+В `docs/memory/` оставлены `glossary.md`, `rules.md` и `entities.md`. Не открывать их, если задача не про эти файлы. Перед push, PR или правкой ADR/формулы открыть строку Memory в индексе.
 
 ## Cursor Cloud
 
-Облачный агент — Linux. `dotnet` в этом окружении выставляет `EnableWindowsTargeting=true`, иначе проекты `net10.0-windows` не восстанавливаются. `global.json` требует SDK 10. Окно WPF и `CryptoIndicatorApp.Desktop.Tests` здесь не запускаются: рантайма `Microsoft.WindowsDesktop.App` для Linux нет. Живой Binance из этого региона отвечает `restricted location`; локальный replay идёт через `tools/LiveDryRun`. `powershell.exe` — это PowerShell 7. Скрипты памяти, которые вызывают `where.exe`, читают `LOCALAPPDATA` или строят Windows-URI, на Linux падают. Узкая проверка: `dotnet test` для Domain, Application и Memory, затем `dotnet run --project tools/LiveDryRun -- --symbol BTCUSDT --input <jsonl> --replay-only`.
+Облачный агент — Linux. `dotnet` в этом окружении выставляет `EnableWindowsTargeting=true`, иначе проекты `net10.0-windows` не восстанавливаются. `global.json` требует SDK 10. Окно WPF и `CryptoIndicatorApp.Desktop.Tests` здесь не запускаются: рантайма `Microsoft.WindowsDesktop.App` для Linux нет. Живой Binance из этого региона отвечает `restricted location`; локальный replay идёт через `tools/LiveDryRun`. `powershell.exe` — это PowerShell 7. Узкая проверка: `dotnet test` для Domain и Application, затем `dotnet run --project tools/LiveDryRun -- --symbol BTCUSDT --input <jsonl> --replay-only`.

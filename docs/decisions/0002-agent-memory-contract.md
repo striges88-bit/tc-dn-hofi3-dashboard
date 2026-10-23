@@ -2,6 +2,10 @@
 
 Date: 2026-06-28
 
+## Status
+
+The tooling implementation below is superseded by [ADR 0013](0013-remove-memory-cli.md). Do not integrate agent memory into the WPF runtime; that limit remains.
+
 ## Decision
 
 Implement agent memory as project tooling first: a human-authored contract, a generated-memory schema, deterministic retrieval/staleness tests, and a manual refresh script that writes only ignored generated output.

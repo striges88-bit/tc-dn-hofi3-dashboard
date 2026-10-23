@@ -2,6 +2,10 @@
 
 Date: 2026-06-29
 
+## Status
+
+Superseded by [ADR 0013](0013-remove-memory-cli.md). There is no memory gate to run.
+
 ## Decision
 
 Use a manual memory gate before push or PR review:
@@ -13,6 +17,8 @@ Use a manual memory gate before push or PR review:
 Do not add post-commit memory refresh automation. A later commit-addressed stage may allow an explicit opt-in post-commit marker hook, but that hook must only write a refresh-needed marker and must not run rebuild, `memory-refresh-all`, LanceDB rebuild/eval, curated retain, Cloud, or Codex auto-retain. Do not install Git hooks automatically. ADR 0006 allows only an explicit opt-in local pre-push hook installer that wraps the manual helper without rebuilding memory.
 
 Update 2026-10-21: the LanceDB rebuild/eval gate clauses no longer apply; the sidecar was removed entirely (ADR 0010). The manual gate itself, the no-post-commit-automation rule, and the marker-only hook limits remain in force for the SQLite store.
+
+Update 2026-10-23: ADR 0013 removes the SQLite CLI, so the manual gate, the pre-push helper, and the marker-only hook no longer apply.
 
 ## Rationale
 

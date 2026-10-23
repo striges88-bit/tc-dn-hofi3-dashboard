@@ -39,6 +39,3 @@ jobs:
 
       - name: Test solution
         run: dotnet test CryptoIndicatorApp.sln --configuration Release --no-restore --no-build --logger "trx;LogFilePrefix=solution"
-
-      - name: Test Memory CLI
-        run: dotnet test tools/Memory.Tests/CryptoIndicatorApp.Memory.Tests.csproj --configuration Release --no-restore --no-build --logger "trx;LogFilePrefix=memory-cli"
