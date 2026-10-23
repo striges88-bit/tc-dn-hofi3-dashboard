@@ -21,5 +21,5 @@
 | [`docs/thread-checkpoints-2026-10-02.md`](thread-checkpoints-2026-10-02.md) | Снимок продуктовых решений | Когда таймлайн даёт ссылку. Это не замена `STATUS.md` |
 | [`docs/superpowers/`](superpowers/) | Старые планы и исходная спецификация | Только если задача называет конкретный план |
 | [`scripts/README.md`](../scripts/README.md) | Какие скрипты запускать | Нужна команда обслуживания |
-| [`docs/memory/README.md`](memory/README.md) | Память агента, не runtime приложения | Только если задача про память. Остальное в `docs/memory/` не читать |
+| [`docs/memory/glossary.md`](memory/glossary.md), [`rules.md`](memory/rules.md), [`entities.md`](memory/entities.md) | Рукописные заметки. CLI памяти удалён ([0013](decisions/0013-remove-memory-cli.md)) | Только если задача прямо про эти три файла |
 | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Что уже проверяет CI | Вопрос, какая проверка механическая |

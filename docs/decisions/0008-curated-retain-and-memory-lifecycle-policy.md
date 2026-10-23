@@ -2,6 +2,10 @@
 
 Date: 2026-06-30
 
+## Status
+
+Superseded by [ADR 0013](0013-remove-memory-cli.md). `docs/memory/retain-policy.md` is deleted with the retain scripts.
+
 ## Decision
 
 Adopt a curated retain policy before any external memory retain, Hindsight retain, or Codex auto-retain is enabled.
@@ -23,6 +27,8 @@ The denylist remains excluded from all retain/import flows: `recordings/*.jsonl`
 The optional post-commit marker hook remains marker-only. It may write a stale-memory marker, but it must not run rebuild, retain, Cloud calls, `memory-refresh-all`, LanceDB rebuild/eval, Hindsight retain, or Codex auto-retain.
 
 Update 2026-10-21: the LanceDB rebuild/eval mentions no longer apply; the sidecar was removed entirely (ADR 0010). The retain policy, the allowlist and denylist, and the marker-only hook limit remain in force.
+
+Update 2026-10-23: ADR 0013 removes the retain scripts and `docs/memory/retain-policy.md`. External retain stays unavailable because the tooling is gone.
 
 ## Rationale
 

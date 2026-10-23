@@ -4,7 +4,7 @@ Date: 2026-10-21
 
 ## Status
 
-Accepted. Supersedes the sidecar clauses of ADR 0003 and vacates the LanceDB eval-gate references in ADRs 0005, 0007, and 0008.
+Accepted. Supersedes the sidecar clauses of ADR 0003 and vacates the LanceDB eval-gate references in ADRs 0005, 0007, and 0008. The SQLite CLI this ADR left in place was removed by [ADR 0013](0013-remove-memory-cli.md).
 
 ## Decision
 
@@ -26,3 +26,4 @@ Steven chose full removal over demoting the sidecar to an optional diagnostic or
 - `memory-refresh-all` runs three steps instead of six.
 - Local leftover artifacts under `docs/memory/generated/lancedb*` are ignored by Git and safe to delete manually; no script references them anymore.
 - Semantic retrieval is SQLite FTS5 only. A future semantic sidecar needs a new ADR, must stay below SQLite status/source metadata, and must not sit inside a mandatory gate.
+- ADR 0013 removed the SQLite CLI. The refresh-step counts above are historical.

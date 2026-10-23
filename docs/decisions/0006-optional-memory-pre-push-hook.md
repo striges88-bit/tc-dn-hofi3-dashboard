@@ -2,6 +2,10 @@
 
 Date: 2026-06-29
 
+## Status
+
+Superseded by [ADR 0013](0013-remove-memory-cli.md).
+
 ## Decision
 
 Allow an optional local Git `pre-push` hook for the memory gate, installed only by an explicit command:

@@ -1,20 +1,20 @@
 ---
 name: binance-indicator-dev
-description: Project workflow for the TC-DN-HOFI3 Binance USDS-M Futures WPF analytics app. Use when working on Binance stream ingestion, local order-book sequencing, JSONL recording or replay, TC-DN-HOFI3 indicator logic, latency/book-health logging, WPF live or replay display, validation tests, dry runs, project memory, or continuity/skill recovery for this repository.
+description: Project workflow for the TC-DN-HOFI3 Binance USDS-M Futures WPF analytics app. Use when working on Binance stream ingestion, local order-book sequencing, JSONL recording or replay, TC-DN-HOFI3 indicator logic, latency/book-health logging, WPF live or replay display, validation tests, dry runs, or continuity/skill recovery for this repository.
 ---
 
 # Binance Indicator Dev
 
 ## Overview
 
-Use this skill to work safely inside the TC-DN-HOFI3 project. Keep the repository as the source of truth; local Codex chat history, generated memory, and `%USERPROFILE%\.codex\skills` are convenience caches only.
+Use this skill to work safely inside the TC-DN-HOFI3 project. Keep the repository as the source of truth; local Codex chat history and `%USERPROFILE%\.codex\skills` are convenience caches only.
 
 ## Start Here
 
 1. Read `AGENTS.md` first and follow it when it conflicts with generic guidance.
 2. Check `tasks/todo.md` for the active plan and update checkboxes for non-trivial work.
 3. Check `tasks/lessons.md` for feedback-driven rules before repeating a risky pattern.
-4. Use source priority from `docs/memory/contract.md`: current code/tests/config first, then `AGENTS.md`, ADRs, formula docs, human memory docs, generated memory, and external stores last.
+4. Prefer current code, tests, and config, then `AGENTS.md`, ADRs, and formula docs.
 5. If a fact may have changed, inspect the source instead of relying on chat memory.
 
 ## Project Boundaries
@@ -68,7 +68,6 @@ Use this skill to work safely inside the TC-DN-HOFI3 project. Keep the repositor
   - `.\.dotnet\dotnet.exe test CryptoIndicatorApp.sln --no-restore`
   - `.\.dotnet\dotnet.exe build CryptoIndicatorApp.sln --no-restore`
   - `.\.dotnet\dotnet.exe publish CryptoIndicatorApp.Desktop\CryptoIndicatorApp.Desktop.csproj -c Release -o publish\desktop --no-restore`
-  - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\memory-refresh.ps1`
 
 ## Continuity And Memory
 

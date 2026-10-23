@@ -2,6 +2,10 @@
 
 Date: 2026-06-30
 
+## Status
+
+Superseded by [ADR 0013](0013-remove-memory-cli.md).
+
 ## Decision
 
 Use commit-addressed memory refresh for the generated SQLite/LanceDB memory layer.
@@ -17,6 +21,8 @@ The optional post-commit hook is marker-only. It may write `docs/memory/generate
 Curated retain remains a separate future stage behind a redaction/delete/export policy. The intended allowlist is `AGENTS.md`, `docs/decisions/*.md`, `docs/formulas.md`, `TC-DN-HOFI3.md`, `docs/memory/*.md`, and `tasks/lessons.md`. Denylisted material remains excluded: `recordings/*.jsonl`, `docs/memory/generated/`, `.hindsight/`, secrets, `bin/`, `obj/`, `publish/`, local proxy details, and raw experiment dumps.
 
 Update 2026-10-21: the LanceDB sidecar clauses no longer apply; the sidecar was removed entirely (ADR 0010). Commit-addressed refresh from `HEAD`, the marker-only hook, and the stale-status rule remain in force for the SQLite store alone.
+
+Update 2026-10-23: ADR 0013 removes the SQLite CLI, so commit-addressed refresh and the marker-only hook no longer apply.
 
 ## Rationale
 
