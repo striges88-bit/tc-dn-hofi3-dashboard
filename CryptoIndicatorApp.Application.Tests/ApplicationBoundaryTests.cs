@@ -6,6 +6,8 @@ namespace CryptoIndicatorApp.Application.Tests;
 
 public class ApplicationBoundaryTests
 {
+    private static readonly HashSet<string> FrameworkAssemblies = LoadFrameworkAssemblies();
+
     [Fact]
     public void ApplicationAssemblyDoesNotReferenceInfrastructure()
     {
@@ -35,9 +37,21 @@ public class ApplicationBoundaryTests
             .GetReferencedAssemblies()
             .Select(reference => reference.Name)
             .OfType<string>()
-            .Where(name => !name.StartsWith("System", StringComparison.Ordinal)
+            .Where(name => !FrameworkAssemblies.Contains(name)
                 && name != "netstandard"
                 && name != allowedProject)
             .ToArray();
+    }
+
+    private static HashSet<string> LoadFrameworkAssemblies()
+    {
+        var frameworkDirectory = Path.GetDirectoryName(typeof(object).Assembly.Location)
+            ?? throw new InvalidOperationException("Shared framework directory was not found.");
+
+        return Directory
+            .EnumerateFiles(frameworkDirectory, "*.dll")
+            .Select(Path.GetFileNameWithoutExtension)
+            .OfType<string>()
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 }
