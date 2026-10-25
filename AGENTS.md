@@ -21,6 +21,17 @@
 
 Изменение поведения сопровождается самым узким тестом и командой, которой его прогнали. CI на каждом pull request и на push в `main` собирает решение и гоняет тесты: [`.github/workflows/ci.yml`](.github/workflows/ci.yml). В ответе указать, что не проверено.
 
+### Команды
+
+```powershell
+dotnet restore CryptoIndicatorApp.sln
+dotnet format CryptoIndicatorApp.sln --verify-no-changes
+dotnet build CryptoIndicatorApp.sln --configuration Release -tl:off
+dotnet test CryptoIndicatorApp.sln --configuration Release --no-build
+```
+
+Это те же шаги, что и в CI. `-tl:off` — читаемый вывод вместо terminal logger.
+
 ## Куда идти
 
 | Зачем | Куда |
