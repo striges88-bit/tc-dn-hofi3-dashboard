@@ -4,5 +4,5 @@ namespace CryptoIndicatorApp.Application.MarketData;
 
 public interface IMarketEventSource
 {
-    IAsyncEnumerable<IMarketEvent> ReadAllAsync(CancellationToken cancellationToken = default);
+    public IAsyncEnumerable<IMarketEvent> ReadAllAsync(CancellationToken cancellationToken = default);
 }

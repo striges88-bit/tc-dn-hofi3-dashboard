@@ -4,5 +4,5 @@ namespace CryptoIndicatorApp.Application.MarketData;
 
 public interface IMarketEventRecorder
 {
-    ValueTask AppendAsync(IMarketEvent marketEvent, CancellationToken cancellationToken = default);
+    public ValueTask AppendAsync(IMarketEvent marketEvent, CancellationToken cancellationToken = default);
 }

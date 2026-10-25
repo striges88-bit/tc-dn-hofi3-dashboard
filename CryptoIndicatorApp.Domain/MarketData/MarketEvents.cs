@@ -2,11 +2,11 @@ namespace CryptoIndicatorApp.Domain.MarketData;
 
 public interface IMarketEvent
 {
-    string Symbol { get; }
+    public string Symbol { get; }
 
-    DateTimeOffset ExchangeTime { get; }
+    public DateTimeOffset ExchangeTime { get; }
 
-    DateTimeOffset ReceiveTime { get; }
+    public DateTimeOffset ReceiveTime { get; }
 }
 
 public sealed record DepthSnapshotEvent(

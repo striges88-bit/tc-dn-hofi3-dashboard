@@ -200,7 +200,7 @@ static string FormatDouble(double value)
     return value.ToString("0.###", CultureInfo.InvariantCulture);
 }
 
-sealed record ReplayRunResult(
+internal sealed record ReplayRunResult(
     int RecordedEventCount,
     int SampleCount,
     IndicatorSample? LastSample,
