@@ -4,13 +4,13 @@ namespace CryptoIndicatorApp.Application.Context;
 
 public interface IContextDataSource
 {
-    Task<IReadOnlyList<OpenInterestPoint>> GetOpenInterestHistoryAsync(
+    public Task<IReadOnlyList<OpenInterestPoint>> GetOpenInterestHistoryAsync(
         string symbol,
         ContextFrame frame,
         int limit,
         CancellationToken cancellationToken = default);
 
-    IAsyncEnumerable<LiquidationEvent> ReadLiquidationsAsync(
+    public IAsyncEnumerable<LiquidationEvent> ReadLiquidationsAsync(
         string symbol,
         CancellationToken cancellationToken = default);
 }

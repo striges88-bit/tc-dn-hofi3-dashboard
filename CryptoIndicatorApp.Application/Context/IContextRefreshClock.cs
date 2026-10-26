@@ -4,7 +4,7 @@ namespace CryptoIndicatorApp.Application.Context;
 
 public interface IContextRefreshClock
 {
-    IAsyncEnumerable<DateTimeOffset> TicksAsync(
+    public IAsyncEnumerable<DateTimeOffset> TicksAsync(
         TimeSpan interval,
         CancellationToken cancellationToken = default);
 }

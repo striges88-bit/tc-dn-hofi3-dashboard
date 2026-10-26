@@ -29,3 +29,6 @@ csharp_indent_case_contents = true
 csharp_indent_switch_labels = true
 csharp_style_namespace_declarations = file_scoped:warning
 csharp_using_directive_placement = outside_namespace:none
+csharp_prefer_braces = true:warning
+csharp_preferred_modifier_order = public,private,protected,internal,file,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,required,volatile,async:warning
+dotnet_style_require_accessibility_modifiers = always:warning
