@@ -29,6 +29,8 @@ Agent map: [docs/index.md](docs/index.md). Layer map: [docs/architecture.md](doc
 
 ## Basic Verification
 
+`dotnet build` fails on violations of the IDE rules enabled in `.editorconfig` (braces, modifier order, accessibility modifiers), because `TreatWarningsAsErrors` is on. Layer references are enforced by allow-list tests in `CryptoIndicatorApp.Application.Tests/ApplicationBoundaryTests.cs`.
+
 ```powershell
 dotnet test CryptoIndicatorApp.sln --no-restore
 dotnet build CryptoIndicatorApp.sln --no-restore

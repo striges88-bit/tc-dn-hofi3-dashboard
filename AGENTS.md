@@ -23,6 +23,8 @@ Merge — отдельно: `git merge`, `gh pr merge` и любой merge PR т
 
 Изменение поведения сопровождается самым узким тестом и командой, которой его прогнали. CI на каждом pull request и на push в `main` собирает решение и гоняет тесты: [`.github/workflows/ci.yml`](.github/workflows/ci.yml). В ответе указать, что не проверено.
 
+Сборка роняет нарушения IDE0011, IDE0036 и IDE0040: [`.editorconfig`](.editorconfig) задаёт их на `warning`, а `TreatWarningsAsErrors` превращает в ошибки. Границы слоёв проверяют allow-list тесты [`ApplicationBoundaryTests.cs`](CryptoIndicatorApp.Application.Tests/ApplicationBoundaryTests.cs).
+
 ### Команды
 
 ```powershell

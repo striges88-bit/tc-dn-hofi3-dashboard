@@ -63,6 +63,7 @@ Use this skill to work safely inside the TC-DN-HOFI3 project. Keep the repositor
 ## Verification
 
 - Before claiming completion, run the narrowest meaningful tests and report anything not verified.
+- `dotnet build` fails on the IDE rules enabled in `.editorconfig` (IDE0011, IDE0036, IDE0040); fix the code, do not suppress or downgrade the rule. Layer boundaries are also asserted by `CryptoIndicatorApp.Application.Tests/ApplicationBoundaryTests.cs`.
 - For shared/high-risk changes, run the relevant project tests and build the solution with the project-local SDK when available: `.\.dotnet\dotnet.exe`.
 - Useful commands:
   - `.\.dotnet\dotnet.exe test CryptoIndicatorApp.sln --no-restore`
