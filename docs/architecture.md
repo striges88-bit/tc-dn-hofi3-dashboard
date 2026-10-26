@@ -104,4 +104,5 @@ Live и replay подают одни и те же внутренние собы�
 - Пакет `Binance.Net` закрыт у Infrastructure через `PrivateAssets` со значением `compile`: хост против типов клиента не компилируется. Сборка по-прежнему копирует `Binance.Net.dll`.
 - `System.Text.Json` и `System.Threading.Channels` приходят из общего фреймворка `net10.0`. Прямые ссылки на эти пакеты не добавлять: [решение 0011](decisions/0011-target-dotnet-10.md).
 - Конверт JSONL приватный внутри `JsonlMarketEventStore`. Схема 1. Снаружи ходят доменные события, включая биржевые идентификаторы обновлений и сделок.
+- Ссылки слоёв проверяются механически: [ApplicationBoundaryTests.cs](../CryptoIndicatorApp.Application.Tests/ApplicationBoundaryTests.cs) разрешает Domain только сборки общего фреймворка, а Application — фреймворк и Domain. Нарушения IDE0011, IDE0036 и IDE0040 роняют сборку.
 - Сгенерированные экспорты памяти и графа не коммитить, пока их схема не одобрена.
