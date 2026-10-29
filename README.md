@@ -34,8 +34,10 @@ Agent map: [docs/index.md](docs/index.md). Layer map: [docs/architecture.md](doc
 `dotnet build` fails on violations of the IDE rules enabled in `.editorconfig` (braces, modifier order, accessibility modifiers), because `TreatWarningsAsErrors` is on. Layer references are enforced by allow-list tests in `CryptoIndicatorApp.Application.Tests/ApplicationBoundaryTests.cs`.
 
 ```powershell
-dotnet test CryptoIndicatorApp.sln --no-restore
-dotnet build CryptoIndicatorApp.sln --no-restore
+dotnet restore CryptoIndicatorApp.sln --verbosity minimal --tl:off
+dotnet format CryptoIndicatorApp.sln --verify-no-changes --no-restore --verbosity minimal
+dotnet build CryptoIndicatorApp.sln --configuration Release --no-restore --verbosity minimal --tl:off
+dotnet test CryptoIndicatorApp.sln --configuration Release --no-build --no-restore --verbosity minimal --tl:off --logger "trx;LogFilePrefix=solution"
 ```
 
-If dependencies were changed or assets are stale, run restore before using `--no-restore`.
+Use the same SDK for the whole cycle (`.\.dotnet\dotnet.exe` when available). Package versions are centralized in [Directory.Packages.props](Directory.Packages.props). See [docs/tooling.md](docs/tooling.md) for reuse conditions, saved logs, and the project-local Roslyn pilot.

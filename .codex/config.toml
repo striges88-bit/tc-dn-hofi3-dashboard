@@ -1,0 +1,18 @@
+# Semantic pilot and native Codex Desktop calls passed on 2026-10-29.
+# Seven available read-only tools. No global config is changed.
+[mcp_servers."MadQ.RoslynMcp"]
+enabled = true
+required = false
+command = "dotnet"
+args = ["tool", "run", "madq-roslynmcp", "--", "--workspace", "sdk"]
+startup_timeout_sec = 30
+tool_timeout_sec = 120
+enabled_tools = [
+  "roslyn_info",
+  "roslyn_get_project_info",
+  "roslyn_find_implementations",
+  "roslyn_find_references",
+  "roslyn_get_symbol_info",
+  "roslyn_get_member_body",
+  "roslyn_get_diagnostics",
+]

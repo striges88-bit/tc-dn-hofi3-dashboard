@@ -29,13 +29,41 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
-        run: dotnet restore CryptoIndicatorApp.sln
+        run: |
+          New-Item -ItemType Directory -Force TestResults | Out-Null
+          dotnet restore CryptoIndicatorApp.sln --verbosity minimal --tl:off 2>&1 | Tee-Object TestResults/restore.log
+          $taskExit = $LASTEXITCODE
+          $taskExit | Set-Content TestResults/restore.exit-code
+          exit $taskExit
 
       - name: Verify formatting
-        run: dotnet format CryptoIndicatorApp.sln --verify-no-changes
+        run: |
+          dotnet format CryptoIndicatorApp.sln --verify-no-changes --no-restore --verbosity minimal 2>&1 | Tee-Object TestResults/format.log
+          $taskExit = $LASTEXITCODE
+          $taskExit | Set-Content TestResults/format.exit-code
+          exit $taskExit
 
       - name: Build
-        run: dotnet build CryptoIndicatorApp.sln --configuration Release --no-restore
+        run: |
+          dotnet build CryptoIndicatorApp.sln --configuration Release --no-restore --verbosity minimal --tl:off 2>&1 | Tee-Object TestResults/build.log
+          $taskExit = $LASTEXITCODE
+          $taskExit | Set-Content TestResults/build.exit-code
+          exit $taskExit
 
       - name: Test solution
-        run: dotnet test CryptoIndicatorApp.sln --configuration Release --no-restore --no-build --logger "trx;LogFilePrefix=solution"
+        run: |
+          dotnet test CryptoIndicatorApp.sln --configuration Release --no-build --no-restore --verbosity minimal --tl:off --logger "trx;LogFilePrefix=solution" 2>&1 | Tee-Object TestResults/test.log
+          $taskExit = $LASTEXITCODE
+          $taskExit | Set-Content TestResults/test.exit-code
+          exit $taskExit
+
+      - name: Save verification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: verification
+          path: |
+            TestResults/
+            **/TestResults/*.trx
+          if-no-files-found: warn
+          retention-days: 7

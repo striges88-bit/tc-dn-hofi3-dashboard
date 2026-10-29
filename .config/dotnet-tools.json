@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "madq.roslynmcp": {
+      "version": "0.8.1-beta",
+      "commands": ["madq-roslynmcp"]
+    }
+  }
+}
