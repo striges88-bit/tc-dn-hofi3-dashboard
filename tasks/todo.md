@@ -1,4 +1,55 @@
-# Windows Binance Indicator App - Planning Todo
+# PRJCT-INDICv2 — задачи и исторический журнал
+
+<a id="active-task"></a>
+
+## Текущий этап — базовая подготовка (2026-10-29)
+
+Основной проект — `PRJCT-INDICv2`. Старый `PRJCT-INDIC` и его чаты относятся к отдельному проекту, который Стивен намерен архивировать. Архивация в эту задачу не входит.
+
+**Задача:** согласовать инструкции, статус, навигацию и адрес памяти после ознакомления с репозиторием.
+**Task ID:** `prep-20261029-a1`; карточка Engram `task/prep-20261029-a1/state`.
+**Результат:** один актуальный блок задач и отдельный Engram project `prjct-indic-v2` для этого checkout.
+**Приёмка:** индекс ведёт сюда; выполненные refresh/OI/liquidation не предлагаются повторно; UI-задачи отложены; оба проекта имеют разные адреса памяти.
+**Узкая проверка:** JSON/readback привязки Engram, адресный поиск и readback новой записи, проверка ссылок и `git diff --check`.
+**Границы:** только документация и привязка Engram этого checkout. Без изменений приложения, формулы, архитектуры, WPF, зависимостей и старого проекта. Дополнительным запросом 2026-10-29 Стивен разрешил commit и push этого объёма, затем отдельную локальную ветку для подготовки инструментария. Merge и deploy не разрешены.
+**Повторы и остановка:** после двух одинаковых ошибок сначала новая гипотеза; при несовпадении проекта остановить запись в память. После прохождения приёмки остановиться.
+
+- [x] Сверить текущий checkout и обнаружить общий адрес Engram у двух проектов.
+- [x] Выделить отдельный адрес памяти текущего проекта, сохранив прежние записи на их месте.
+- [x] Согласовать AGENTS, README, STATUS, индекс и актуальный блок задач.
+- [x] Исправить доказанно устаревшие статусы и отделить исторический журнал.
+- [x] Выполнить узкие проверки и записать итог.
+
+### Отложено по решению Стивена 2026-10-29
+
+- Реальная WPF-компоновка через measure/arrange и визуальная приёмка.
+- Четырёхцветный график, палитра, прозрачность и signed geometry.
+- Запись и replay контекста ликвидаций/OI.
+
+Возможна существенная переработка внутреннего устройства, формулы и архитектуры. Конкретный дизайн и объём ещё не одобрены. Действующие инварианты сохраняются до отдельного решения.
+
+### Результат согласования
+
+**PASS** для согласованного объёма документации и адреса памяти. На момент приёмки согласования изменения были оставлены локально в ветке `codex/align-project-context`. По дополнительному запросу Стивена выполняются commit и push этого объёма; SHA, результат отправки и переход на новую ветку фиксируются в итоговом ответе и карточке Engram. Merge и deploy не входят в доставку.
+
+- Согласованы семь файлов: `.engram/config.json`, `AGENTS.md`, `README.md`, `STATUS.md`, `docs/index.md`, `tasks/todo.md`, `tasks/lessons.md`. Исходники приложения и зависимости не менялись.
+- Проверены JSON привязки и default `mem_current_project`: текущий checkout определяется как `prjct-indic-v2`, source `config`; конфиг старого checkout по-прежнему задаёт `prjct-indic`.
+- Запись Engram `#340` прочитана полностью обратно: project `prjct-indic-v2`, session `manual-save-prjct-indic-v2`. Маркер `identity_prjct_indic_v2_20261029` найден в новом адресе и отсутствует в адресном поиске старого. Это проверка адресации новой записи; историческая память не переносилась и не проверялась на полноту.
+- Структурная проверка прошла: точный состав семи файлов, 53 локальные ссылки актуальных документов, один актуальный блок, закрытые доказанно выполненные пункты, отложенные UI-работы. В историческом журнале оставлены 14 прежних незакрытых пунктов; они явно не являются текущей очередью. `git diff --check` прошёл.
+- Продуктовые проверки: **NOT_RUN**. Сборка, тесты, GUI, live/replay и безопасность зависимостей не проверялись в этой задаче; прежний CI относится к базовому `f4565d5`.
+- Учёт: два повтора чтения diff из временного каталога; sandbox TEMP исчезал между вызовами, поэтому итог сохранён в устойчивом разрешённом каталоге. Отказ чтения Git старого checkout не обходился; для разделения использованы доступный конфиг и проверка адресации. Ручная доработка пользователя, полное время, usage и стоимость — **UNKNOWN**.
+
+### Следующий шаг
+
+После доставки перейти на отдельную локальную ветку `codex/tooling-preparation` от опубликованного коммита. Приёмка доставки: отправлены только семь файлов согласования, локальный SHA совпадает с удалённой веткой `codex/align-project-context`, новая ветка начинается с того же SHA, рабочее дерево чистое. Узкая проверка — состав staged diff, `git diff --check`, readback удалённого SHA и состояния новой ветки. При отказе push сначала выяснить причину; force-push не разрешён.
+
+Затем выбрать конкретную задачу базовой подготовки инструментария и её критерии. Сначала проверить уже доступные средства. Установка, активация и продуктовая реализация требуют отдельного согласованного объёма.
+
+<a id="historical-journal"></a>
+
+## Исторический журнал
+
+Ниже сохранён унаследованный журнал разработки до согласования 2026-10-29. Его заголовки `Current`, `Next`, `Open` и незакрытые флажки описывают прежние состояния, а не текущую очередь. Команды публикации, merge и старые gates из этих записей не дают разрешения их выполнять. Старый Memory CLI, Hindsight/GBrain и их gates удалены по [ADR 0013](../docs/decisions/0013-remove-memory-cli.md). Актуальный этап и следующий шаг находятся только в блоке выше и в [STATUS.md](../STATUS.md).
 
 ## Status
 
@@ -150,7 +201,7 @@
 
 ## Post-Live MVP Enhancements Todo
 
-- [ ] Add manual symbol/ticker refresh from Binance USDS-M exchange information, with delisted/inactive symbol handling.
+- [x] Add manual symbol/ticker refresh from Binance USDS-M exchange information, with delisted/inactive symbol handling. Статус согласован 2026-10-29 по `MainWindow.RefreshSymbolsButton_Click`, `BinanceUsdFuturesSymbolFilter` и `BinanceSymbolProviderTests`; новый live smoke не выполнялся.
 - [x] Add optional proxy configuration for public REST snapshot and WebSocket market streams.
 - [x] Verify proxy support against Binance.Net/CryptoExchange.Net APIs before implementation; ShadowSocks should be treated as an external local proxy endpoint, not as app-managed networking.
 
@@ -257,9 +308,9 @@
 - [x] Add visual color state for signal candidates, with green/red intensity based on signal strength, but keep text labels so color is not the only signal.
 - [x] Make Replay path behavior explicit: in Live mode hide or de-emphasize it; in Replay mode require/select a file instead of showing ambiguous `n/a`.
 - [x] Add a window pin / always-on-top toggle in the compact header so the dashboard can stay visible while switching to other windows.
-- [ ] Design liquidation context as a separate slow-risk module using Binance USDS-M `<symbol>@forceOrder`; aggregate by 15-minute buckets and display signed notional intensity over roughly 2.5 hours.
-- [ ] Design open-interest context as a separate low-frequency module from Binance REST open interest endpoints; do not treat it as a WebSocket stream or hot-path input.
-- [ ] Run full tests, publish, and manual WPF smoke after each UI slice before adding the next data module.
+- [x] Design liquidation context as a separate slow-risk module using Binance USDS-M `<symbol>@forceOrder`; aggregate by 15-minute buckets and display signed notional intensity over roughly 2.5 hours. Согласовано с последующими блоками `Liquidation And Open Interest Formula Design` и `Context Modules Implementation/Results` ниже; это не новая приёмка.
+- [x] Design open-interest context as a separate low-frequency module from Binance REST open interest endpoints; do not treat it as a WebSocket stream or hot-path input. Согласовано с теми же блоками реализации и результатов ниже.
+- Историческое правило проверки UI-срезов: run full tests, publish, and manual WPF smoke after each UI slice before adding the next data module. Это не отдельная текущая задача; WPF-работы отложены в актуальном блоке.
 
 ## Next UX And Context Modules Notes
 
@@ -428,7 +479,7 @@
 - [x] Add a red Desktop test for zero-line geometry/contract.
 - [x] Implement the neutral zero line as Desktop-only chart rendering.
 - [x] Run Desktop tests, full solution tests, and publish.
-- [ ] Future visual-test slice: compare 4-color signed line variants where positive and negative OFI/TFI segments use distinct colors, with OFI opaque/dominant and TFI lower-opacity/secondary.
+- Отложено Стивеном 2026-10-29: future visual-test slice to compare 4-color signed line variants where positive and negative OFI/TFI segments use distinct colors, with OFI opaque/dominant and TFI lower-opacity/secondary. Не следующий шаг базовой подготовки; см. [актуальный блок](#active-task).
 
 ## Chart Zero Line And Visual Color Tests Notes
 
@@ -1071,8 +1122,8 @@
   - [x] Run narrow tests, real dry-runs, full build, and diff hygiene.
 - [x] Slice 3: validate optional post-commit marker local install behavior without enabling rebuild or retain hooks.
 - [x] Slice 4: make the FastEmbed/LanceDB warning an explicit semantic baseline decision backed by eval.
-- [ ] Slice 5: add a simple operator UX helper for routine memory checks.
-- [ ] For each slice: use RED/GREEN tests, run narrow verification, build when shared scripts/docs are touched, commit the verified slice, refresh memory from committed `HEAD`, and run the manual pre-push gate before PR/push.
+- [x] Slice 5: add a simple operator UX helper for routine memory checks. Исторически выполнено в `Memory Polish Slice 5 Results` ниже; сам tooling впоследствии удалён по ADR 0013.
+- Историческое правило этого roadmap: use RED/GREEN tests, run narrow verification, build when shared scripts/docs are touched, commit the verified slice, refresh memory from committed `HEAD`, and run the manual pre-push gate before PR/push. Старые memory gates удалены по ADR 0013; это не действующая инструкция публикации.
 
 ## Memory Polish Roadmap Results
 
