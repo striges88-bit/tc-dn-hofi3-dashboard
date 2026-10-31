@@ -4,6 +4,10 @@ Record feedback-driven mistake patterns here after reviews, corrections, or fixe
 
 ## Active Rules
 
+- Separate independent checkouts by verified root and a distinct Engram `project_name`, even when code or Git history overlaps. `PRJCT-INDICv2` uses `prjct-indic-v2`; the older `PRJCT-INDIC` retains `prjct-indic`. Correct cwd detection with a shared name does not prove memory isolation. Do not migrate old observations or archive the old project implicitly.
+- Keep one explicit current task block and link to it from the index. Historical `Current`/`Next` headings and unfinished checkboxes are evidence of past state, not an active queue or permission to resume obsolete tooling. Reconcile completion against code/results; label deferred or superseded work without claiming a new runtime check.
+- Save evidence needed across tool calls in a stable authorized directory. This host can discard per-call sandbox TEMP; a later call may have a different TEMP path. Retain the returned absolute source path and producer exit code, and check whether the original source still exists before repeating its producer.
+
 - In test teardown, logging both errors does not preserve the test result: propagate the first failure with its original stack, record subsequent cleanup/disposal errors separately, and prove cleanup-only failure still fails. Exercise this deterministically (for example, a held file handle), without weakening native completion waits or hiding resource failures.
 
 - When the session context approaches 50% full, stop at a clean handoff point for `/compact`; record completed verification, remaining work, and the next pending command before continuing substantial work.

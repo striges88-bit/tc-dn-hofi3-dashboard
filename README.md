@@ -1,5 +1,7 @@
 # TC-DN-HOFI3 Dashboard
 
+Active project: **PRJCT-INDICv2**. The older PRJCT-INDIC checkout and its chats belong to a separate project. See [STATUS.md](STATUS.md) for the current preparation stage and deferred work.
+
 Windows WPF analytics application for the TC-DN-HOFI3 Binance USDS-M Futures indicator.
 
 The project is research and monitoring software. It does not place orders, manage positions, or provide automated trading execution.
