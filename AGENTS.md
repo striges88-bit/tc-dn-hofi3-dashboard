@@ -35,13 +35,13 @@ Merge — отдельно: `git merge`, `gh pr merge` и любой merge PR т
 ### Команды
 
 ```powershell
-dotnet restore CryptoIndicatorApp.sln
-dotnet format CryptoIndicatorApp.sln --verify-no-changes
-dotnet build CryptoIndicatorApp.sln --configuration Release -tl:off
-dotnet test CryptoIndicatorApp.sln --configuration Release --no-build
+dotnet restore CryptoIndicatorApp.sln --verbosity minimal --tl:off
+dotnet format CryptoIndicatorApp.sln --verify-no-changes --no-restore --verbosity minimal
+dotnet build CryptoIndicatorApp.sln --configuration Release --no-restore --verbosity minimal --tl:off
+dotnet test CryptoIndicatorApp.sln --configuration Release --no-build --no-restore --verbosity minimal --tl:off --logger "trx;LogFilePrefix=solution"
 ```
 
-Это те же шаги, что и в CI. `-tl:off` — читаемый вывод вместо terminal logger.
+Это те же шаги, что и в CI. Если есть локальный SDK, можно заменить `dotnet` на `.\.dotnet\dotnet.exe` для всего цикла. Условия повторного использования assets/сборки, сохранение журналов и локальный Roslyn — в [docs/tooling.md](docs/tooling.md). Версии NuGet задаёт [Directory.Packages.props](Directory.Packages.props).
 
 ## Куда идти
 

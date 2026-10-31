@@ -23,3 +23,4 @@
 | [`scripts/README.md`](../scripts/README.md) | Какие скрипты запускать | Нужна команда обслуживания |
 | [`docs/memory/glossary.md`](memory/glossary.md), [`rules.md`](memory/rules.md), [`entities.md`](memory/entities.md) | Рукописные заметки. CLI памяти удалён ([0013](decisions/0013-remove-memory-cli.md)) | Только если задача прямо про эти три файла |
 | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Что уже проверяет CI | Вопрос, какая проверка механическая |
+| [`docs/tooling.md`](tooling.md) | NuGet, проверка и локальный Roslyn | Подготовка инструментов, повторное использование проверок и MCP |
